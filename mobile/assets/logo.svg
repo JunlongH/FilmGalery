@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#37474f"/>
+      <stop offset="100%" stop-color="#263238"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="100" fill="url(#bg)"/>
+  
+  <!-- Film Strip Shape -->
+  <rect x="106" y="86" width="300" height="340" rx="20" fill="#eceff1"/>
+  
+  <!-- Inner Dark Area -->
+  <rect x="146" y="86" width="220" height="340" fill="#263238"/>
+  
+  <!-- Sprocket Holes Left -->
+  <rect x="118" y="110" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="118" y="150" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="118" y="190" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="118" y="230" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="118" y="270" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="118" y="310" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="118" y="350" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="118" y="390" width="16" height="24" rx="4" fill="#263238"/>
+
+  <!-- Sprocket Holes Right -->
+  <rect x="378" y="110" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="378" y="150" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="378" y="190" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="378" y="230" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="378" y="270" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="378" y="310" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="378" y="350" width="16" height="24" rx="4" fill="#263238"/>
+  <rect x="378" y="390" width="16" height="24" rx="4" fill="#263238"/>
+
+  <!-- Lens / Aperture -->
+  <circle cx="256" cy="256" r="80" fill="#cfd8dc"/>
+  <circle cx="256" cy="256" r="60" fill="#455a64"/>
+  <circle cx="256" cy="256" r="20" fill="#eceff1"/>
+  
+  <!-- Lens Reflection -->
+  <circle cx="270" cy="240" r="8" fill="white" opacity="0.5"/>
+</svg>
