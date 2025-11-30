@@ -2,8 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { buildUploadUrl, updatePositiveFromNegative } from '../api';
 import FilmLab from './FilmLab/FilmLab';
 import ModalDialog from './ModalDialog';
+import PhotoDetailsSidebar from './PhotoDetailsSidebar.jsx';
 
-export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUpdate, viewMode = 'positive' }) {
+export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUpdate, viewMode = 'positive', roll }) {
   const [i, setI] = useState(index);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -13,6 +14,7 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
   const dragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const containerRef = useRef();
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     setI(index);
@@ -237,6 +239,7 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
       <div className="iv-topbar">
         <div className="iv-title">{img.caption || img.frame_number || `Image ${i+1} / ${images.length}`}</div>
         <div className="iv-controls">
+          <button className="iv-btn" onClick={() => setShowDetails(true)} title="Edit Meta">Edit Meta</button>
           <button className="iv-btn" onClick={() => { setIsNegativeMode(true); setShowInverter(true); }} title="Film Lab (Invert/Color)">Film Lab</button>
           <button className="iv-btn" onClick={handleDownload} title="Save to Disk">Download</button>
           <button className="iv-btn" onClick={zoomOut}>−</button>
@@ -272,6 +275,15 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
         <div className="iv-small">{i+1} / {images.length}</div>
         <button className="iv-btn" onClick={()=>setI(k => Math.min(images.length-1, k + 1))} disabled={i===images.length-1}>Next</button>
       </div>
+
+      {showDetails && (
+        <PhotoDetailsSidebar
+          photo={img}
+          roll={roll}
+          onClose={() => setShowDetails(false)}
+          onSaved={() => { setShowDetails(false); onPhotoUpdate && onPhotoUpdate(); }}
+        />
+      )}
     </div>
   );
 }

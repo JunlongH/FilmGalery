@@ -65,6 +65,8 @@ const mountRoutes = () => {
 	app.use('/api/metadata', require('./routes/metadata'));
 	app.use('/api/search', require('./routes/search'));
 	app.use('/api/presets', require('./routes/presets'));
+	app.use('/api/locations', require('./routes/locations'));
+	app.use('/api/stats', require('./routes/stats'));
 	app.use('/api/filmlab', require('./routes/filmlab'));
 	app.use('/api/conflicts', require('./routes/conflicts'));
 };
@@ -90,7 +92,7 @@ CREATE TABLE IF NOT EXISTS rolls (
 	end_date TEXT,
 	camera TEXT,
 	lens TEXT,
-	shooter TEXT,
+	photographer TEXT,
 	filmId INTEGER,
 	film_type TEXT,
 	exposures INTEGER,
@@ -99,6 +101,15 @@ CREATE TABLE IF NOT EXISTS rolls (
 	folderName TEXT,
 	iso INTEGER,
 	notes TEXT,
+	develop_lab TEXT,
+	develop_process TEXT,
+	develop_date TEXT,
+	purchase_cost REAL,
+	develop_cost REAL,
+	purchase_channel TEXT,
+	batch_number TEXT,
+	develop_note TEXT,
+	preset_json TEXT,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (filmId) REFERENCES films(id) ON DELETE SET NULL
 );
@@ -119,6 +130,15 @@ CREATE TABLE IF NOT EXISTS photos (
 	taken_at TEXT,
 	rating INTEGER,
 	negative_rel_path TEXT,
+	date_taken TEXT,
+	time_taken TEXT,
+	location_id INTEGER,
+	detail_location TEXT,
+	latitude REAL,
+	longitude REAL,
+	camera TEXT,
+	lens TEXT,
+	photographer TEXT,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (roll_id) REFERENCES rolls(id) ON DELETE CASCADE
 );
@@ -157,6 +177,24 @@ CREATE TABLE IF NOT EXISTS presets (
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS locations (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	country_code TEXT,
+	country_name TEXT,
+	city_name TEXT NOT NULL,
+	city_lat REAL,
+	city_lng REAL,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS roll_locations (
+	roll_id INTEGER NOT NULL,
+	location_id INTEGER NOT NULL,
+	PRIMARY KEY (roll_id, location_id),
+	FOREIGN KEY (roll_id) REFERENCES rolls(id) ON DELETE CASCADE,
+	FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+);
 `;
 
 function ensureSchema() {
@@ -183,45 +221,104 @@ async function verifySchemaTables() {
 }
 
 // Ensure additional columns (non-breaking migrations) without separate migration files.
-function ensureExtraColumns() {
-	// Add preset_json column to rolls if missing
-	db.all("PRAGMA table_info(rolls)", (err, cols) => {
-		if (err) { console.error('Failed to inspect rolls table', err.message); return; }
-		const hasPreset = cols.some(c => c.name === 'preset_json');
-		if (!hasPreset) {
-			console.log('[MIGRATION] Adding preset_json column to rolls');
-			db.run('ALTER TABLE rolls ADD COLUMN preset_json TEXT', (e) => {
-				if (e) console.error('Failed adding preset_json column', e.message); else console.log('[MIGRATION] preset_json column added');
+async function ensureExtraColumns() {
+	// This now covered by schemaSQL explicit columns. Keep defensive checks for existing deployments.
+	return new Promise((resolve) => {
+		db.all("PRAGMA table_info(rolls)", async (err, cols) => {
+			if (err) { console.error('Inspect rolls failed', err.message); return resolve(); }
+			
+			// Check if we need to rename shooter to photographer
+			const hasShooter = cols.some(c => c.name === 'shooter');
+			const hasPhotographer = cols.some(c => c.name === 'photographer');
+			
+			if (hasShooter && !hasPhotographer) {
+				console.log('[MIGRATION] Renaming shooter to photographer in rolls table...');
+				try {
+					const migration = require('./migrations/2025-11-30-rename-shooter-to-photographer');
+					await migration.up();
+					console.log('[MIGRATION] Successfully renamed shooter to photographer');
+				} catch (e) {
+					console.error('[MIGRATION] Failed to rename shooter to photographer:', e.message);
+				}
+			}
+			
+			// Ensure other roll columns
+			const needed = ['develop_lab','develop_process','develop_date','purchase_cost','develop_cost','purchase_channel','batch_number','develop_note','preset_json'];
+			for (const col of needed) {
+				if (!cols.some(c => c.name === col)) {
+					db.run(`ALTER TABLE rolls ADD COLUMN ${col} TEXT`, (e) => {
+						if (e) console.error('Add column failed', col, e.message); else console.log('[MIGRATION] Added column', col);
+					});
+				}
+			}
+			
+			// Ensure photo columns
+			db.all("PRAGMA table_info(photos)", (err2, photoCols) => {
+				if (err2) { console.error('Inspect photos failed', err2.message); return resolve(); }
+				const photoNeeded = ['date_taken','time_taken','location_id','detail_location','latitude','longitude','camera','lens','photographer'];
+				for (const col of photoNeeded) {
+					if (!photoCols.some(c => c.name === col)) {
+						db.run(`ALTER TABLE photos ADD COLUMN ${col} TEXT`, (e) => {
+							if (e) console.error('Add photo column failed', col, e.message); else console.log('[MIGRATION] Added photo column', col);
+						});
+					}
+				}
+				resolve();
 			});
-		}
+		});
 	});
+}
 
-	// Add extended photo columns if missing (original / positive / thumbs / flags)
-	db.all("PRAGMA table_info(photos)", (err, cols) => {
-		if (err) { console.error('Failed to inspect photos table', err.message); return; }
-		const names = new Set(cols.map(c => c.name));
-		const toAdd = [];
-		if (!names.has('original_rel_path')) toAdd.push("ALTER TABLE photos ADD COLUMN original_rel_path TEXT");
-		if (!names.has('positive_rel_path')) toAdd.push("ALTER TABLE photos ADD COLUMN positive_rel_path TEXT");
-		if (!names.has('positive_thumb_rel_path')) toAdd.push("ALTER TABLE photos ADD COLUMN positive_thumb_rel_path TEXT");
-		if (!names.has('negative_thumb_rel_path')) toAdd.push("ALTER TABLE photos ADD COLUMN negative_thumb_rel_path TEXT");
-		if (!names.has('negative_rel_path')) toAdd.push("ALTER TABLE photos ADD COLUMN negative_rel_path TEXT");
-		if (!names.has('is_negative_source')) toAdd.push("ALTER TABLE photos ADD COLUMN is_negative_source INTEGER DEFAULT 0");
-		if (toAdd.length) {
-			console.log('[MIGRATION] Extending photos table with extra columns');
-			toAdd.forEach(sql => {
-				db.run(sql, (e) => {
-					if (e) console.error('Failed altering photos table with', sql, e.message);
-				});
-			});
-		}
+
+const { seedLocations } = require('./seed-locations');
+const { recomputeRollSequence } = require('./services/roll-service');
+
+async function cleanOrphanedPhotos() {
+	return new Promise((resolve) => {
+		db.run(`DELETE FROM photos WHERE roll_id NOT IN (SELECT id FROM rolls)`, function(err) {
+			if (err) {
+				console.error('[CLEANUP] Failed to remove orphaned photos:', err.message);
+			} else if (this.changes > 0) {
+				console.log(`[CLEANUP] Removed ${this.changes} orphaned photo(s)`);
+			}
+			resolve();
+		});
+	});
+}
+
+async function cleanInvalidRollGear() {
+	return new Promise((resolve) => {
+		db.run(`DELETE FROM roll_gear WHERE roll_id NOT IN (SELECT id FROM rolls)`, function(err) {
+			if (err) {
+				console.error('[CLEANUP] Failed to remove invalid roll_gear entries:', err.message);
+			} else if (this.changes > 0) {
+				console.log(`[CLEANUP] Removed ${this.changes} invalid roll_gear entry(ies)`);
+			}
+			resolve();
+		});
 	});
 }
 
 (async () => {
 	try {
 		await verifySchemaTables();
-		ensureExtraColumns();
+		await ensureExtraColumns();
+		// Clean orphaned photos before migrations
+		await cleanOrphanedPhotos();
+		// Run roll_gear migration once on startup
+		try {
+			const addGear = require('./migrations/2025-11-30-add-roll-gear');
+			await addGear.up();
+			console.log('[MIGRATION] roll_gear ensured and backfilled');
+		} catch(e){ console.error('[MIGRATION] roll_gear migration failed', e.message); }
+		// Clean invalid roll_gear entries after migration
+		await cleanInvalidRollGear();
+		// Ensure display_seq column exists and compute initial sequence
+		try {
+			await recomputeRollSequence();
+			console.log('[MIGRATION] display_seq column ensured and sequence computed');
+		} catch(e){ console.error('[MIGRATION] display_seq initialization failed', e.message); }
+		await seedLocations();
 		mountRoutes();
 		
 		// Add graceful shutdown endpoint

@@ -43,7 +43,7 @@ function NoteEditModal({ initialValue, onSave, onClose }) {
   );
 }
 
-export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUpdatePhoto, filmName, onEditTags, viewMode = 'positive' }) {
+export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUpdatePhoto, filmName, onEditTags, viewMode = 'positive', multiSelect=false, selected=false, onToggleSelect }) {
   const navigate = useNavigate();
   const [fullUrl, setFullUrl] = React.useState(null);
   const [thumbUrl, setThumbUrl] = React.useState(null);
@@ -157,6 +157,8 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
     if (onEditTags) onEditTags(p);
   };
 
+  // Removed inline meta modal in favor of ImageViewer sidebar
+
   const handleDeleteTag = async (tagId) => {
     showConfirm('Remove Tag', 'Remove this tag?', async () => {
         const nextTags = tags.filter(t => t.id !== tagId).map(t => t.name);
@@ -168,8 +170,21 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
     });
   };
 
+  const handleRootClick = () => {
+    if (multiSelect) {
+      onToggleSelect && onToggleSelect(p);
+      return;
+    }
+    onSelect && onSelect();
+  };
+
   return (
-    <div className="photo-item">
+    <div className={`photo-item ${selected ? 'selected' : ''}`} onClick={handleRootClick} style={multiSelect ? { outline: selected ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', position:'relative', cursor:'pointer' } : {}}>
+      {multiSelect && (
+        <div style={{ position:'absolute', top:6, left:6, zIndex:10 }}>
+          <input type="checkbox" checked={selected} onChange={(e)=>{ e.stopPropagation(); onToggleSelect && onToggleSelect(p); }} />
+        </div>
+      )}
       <ModalDialog 
         isOpen={dialog.isOpen} 
         type={dialog.type} 
@@ -178,7 +193,7 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
         onConfirm={dialog.onConfirm}
         onCancel={dialog.onCancel}
       />
-      <div className="photo-like-btn" onClick={toggleLike} title={liked ? "Unlike" : "Like"}>
+      <div className="photo-like-btn" onClick={multiSelect ? undefined : toggleLike} title={liked ? "Unlike" : "Like"} style={multiSelect ? { pointerEvents:'none', opacity:0.5 } : {}}>
         <HeartIcon filled={liked} />
       </div>
       <div className="photo-tags-overlay" onClick={(e)=>e.stopPropagation()}>
@@ -207,21 +222,24 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
             ))}
           </div>
         ) : null}
-        <button className="photo-tag-add-btn" onClick={handleEditTags} title="Add / Edit tags">
+        <button className="photo-tag-add-btn" onClick={multiSelect ? undefined : handleEditTags} title="Add / Edit tags" style={multiSelect ? { pointerEvents:'none', opacity:0.5 } : {}}>
           <PlusIcon />
         </button>
       </div>
-      <div className="photo-actions">
-        <button onClick={(e)=>{e.stopPropagation(); onSetCover(p.id);}}>Set cover</button>
-        <button onClick={handleEditNote}>Note</button>
-        <button onClick={(e)=>{e.stopPropagation(); onDeletePhoto(p.id);}}>Delete</button>
-      </div>
+      {!multiSelect && (
+        <div className="photo-actions">
+          <button onClick={(e)=>{e.stopPropagation(); onSetCover(p.id);}}>Set cover</button>
+          <button onClick={handleEditNote}>Note</button>
+          {/* Edit Meta moved to fullscreen ImageViewer sidebar */}
+          <button onClick={(e)=>{e.stopPropagation(); onDeletePhoto(p.id);}}>Delete</button>
+        </div>
+      )}
       {p.caption && (
         <div className="photo-caption-overlay bottom">
           {p.caption}
         </div>
       )}
-      <div className="photo-thumb" onClick={onSelect}>
+      <div className="photo-thumb">
         {(thumbUrl || fullUrl) ? (
           <LazyLoadImage
             alt={p.caption || ''}
@@ -257,6 +275,7 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
           onClose={() => setEditingNote(false)} 
         />
       )}
+      
     </div>
   );
 }

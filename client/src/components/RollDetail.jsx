@@ -7,6 +7,11 @@ import ImageViewer from './ImageViewer';
 import PhotoItem from './PhotoItem';
 import TagEditModal from './TagEditModal';
 import ModalDialog from './ModalDialog';
+import LocationSelect from './LocationSelect.jsx';
+import PhotoDetailsSidebar from './PhotoDetailsSidebar.jsx';
+import '../styles/sidebar.css';
+import '../styles/forms.css';
+import '../styles/roll-detail-card.css';
 
 export default function RollDetail() {
   const { id } = useParams();
@@ -17,9 +22,13 @@ export default function RollDetail() {
   const [editingTagsPhoto, setEditingTagsPhoto] = useState(null);
   const [viewMode, setViewMode] = useState('positive'); // 'positive' | 'negative'
   const [availableFilms, setAvailableFilms] = useState([]);
-  const [options, setOptions] = useState({ cameras: [], lenses: [], shooters: [] });
+  const [options, setOptions] = useState({ cameras: [], lenses: [], photographers: [] });
   const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
   const [isExpanded, setIsExpanded] = useState(false); // Add state for collapsible card
+  const [multiSelect, setMultiSelect] = useState(false);
+  const [selectedPhotos, setSelectedPhotos] = useState([]);
+  const [showBatchSidebar, setShowBatchSidebar] = useState(false);
+  const [showRollSidebar, setShowRollSidebar] = useState(false);
 
   const showAlert = (title, message) => {
     setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: () => setDialog(prev => ({ ...prev, isOpen: false })) });
@@ -53,6 +62,8 @@ export default function RollDetail() {
     queryKey: ['tags'],
     queryFn: getTags
   });
+
+  // Locations now embedded in roll response (row.locations)
 
   const uploadMutation = useMutation({
     mutationFn: uploadPhotosToRoll,
@@ -141,6 +152,10 @@ export default function RollDetail() {
   async function onUpdatePhoto(photoId, data) {
     try {
       await updatePhotoMutation.mutateAsync({ photoId, data });
+      if (multiSelect) {
+        // update in local selectedPhotos if present
+        setSelectedPhotos(prev => prev.map(p => p.id === photoId ? { ...p, ...data } : p));
+      }
     } catch (err) {
       console.error(err);
     }
@@ -151,11 +166,11 @@ export default function RollDetail() {
     try {
       const [f, o] = await Promise.all([getFilms(), getMetadataOptions()]);
       setAvailableFilms(Array.isArray(f) ? f : []);
-      setOptions(o || { cameras: [], lenses: [], shooters: [] });
+      setOptions(o || { cameras: [], lenses: [], photographers: [] });
     } catch (err) {
       console.error('Failed to load films/options for edit', err);
       setAvailableFilms([]);
-      setOptions({ cameras: [], lenses: [], shooters: [] });
+      setOptions({ cameras: [], lenses: [], photographers: [] });
     }
 
     setEditData({
@@ -164,18 +179,36 @@ export default function RollDetail() {
       end_date: roll.end_date || '',
       camera: roll.camera || '',
       lens: roll.lens || '',
-      shooter: roll.shooter || '',
+      photographer: roll.photographer || '',
       film_type: roll.film_type || '',
       filmId: roll.filmId || roll.film_id || '',
-      notes: roll.notes || ''
+      notes: roll.notes || '',
+      develop_lab: roll.develop_lab || '',
+      develop_process: roll.develop_process || '',
+      develop_date: roll.develop_date || '',
+      purchase_cost: roll.purchase_cost || '',
+      develop_cost: roll.develop_cost || '',
+      purchase_channel: roll.purchase_channel || '',
+      develop_note: roll.develop_note || ''
     });
-    setIsEditing(true);
+    setSelectedLocations(Array.isArray(roll.locations) ? roll.locations.slice() : []);
+    setIsEditing(false);
+    setShowRollSidebar(true);
   }
+
+  const PROCESS_PRESETS = ['C-41', 'E-6', 'BW', 'ECN-2'];
+  const [selectedLocations, setSelectedLocations] = useState([]);
 
   async function handleSaveEdit() {
     try {
-      await updateRollMutation.mutateAsync({ rollId: id, data: editData });
-      setIsEditing(false);
+      await updateRollMutation.mutateAsync({ 
+        rollId: id, 
+        data: { 
+          ...editData,
+          locations: selectedLocations.map(l => l.location_id)
+        }
+      });
+      setShowRollSidebar(false);
     } catch (err) {
       console.error(err);
       alert('Update failed: ' + err.message);
@@ -195,7 +228,7 @@ export default function RollDetail() {
         const yyyy = dtN.getFullYear();
         const mm = String(dtN.getMonth() + 1).padStart(2, '0');
         const dd = String(dtN.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
+        return `${yyyy}.${mm}.${dd}`;
       }
     }
     const dt = new Date(d);
@@ -203,7 +236,7 @@ export default function RollDetail() {
       const yyyy = dt.getFullYear();
       const mm = String(dt.getMonth() + 1).padStart(2, '0');
       const dd = String(dt.getDate()).padStart(2, '0');
-      return `${yyyy}-${mm}-${dd}`;
+      return `${yyyy}.${mm}.${dd}`;
     }
     return String(d);
   }
@@ -228,174 +261,137 @@ export default function RollDetail() {
         onConfirm={dialog.onConfirm}
         onCancel={dialog.onCancel}
       />
-      <div className="page-header" style={{ display: 'block' }}>
-        {isEditing ? (
-          <div style={{ border:'1px solid #ddd', padding:16, marginBottom:16, background:'#f9f9f9', borderRadius:4 }}>
-            <h3 style={{ marginTop:0 }}>Edit Roll</h3>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:12 }}>
-              <label style={{ display:'flex', flexDirection:'column' }}>
-                <span style={{ fontSize:12, fontWeight:600, marginBottom:4 }}>Title</span>
-                <input style={{ padding:6 }} value={editData.title} onChange={e=>setEditData({...editData, title:e.target.value})} />
-              </label>
-              <label style={{ display:'flex', flexDirection:'column' }}>
-                <span style={{ fontSize:12, fontWeight:600, marginBottom:4 }}>Start Date</span>
-                <input type="date" style={{ padding:6 }} value={editData.start_date} onChange={e=>setEditData({...editData, start_date:e.target.value})} />
-              </label>
-              <label style={{ display:'flex', flexDirection:'column' }}>
-                <span style={{ fontSize:12, fontWeight:600, marginBottom:4 }}>End Date</span>
-                <input type="date" style={{ padding:6 }} value={editData.end_date} onChange={e=>setEditData({...editData, end_date:e.target.value})} />
-              </label>
-              <label style={{ display:'flex', flexDirection:'column' }}>
-                <span style={{ fontSize:12, fontWeight:600, marginBottom:4 }}>Camera</span>
-                <input list="camera-options" style={{ padding:6 }} value={editData.camera} onChange={e=>setEditData({...editData, camera:e.target.value})} placeholder="Select or type..." />
-                <datalist id="camera-options">
-                  {options.cameras.map((c, i) => <option key={i} value={c} />)}
-                </datalist>
-              </label>
-              <label style={{ display:'flex', flexDirection:'column' }}>
-                <span style={{ fontSize:12, fontWeight:600, marginBottom:4 }}>Lens</span>
-                <input list="lens-options" style={{ padding:6 }} value={editData.lens} onChange={e=>setEditData({...editData, lens:e.target.value})} placeholder="Select or type..." />
-                <datalist id="lens-options">
-                  {options.lenses.map((l, i) => <option key={i} value={l} />)}
-                </datalist>
-              </label>
-              <label style={{ display:'flex', flexDirection:'column' }}>
-                <span style={{ fontSize:12, fontWeight:600, marginBottom:4 }}>Shooter</span>
-                <input list="shooter-options" style={{ padding:6 }} value={editData.shooter} onChange={e=>setEditData({...editData, shooter:e.target.value})} placeholder="Select or type..." />
-                <datalist id="shooter-options">
-                  {options.shooters.map((s, i) => <option key={i} value={s} />)}
-                </datalist>
-              </label>
-              <label style={{ display:'flex', flexDirection:'column' }}>
-                <span style={{ fontSize:12, fontWeight:600, marginBottom:4 }}>Film Type</span>
-                <select 
-                  style={{ padding:6 }} 
-                  value={editData.filmId || ''} 
-                  onChange={e => {
-                    const fid = e.target.value;
-                    const found = availableFilms.find(f => String(f.id) === String(fid));
-                    setEditData({
-                      ...editData, 
-                      filmId: fid, 
-                      film_type: found ? found.name : '' 
-                    });
-                  }}
-                >
-                  <option value="">-- Select Film --</option>
-                  {availableFilms.map(f => (
-                    <option key={f.id} value={f.id}>{f.name} (ISO {f.iso})</option>
-                  ))}
-                </select>
-              </label>
+      <div className="roll-card">
+        <div className="roll-info-column">
+          <div className="roll-header-section">
+            <div className="roll-title-block">
+              <span className="roll-id">#{(roll && roll.display_seq) ? roll.display_seq : id}</span>
+              <h1 className="roll-title">{roll.title || 'Untitled Roll'}</h1>
             </div>
-            <div style={{ marginTop:12 }}>
-              <label style={{ display:'flex', flexDirection:'column' }}>
-                <span style={{ fontSize:12, fontWeight:600, marginBottom:4 }}>Notes</span>
-                <textarea style={{ width:'100%', height:80, padding:6, fontFamily:'inherit' }} value={editData.notes} onChange={e=>setEditData({...editData, notes:e.target.value})} />
-              </label>
-            </div>
-            <div style={{ marginTop:16, display:'flex', gap:12 }}>
-              <button onClick={handleSaveEdit} style={{ padding:'8px 16px', background:'#333', color:'#fff', border:'none', cursor:'pointer', borderRadius:4 }}>Save Changes</button>
-              <button onClick={()=>setIsEditing(false)} style={{ padding:'8px 16px', background:'#fff', border:'1px solid #ccc', cursor:'pointer', borderRadius:4 }}>Cancel</button>
-            </div>
+            <button className="roll-action-btn" onClick={handleEditClick}>Edit Info</button>
           </div>
-        ) : (
-          <div className="roll-detail-header">
-            <div className="roll-info">
-              <div className="roll-title-row">
-                <h1 className="roll-title">{roll.title || 'Untitled Roll'}</h1>
-                <button className="roll-edit-btn" onClick={handleEditClick}>Edit Info</button>
-              </div>
-              
-              <div className="roll-meta-grid">
-                <div className="roll-meta-item">
-                  <span className="roll-meta-label">Date</span>
-                  <span className="roll-meta-value">{dateStr || '—'}</span>
-                </div>
-                <div className="roll-meta-item">
-                  <span className="roll-meta-label">Film</span>
-                  <span className="roll-meta-value">{filmName || '—'}</span>
-                </div>
-                
-                {isExpanded && (
-                  <>
-                    <div className="roll-meta-item">
-                      <span className="roll-meta-label">Camera</span>
-                      <span className="roll-meta-value">{roll.camera || '—'}</span>
-                    </div>
-                    <div className="roll-meta-item">
-                      <span className="roll-meta-label">Lens</span>
-                      <span className="roll-meta-value">{roll.lens || '—'}</span>
-                    </div>
-                    <div className="roll-meta-item">
-                      <span className="roll-meta-label">Photographer</span>
-                      <span className="roll-meta-value">{roll.shooter || '—'}</span>
-                    </div>
-                    {roll.notes && (
-                      <div className="roll-meta-item" style={{ gridColumn: '1 / -1' }}>
-                        <span className="roll-meta-label">Notes</span>
-                        <span className="roll-meta-value" style={{ fontSize: 13, color: '#555' }}>{roll.notes}</span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
 
-              <button 
-                onClick={() => setIsExpanded(!isExpanded)}
-                style={{ 
-                  background: 'transparent', 
-                  border: 'none', 
-                  color: '#666', 
-                  fontSize: 12, 
-                  fontWeight: 600, 
-                  cursor: 'pointer', 
-                  padding: '4px 0',
-                  marginBottom: 16,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4
-                }}
-              >
-                {isExpanded ? 'Show Less' : 'Show More'}
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </button>
-
-              <div className="roll-actions-bar">
-                <div className="segmented-control">
-                  <button 
-                    className={`segment-btn ${viewMode === 'positive' ? 'active' : ''}`}
-                    onClick={() => setViewMode('positive')}
-                  >
-                    Positive
-                  </button>
-                  <button 
-                    className={`segment-btn ${viewMode === 'negative' ? 'active' : ''}`}
-                    onClick={() => setViewMode('negative')}
-                  >
-                    Negative
-                  </button>
-                </div>
-                <button className="primary-btn" onClick={() => fileInputRef.current && fileInputRef.current.click()}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  Upload Photos
-                </button>
-              </div>
+          <div className="roll-meta-grid">
+            <div className="meta-group">
+              <span className="meta-label">Date</span>
+              <span className="meta-value-text date-inline">{dateStr || '—'}</span>
             </div>
+            <div className="meta-group">
+              <span className="meta-label">Film</span>
+              <span className="meta-value-text">{filmName || '—'}</span>
+            </div>
+            
+            {/* Locations - Moved to first row */}
+            {Array.isArray(roll?.locations) && roll.locations.length > 0 && (
+              <div className="meta-group">
+                <span className="meta-label">Locations</span>
+                <div className="tags-list">
+                  {roll.locations.map(l => (
+                    <span key={l.location_id} className="tag-pill">{l.city_name}</span>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            {(roll.coverPath || roll.cover_photo) && (
-              <div className="roll-cover-wrapper">
-                <img 
-                  src={buildUploadUrl(roll.coverPath || roll.cover_photo)} 
-                  alt="Cover" 
-                  className="roll-cover-image"
-                />
+            {/* Collapsible Gear Details */}
+            <details className="roll-collapsible" style={{ gridColumn: '1 / -1', marginTop: 8 }}>
+              <summary>
+                <span className="meta-label">Gear & Crew</span>
+                <svg className="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </summary>
+              <div className="roll-collapsible-content" style={{ paddingTop: 20 }}>
+                <div className="roll-meta-grid" style={{ gap: '24px' }}>
+                  
+                  {/* Cameras */}
+                  <div className="meta-group">
+                    <span className="meta-label">Cameras</span>
+                    <div className="tags-list">
+                      {(roll.gear?.cameras?.length ? roll.gear.cameras : (roll.camera ? [roll.camera] : [])).map((v, i) => (
+                        <span key={i} className="tag-pill">{v}</span>
+                      ))}
+                      {!(roll.gear?.cameras?.length || roll.camera) && <span className="meta-value-text" style={{opacity:0.5, fontSize:13}}>—</span>}
+                    </div>
+                  </div>
+
+                  {/* Lenses */}
+                  <div className="meta-group">
+                    <span className="meta-label">Lenses</span>
+                    <div className="tags-list">
+                      {(roll.gear?.lenses?.length ? roll.gear.lenses : (roll.lens ? [roll.lens] : [])).map((v, i) => (
+                        <span key={i} className="tag-pill">{v}</span>
+                      ))}
+                      {!(roll.gear?.lenses?.length || roll.lens) && <span className="meta-value-text" style={{opacity:0.5, fontSize:13}}>—</span>}
+                    </div>
+                  </div>
+
+                  {/* Photographers */}
+                  <div className="meta-group">
+                    <span className="meta-label">Photographers</span>
+                    <div className="tags-list">
+                      {(roll.gear?.photographers?.length ? roll.gear.photographers : (roll.photographer ? [roll.photographer] : [])).map((v, i) => (
+                        <span key={i} className="tag-pill">{v}</span>
+                      ))}
+                      {!(roll.gear?.photographers?.length || roll.photographer) && <span className="meta-value-text" style={{opacity:0.5, fontSize:13}}>—</span>}
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </details>
+
+            {roll.notes && (
+              <div className="meta-group" style={{ gridColumn: '1 / -1', marginTop: 8 }}>
+                <span className="meta-label">Notes</span>
+                <span className="meta-value-text" style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>{roll.notes}</span>
               </div>
             )}
           </div>
-        )}
+
+          <div className="roll-actions-bar" style={{ marginTop: 'auto', paddingTop: 24 }}>
+            <div className="segmented-control">
+              <button 
+                className={`segment-btn ${viewMode === 'positive' ? 'active' : ''}`}
+                onClick={() => !multiSelect && setViewMode('positive')}
+                disabled={multiSelect}
+              >
+                Positive
+              </button>
+              <button 
+                className={`segment-btn ${viewMode === 'negative' ? 'active' : ''}`}
+                onClick={() => !multiSelect && setViewMode('negative')}
+                disabled={multiSelect}
+              >
+                Negative
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button className="primary-btn" onClick={() => !multiSelect && fileInputRef.current && fileInputRef.current.click()} disabled={multiSelect}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight:6}}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Upload Photos
+              </button>
+              <button className="primary-btn" style={{ background: multiSelect ? '#1d4ed8' : '#334155' }} onClick={() => { setMultiSelect(!multiSelect); if (!multiSelect) setSelectedPhotos([]); }}>
+                {multiSelect ? 'Multi-Select: ON' : 'Multi-Select'}
+              </button>
+              {multiSelect && selectedPhotos.length > 0 && (
+                <button className="primary-btn" style={{ background:'#2563eb' }} onClick={() => setShowBatchSidebar(true)}>Edit Selected ({selectedPhotos.length})</button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="roll-visual-column">
+          <div className="roll-cover-frame">
+            {(roll.coverPath || roll.cover_photo) ? (
+              <img 
+                src={buildUploadUrl(roll.coverPath || roll.cover_photo)} 
+                alt="Cover" 
+                className="roll-cover-img"
+              />
+            ) : (
+              <div className="empty-cover-placeholder">No Cover Image</div>
+            )}
+          </div>
+        </div>
       </div>
 
         {isEditing && (
@@ -470,6 +466,11 @@ export default function RollDetail() {
                   onDeletePhoto={onDeletePhoto} 
                   onUpdatePhoto={onUpdatePhoto}
                   onEditTags={(photo) => setEditingTagsPhoto(photo)}
+                  multiSelect={multiSelect}
+                  selected={selectedPhotos.some(sp => sp.id === p.id)}
+                  onToggleSelect={(photo)=>{
+                    setSelectedPhotos(prev => prev.some(sp => sp.id === photo.id) ? prev.filter(sp => sp.id !== photo.id) : [...prev, photo]);
+                  }}
                 />
               ))}
             </div>
@@ -510,7 +511,110 @@ export default function RollDetail() {
                queryClient.invalidateQueries(['rollPhotos', id]);
                queryClient.invalidateQueries(['roll', id]);
             }}
+            roll={roll}
           />
+        )}
+        {showBatchSidebar && multiSelect && selectedPhotos.length > 0 && (
+          <PhotoDetailsSidebar 
+            photos={selectedPhotos}
+            roll={roll}
+            onClose={() => setShowBatchSidebar(false)}
+            onSaved={() => {
+              setShowBatchSidebar(false);
+              queryClient.invalidateQueries(['rollPhotos', id]);
+              queryClient.invalidateQueries(['roll', id]); // Refresh roll metadata
+            }}
+          />
+        )}
+        {showRollSidebar && (
+          <div role="presentation" onClick={()=>setShowRollSidebar(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.25)', zIndex:10019 }}>
+          <aside className="fg-sidepanel fade-slide-enter-active" role="dialog" aria-modal="true" aria-label="Edit roll" onClick={(e)=>e.stopPropagation()}>
+            <header className="fg-sidepanel-header">
+              <h3 className="fg-sidepanel-title">Edit Roll</h3>
+              <button className="fg-sidepanel-close" aria-label="Close" onClick={()=>setShowRollSidebar(false)}>×</button>
+            </header>
+            <section className="fg-sidepanel-section">
+              <div className="fg-section-label">Basic</div>
+              <div className="fg-separator" />
+              <div className="fg-field">
+                <label className="fg-label">Title</label>
+                <input className="fg-input" value={editData.title} onChange={e=>setEditData({...editData, title:e.target.value})} />
+              </div>
+              <div className="fg-sidepanel-groupGrid cols-2">
+                <div className="fg-field">
+                  <label className="fg-label">Start Date</label>
+                  <input className="fg-input" type="date" value={editData.start_date} onChange={e=>setEditData({...editData, start_date:e.target.value})} />
+                </div>
+                <div className="fg-field">
+                  <label className="fg-label">End Date</label>
+                  <input className="fg-input" type="date" value={editData.end_date} onChange={e=>setEditData({...editData, end_date:e.target.value})} />
+                </div>
+              </div>
+              <div className="fg-sidepanel-groupGrid cols-2">
+                <div className="fg-field">
+                  <label className="fg-label">Camera</label>
+                  <input className="fg-input" list="camera-options" value={editData.camera} onChange={e=>setEditData({...editData, camera:e.target.value})} />
+                  <datalist id="camera-options">{options.cameras.map((c,i)=><option key={i} value={c} />)}</datalist>
+                </div>
+                <div className="fg-field">
+                  <label className="fg-label">Lens</label>
+                  <input className="fg-input" list="lens-options" value={editData.lens} onChange={e=>setEditData({...editData, lens:e.target.value})} />
+                  <datalist id="lens-options">{options.lenses.map((l,i)=><option key={i} value={l} />)}</datalist>
+                </div>
+              </div>
+              <div className="fg-field">
+                <label className="fg-label">Photographer</label>
+                <input className="fg-input" list="photographer-options" value={editData.photographer || ''} onChange={e=>setEditData({...editData, photographer:e.target.value})} />
+                <datalist id="photographer-options">{(options.photographers || []).map((s,i)=><option key={i} value={s} />)}</datalist>
+              </div>
+              <div className="fg-field">
+                <label className="fg-label">Film</label>
+                <select className="fg-select" value={editData.filmId || ''} onChange={e=>{ const fid=e.target.value; const found=availableFilms.find(f=>String(f.id)===String(fid)); setEditData({...editData, filmId: fid, film_type: found?found.name:''}); }}>
+                  <option value="">Select film</option>
+                  {availableFilms.map(f => <option key={f.id} value={f.id}>{f.name} (ISO {f.iso})</option>)}
+                </select>
+              </div>
+            </section>
+            <section className="fg-sidepanel-section">
+              <div className="fg-section-label">Shooting Cities</div>
+              <div className="fg-separator" />
+              <LocationSelect value={null} onChange={(loc)=>{ if(!loc||!loc.location_id) return; setSelectedLocations(prev=> prev.some(p=>p.location_id===loc.location_id)?prev:[...prev, loc]); }} />
+              <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginTop:6 }}>
+                {selectedLocations.map(l => <span key={l.location_id} className="fg-pill">{l.city_name}</span>)}
+              </div>
+            </section>
+            <section className="fg-sidepanel-section">
+              <div className="fg-section-label">Development</div>
+              <div className="fg-separator" />
+              <div className="fg-sidepanel-groupGrid cols-2">
+                <input className="fg-input" placeholder="Lab" value={editData.develop_lab} onChange={e=>setEditData(d=>({...d, develop_lab:e.target.value}))} />
+                <div style={{ display:'flex', gap:8 }}>
+                  <select className="fg-select" value={editData.develop_process||''} onChange={e=>setEditData(d=>({...d, develop_process:e.target.value}))}>
+                    <option value="">Preset</option>
+                    {PROCESS_PRESETS.map(p=> <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <input className="fg-input" placeholder="Custom" value={editData.develop_process||''} onChange={e=>setEditData(d=>({...d, develop_process:e.target.value}))} />
+                </div>
+                <input className="fg-input" type="date" placeholder="Develop Date" value={editData.develop_date} onChange={e=>setEditData(d=>({...d, develop_date:e.target.value}))} />
+                <input className="fg-input" type="number" placeholder="Purchase Cost" value={editData.purchase_cost} onChange={e=>setEditData(d=>({...d, purchase_cost:e.target.value}))} />
+                <input className="fg-input" type="number" placeholder="Develop Cost" value={editData.develop_cost} onChange={e=>setEditData(d=>({...d, develop_cost:e.target.value}))} />
+                <input className="fg-input" placeholder="Purchase Channel" value={editData.purchase_channel} onChange={e=>setEditData(d=>({...d, purchase_channel:e.target.value}))} />
+                <input className="fg-input" placeholder="Note" value={editData.develop_note} onChange={e=>setEditData(d=>({...d, develop_note:e.target.value}))} />
+              </div>
+              <div className="fg-field" style={{ marginTop:12 }}>
+                <label className="fg-label">Notes</label>
+                <textarea className="fg-textarea" style={{ minHeight:80 }} value={editData.notes} onChange={e=>setEditData({...editData, notes:e.target.value})} />
+              </div>
+            </section>
+            <section className="fg-sidepanel-section" style={{ marginTop:'auto' }}>
+              <div className="fg-separator" />
+              <div className="fg-sidepanel-actions">
+                <button type="button" className="fg-btn" onClick={()=>setShowRollSidebar(false)}>Cancel</button>
+                <button type="button" className="fg-btn fg-btn-primary" onClick={handleSaveEdit}>Save</button>
+              </div>
+            </section>
+          </aside>
+          </div>
         )}
       
       <input type="file" multiple ref={fileInputRef} style={{ display: 'none' }} onChange={onUpload} />

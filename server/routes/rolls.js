@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { recomputeRollSequence } = require('../services/roll-service');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
@@ -30,7 +31,7 @@ router.post('/', (req, res) => {
       const end_date = body.end_date || null;
       const camera = body.camera || null;
       const lens = body.lens || null;
-      const shooter = body.shooter || null;
+      const photographer = body.photographer || null;
       const film_type = body.film_type || null;
       const filmId = body.filmId ? Number(body.filmId) : null;
       const notes = body.notes || null;
@@ -47,9 +48,9 @@ router.post('/', (req, res) => {
       }
 
       // Insert Roll
-      const sql = `INSERT INTO rolls (title, start_date, end_date, camera, lens, shooter, filmId, film_type, notes) VALUES (?,?,?,?,?,?,?,?,?)`;
+      const sql = `INSERT INTO rolls (title, start_date, end_date, camera, lens, photographer, filmId, film_type, notes) VALUES (?,?,?,?,?,?,?,?,?)`;
       await new Promise((resolve, reject) => {
-        db.run(sql, [title, start_date, end_date, camera, lens, shooter, filmId, film_type, notes], function(err) {
+        db.run(sql, [title, start_date, end_date, camera, lens, photographer, filmId, film_type, notes], function(err) {
           if (err) reject(err);
           else {
             this.lastID; // access this context
@@ -285,11 +286,20 @@ router.post('/', (req, res) => {
               console.error('Failed to insert photo record', dbErr);
           }
         }
-        
+
+        const stmt = db.prepare('INSERT INTO photos (roll_id, frame_number, filename, full_rel_path, thumb_rel_path, negative_rel_path, camera, lens, photographer) VALUES (?,?,?,?,?,?,?,?,?)');
+        for (const p of inserted) stmt.run(rollId, p.frameNumber, p.filename, p.fullRelPath, p.thumbRelPath, p.negativeRelPath, camera, lens, photographer);
         stmt.finalize();
 
         // Set cover
         try {
+
+        // Seed roll_gear with initial values
+        try {
+          if (camera) db.run('INSERT OR IGNORE INTO roll_gear (roll_id, type, value) VALUES (?,?,?)', [rollId, 'camera', camera]);
+          if (lens) db.run('INSERT OR IGNORE INTO roll_gear (roll_id, type, value) VALUES (?,?,?)', [rollId, 'lens', lens]);
+          if (photographer) db.run('INSERT OR IGNORE INTO roll_gear (roll_id, type, value) VALUES (?,?,?)', [rollId, 'photographer', photographer]);
+        } catch(e){ console.error('Seed roll_gear failed', e.message); }
             let coverToSet = null;
             if (filmId) {
               // Try to get film thumb
@@ -329,6 +339,9 @@ router.post('/', (req, res) => {
           res.status(201).json({ ok: true, roll: row, files: filesForClient });
         });
 
+      }).then(async () => {
+        // Recompute display sequence after creation
+        try { await recomputeRollSequence(); } catch(e){ console.error('recompute sequence failed', e); }
       }).catch(err => {
          console.error('Transaction error', err);
          res.status(500).json({ error: err.message });
@@ -343,13 +356,96 @@ router.post('/', (req, res) => {
 
 // GET /api/rolls
 router.get('/', (req, res) => {
-  const sql = `
-    SELECT rolls.*, films.name AS film_name_joined 
+  const { camera, lens, photographer, location_id, year, month, ym, film } = req.query;
+
+  const toArray = (v) => {
+    if (v === undefined || v === null) return [];
+    if (Array.isArray(v)) return v.filter(Boolean);
+    if (typeof v === 'string' && v.includes(',')) return v.split(',').map(s=>s.trim()).filter(Boolean);
+    return v === '' ? [] : [v];
+  };
+  const cameras = toArray(camera);
+  const lenses = toArray(lens);
+  const photographers = toArray(photographer);
+  const locations = toArray(location_id).map(v => String(v).split('::')[0]); // support "id::label"
+  const years = toArray(year);
+  const months = toArray(month);
+  const yms = toArray(ym);
+  const films = toArray(film);
+  
+  let sql = `
+    SELECT DISTINCT rolls.*, films.name AS film_name_joined 
     FROM rolls 
     LEFT JOIN films ON rolls.filmId = films.id 
-    ORDER BY rolls.start_date DESC, rolls.id DESC
   `;
-  db.all(sql, (err, rows) => {
+  
+  const params = [];
+  const conditions = [];
+
+  if (cameras.length) {
+    const cameraConds = cameras.map(() => `(
+      rolls.camera = ? OR 
+      EXISTS (SELECT 1 FROM roll_gear WHERE roll_id = rolls.id AND type='camera' AND value = ?)
+    )`).join(' OR ');
+    conditions.push(`(${cameraConds})`);
+    cameras.forEach(c => { params.push(c, c); });
+  }
+
+  if (lenses.length) {
+    const lensConds = lenses.map(() => `(
+      rolls.lens = ? OR 
+      EXISTS (SELECT 1 FROM roll_gear WHERE roll_id = rolls.id AND type='lens' AND value = ?)
+    )`).join(' OR ');
+    conditions.push(`(${lensConds})`);
+    lenses.forEach(l => { params.push(l, l); });
+  }
+
+  if (photographers.length) {
+    const pgConds = photographers.map(() => `(
+      rolls.photographer = ? OR 
+      EXISTS (SELECT 1 FROM roll_gear WHERE roll_id = rolls.id AND type='photographer' AND value = ?) OR
+      EXISTS (SELECT 1 FROM photos WHERE roll_id = rolls.id AND photographer = ?)
+    )`).join(' OR ');
+    conditions.push(`(${pgConds})`);
+    photographers.forEach(p => { params.push(p, p, p); });
+  }
+
+  if (locations.length) {
+    const placeholders = locations.map(()=>'?').join(',');
+    conditions.push(`(
+      EXISTS (SELECT 1 FROM roll_locations WHERE roll_id = rolls.id AND location_id IN (${placeholders}))
+      OR EXISTS (SELECT 1 FROM photos WHERE roll_id = rolls.id AND location_id IN (${placeholders}))
+    )`);
+    params.push(...locations, ...locations);
+  }
+
+  if (years.length || months.length || yms.length) {
+    const parts = [];
+    if (yms.length) {
+      parts.push(`strftime('%Y-%m', rolls.start_date) IN (${yms.map(()=>'?').join(',')})`);
+      params.push(...yms);
+    } else {
+      if (years.length) { parts.push(`strftime('%Y', rolls.start_date) IN (${years.map(()=>'?').join(',')})`); params.push(...years); }
+      if (months.length) { parts.push(`strftime('%m', rolls.start_date) IN (${months.map(()=>'?').join(',')})`); params.push(...months); }
+    }
+    if (parts.length) conditions.push(`(${parts.join(' OR ')})`);
+  }
+
+  if (films.length) {
+    const filmConds = films.map(() => `(
+      rolls.filmId = ? OR films.name = ? OR rolls.film_type = ?
+    )`).join(' OR ');
+    conditions.push(`(${filmConds})`);
+    films.forEach(fv => { params.push(fv, fv, fv); });
+  }
+
+  if (conditions.length > 0) {
+    sql += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  sql += ' ORDER BY rolls.start_date DESC, rolls.id DESC';
+
+  db.all(sql, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -367,8 +463,45 @@ router.get('/:id', (req, res) => {
   db.get(sql, [id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Not found' });
-    res.json(row);
+    db.all(`SELECT l.id AS location_id, l.country_code, l.country_name, l.city_name, l.city_lat, l.city_lng
+            FROM roll_locations rl JOIN locations l ON rl.location_id = l.id
+            WHERE rl.roll_id = ? ORDER BY l.country_name, l.city_name`, [id], (e2, locs) => {
+      if (e2) return res.status(500).json({ error: e2.message });
+      row.locations = locs || [];
+      // attach gear arrays
+      db.all('SELECT type, value FROM roll_gear WHERE roll_id = ?', [id], (e3, gearRows) => {
+        if (e3) return res.status(500).json({ error: e3.message });
+        const gear = { cameras: [], lenses: [], photographers: [] };
+        (gearRows || []).forEach(g => {
+          if (g.type === 'camera') gear.cameras.push(g.value);
+          else if (g.type === 'lens') gear.lenses.push(g.value);
+          else if (g.type === 'photographer') gear.photographers.push(g.value);
+        });
+        row.gear = gear;
+        res.json(row);
+      });
+    });
   });
+});
+
+// GET /api/rolls/:id/locations
+router.get('/:id/locations', async (req, res) => {
+  const id = req.params.id;
+  const sql = `
+    SELECT l.id AS location_id, l.country_code, l.country_name, l.city_name, l.city_lat, l.city_lng
+    FROM roll_locations rl
+    JOIN locations l ON rl.location_id = l.id
+    WHERE rl.roll_id = ?
+    ORDER BY l.country_name, l.city_name
+  `;
+  try {
+    const rows = await new Promise((resolve, reject) => {
+      db.all(sql, [id], (err, rows) => err ? reject(err) : resolve(rows));
+    });
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // GET /api/rolls/:id/preset - return stored preset JSON (parsed)
@@ -378,9 +511,7 @@ router.get('/:id/preset', (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Not found' });
     let parsed = null;
-    if (row.preset_json) {
-      try { parsed = JSON.parse(row.preset_json); } catch(e) { parsed = null; }
-    }
+    try { parsed = row.preset_json ? JSON.parse(row.preset_json) : null; } catch { parsed = null; }
     res.json({ rollId: id, preset: parsed });
   });
 });
@@ -410,20 +541,32 @@ router.delete('/:id/preset', (req, res) => {
 });
 
 // PUT /api/rolls/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const id = req.params.id;
-  const { title, start_date, end_date, camera, lens, shooter, film_type, filmId, notes } = req.body;
+  const { title, start_date, end_date, camera, lens, photographer, film_type, filmId, notes, locations, develop_lab, develop_process, develop_date, purchase_cost, develop_cost, purchase_channel, batch_number, develop_note } = req.body;
   if (start_date && end_date) {
     const sd = new Date(start_date);
     const ed = new Date(end_date);
     if (isNaN(sd.getTime()) || isNaN(ed.getTime())) return res.status(400).json({ error: 'Invalid start_date or end_date' });
     if (sd > ed) return res.status(400).json({ error: 'start_date cannot be later than end_date' });
   }
-  const sql = `UPDATE rolls SET title=?, start_date=?, end_date=?, camera=?, lens=?, shooter=?, film_type=?, filmId=?, notes=? WHERE id=?`;
-  db.run(sql, [title, start_date, end_date, camera, lens, shooter, film_type, filmId, notes, id], function(err){
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ updated: this.changes });
-  });
+  const sql = `UPDATE rolls SET title=?, start_date=?, end_date=?, camera=?, lens=?, photographer=?, film_type=?, filmId=?, notes=?, develop_lab=?, develop_process=?, develop_date=?, purchase_cost=?, develop_cost=?, purchase_channel=?, batch_number=?, develop_note=? WHERE id=?`;
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(sql, [title, start_date, end_date, camera, lens, photographer, film_type, filmId, notes, develop_lab, develop_process, develop_date, purchase_cost, develop_cost, purchase_channel, batch_number, develop_note, id], function(err){
+        if (err) reject(err); else resolve(this.changes);
+      });
+    });
+    if (Array.isArray(locations)) {
+      for (const locId of locations) {
+        await new Promise((resolve, reject) => db.run('INSERT OR IGNORE INTO roll_locations (roll_id, location_id) VALUES (?, ?)', [id, locId], (e)=> e?reject(e):resolve()));
+      }
+    }
+    try { await recomputeRollSequence(); } catch(e){ console.error('recompute sequence failed', e); }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // DELETE /api/rolls/:id
@@ -464,9 +607,10 @@ router.delete('/:id', (req, res) => {
 
       const deleteDb = () => {
         console.log(`[DELETE] Deleting from DB for id: ${id}`);
-        db.run('DELETE FROM rolls WHERE id = ?', [id], function(e){
+          db.run('DELETE FROM rolls WHERE id = ?', [id], async function(e){
           if (e) return res.status(500).json({ error: e.message });
-          res.json({ deleted: this.changes });
+            try { await recomputeRollSequence(); } catch(err){ console.error('recompute sequence failed', err); }
+            res.json({ deleted: this.changes });
         });
       };
 
@@ -530,7 +674,7 @@ router.get('/:rollId/photos', async (req, res) => {
 
 router.post('/:rollId/photos', uploadDefault.single('image'), async (req, res) => {
   const rollId = req.params.rollId;
-  const { caption, taken_at, rating, isNegative } = req.body;
+  const { caption, taken_at, rating, isNegative, camera: photoCamera, lens: photoLens, photographer: photoPhotographer } = req.body;
   if (!req.file) return res.status(400).json({ error: 'image file required' });
   
   // Use original extension for the original file
@@ -647,10 +791,21 @@ router.post('/:rollId/photos', uploadDefault.single('image'), async (req, res) =
       }
     }
 
-    const sql = `INSERT INTO photos (roll_id, frame_number, filename, full_rel_path, thumb_rel_path, negative_rel_path, original_rel_path, positive_rel_path, positive_thumb_rel_path, negative_thumb_rel_path, is_negative_source, caption, taken_at, rating) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
-    db.run(sql, [rollId, frameNumber, finalName, fullRelPath, thumbRelPath, negativeRelPath, originalRelPath, positiveRelPath, positiveThumbRelPath, negativeThumbRelPath, isNegativeSource, caption, taken_at, rating], function(err) {
+    // Fetch roll defaults for metadata if not provided explicitly
+    const rollMeta = await new Promise((resolve) => {
+      db.get('SELECT camera, lens, photographer FROM rolls WHERE id = ?', [rollId], (e, row) => {
+        if (e || !row) return resolve({ camera: null, lens: null, photographer: null });
+        resolve(row);
+      });
+    });
+    const finalCamera = photoCamera || rollMeta.camera || null;
+    const finalLens = photoLens || rollMeta.lens || null;
+    const finalPhotographer = photoPhotographer || rollMeta.photographer || null;
+
+    const sql = `INSERT INTO photos (roll_id, frame_number, filename, full_rel_path, thumb_rel_path, negative_rel_path, caption, taken_at, rating, camera, lens, photographer) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`;
+    db.run(sql, [rollId, frameNumber, finalName, fullRelPath, thumbRelPath, negativeRelPath, caption, taken_at, rating, finalCamera, finalLens, finalPhotographer], function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.status(201).json({ ok: true, id: this.lastID, filename: finalName, fullRelPath, thumbRelPath, negativeRelPath });
+      res.status(201).json({ ok: true, id: this.lastID, filename: finalName, fullRelPath, thumbRelPath, negativeRelPath, camera: finalCamera, lens: finalLens, photographer: finalPhotographer });
     });
 
   } catch (err) {

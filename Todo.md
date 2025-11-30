@@ -1,5 +1,3 @@
-我需要全面了解你的胶片管理软件后再给出建议。让我先研究一下整体架构和功能。 
-
 Research FilmGalery app structure
 
 Searched codebase for "feature list, main features, core features, functionality", 17 results
@@ -298,5 +296,5 @@ Searched codebase for "user workflow, add film, add roll, view photo, edit photo
 
 在后端保留原始 16bit TIFF/BMP，并在 DB 中记录 original_rel_path。
 在 Electron/Node 侧实现一个高位深渲染服务（先用 Node + sharp 做 float/16bit pipeline，之后如有需要再逐步迁到 WebGL float）。
-在 Film Lab 中添加“16bit 模式”开关，参数统一发给高位深渲染服务，前端只接收预览帧。
+在 Film Lab 中添加"16bit 模式"开关，参数统一发给高位深渲染服务，前端只接收预览帧。
 逐步把曝光/曲线等核心调整迁移到高精度管线，并保持现有 8bit 管线做 fallback。

@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS rolls (
   end_date TEXT,
   camera TEXT,
   lens TEXT,
-  shooter TEXT,
+  photographer TEXT,
   filmId INTEGER,
   film_type TEXT,
   exposures INTEGER,

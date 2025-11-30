@@ -6,7 +6,7 @@ const path = require('path');
 const sharp = require('sharp');
 sharp.cache(false);
 const { buildPipeline } = require('../services/filmlab-service');
-const { runAsync, allAsync } = require('../utils/db-helpers');
+const { runAsync, allAsync, getAsync, validatePhotoUpdate } = require('../utils/db-helpers');
 const { savePhotoTags, attachTagsToPhotos } = require('../services/tag-service');
 const { uploadsDir } = require('../config/paths');
 const { uploadDefault } = require('../config/multer');
@@ -76,6 +76,109 @@ function buildCurveLUT(points) {
   return lut;
 }
 
+// Get all photos with optional filtering
+router.get('/', async (req, res) => {
+  const { camera, lens, photographer, location_id, film, year, month, ym } = req.query;
+
+  const toArray = (v) => {
+    if (v === undefined || v === null) return [];
+    if (Array.isArray(v)) return v.filter(Boolean);
+    if (typeof v === 'string' && v.includes(',')) return v.split(',').map(s=>s.trim()).filter(Boolean);
+    return v === '' ? [] : [v];
+  };
+
+  const cameras = toArray(camera);
+  const lenses = toArray(lens);
+  const photographers = toArray(photographer);
+  const locations = toArray(location_id).map(v => String(v).split('::')[0]);
+  const years = toArray(year);
+  const months = toArray(month);
+  const yms = toArray(ym);
+  const films = toArray(film);
+
+  let sql = `
+    SELECT p.*, r.title as roll_title, l.city_name, l.country_name, COALESCE(f.name, r.film_type) AS film_name
+    FROM photos p
+    JOIN rolls r ON p.roll_id = r.id
+    LEFT JOIN locations l ON p.location_id = l.id
+    LEFT JOIN films f ON r.filmId = f.id
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (cameras.length) {
+    const cs = cameras.map(() => `p.camera = ?`).join(' OR ');
+    sql += ` AND (${cs})`;
+    cameras.forEach(c => { params.push(c); });
+  }
+
+  if (lenses.length) {
+    const ls = lenses.map(() => `p.lens = ?`).join(' OR ');
+    sql += ` AND (${ls})`;
+    lenses.forEach(l => { params.push(l); });
+  }
+
+  if (photographers.length) {
+    const ps = photographers.map(() => `p.photographer = ?`).join(' OR ');
+    sql += ` AND (${ps})`;
+    photographers.forEach(pv => { params.push(pv); });
+  }
+
+  if (locations.length) {
+    const placeholders = locations.map(()=>'?').join(',');
+    sql += ` AND p.location_id IN (${placeholders})`;
+    params.push(...locations);
+  }
+
+  if (films.length) {
+    const fs = films.map(() => `(
+      r.filmId = ? OR f.name = ? OR r.film_type = ?
+    )`).join(' OR ');
+    sql += ` AND (${fs})`;
+    films.forEach(fv => { params.push(fv, fv, fv); });
+  }
+
+  if (years.length || months.length || yms.length) {
+    const parts = [];
+    if (yms.length) {
+      parts.push(`strftime('%Y-%m', p.date_taken) IN (${yms.map(()=>'?').join(',')})`); params.push(...yms);
+    } else {
+      if (years.length) { parts.push(`strftime('%Y', p.date_taken) IN (${years.map(()=>'?').join(',')})`); params.push(...years); }
+      if (months.length) { parts.push(`strftime('%m', p.date_taken) IN (${months.map(()=>'?').join(',')})`); params.push(...months); }
+    }
+    if (parts.length) sql += ` AND (${parts.join(' OR ')})`;
+  }
+
+  sql += ` ORDER BY p.date_taken DESC, p.id DESC`;
+
+  try {
+    const rows = await allAsync(sql, params);
+    const withTags = await attachTagsToPhotos(rows);
+    res.json(withTags);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get random photos for hero section
+router.get('/random', async (req, res) => {
+  const limit = parseInt(req.query.limit) || 10;
+  const sql = `
+    SELECT p.*, r.title as roll_title 
+    FROM photos p
+    JOIN rolls r ON p.roll_id = r.id
+    WHERE p.full_rel_path IS NOT NULL
+    ORDER BY RANDOM() 
+    LIMIT ?
+  `;
+  try {
+    const rows = await allAsync(sql, [limit]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get liked photos
 router.get('/favorites', async (req, res) => {
   console.log('[GET] /api/photos/favorites');
@@ -122,7 +225,7 @@ router.get('/negatives', async (req, res) => {
 // update photo (adds tags support)
 router.put('/:id', async (req, res) => {
   const id = req.params.id;
-  const { frame_number, caption, taken_at, rating, tags } = req.body;
+  const { frame_number, caption, taken_at, rating, tags, date_taken, time_taken, location_id, detail_location, latitude, longitude, camera, lens, photographer } = req.body;
   console.log(`[PUT] Update photo ${id}`, req.body);
 
   const updates = [];
@@ -131,12 +234,23 @@ router.put('/:id', async (req, res) => {
   if (caption !== undefined) { updates.push('caption=?'); params.push(caption); }
   if (taken_at !== undefined) { updates.push('taken_at=?'); params.push(taken_at); }
   if (rating !== undefined) { updates.push('rating=?'); params.push(parseInt(rating)); }
+  if (date_taken !== undefined) { updates.push('date_taken=?'); params.push(date_taken); }
+  if (time_taken !== undefined) { updates.push('time_taken=?'); params.push(time_taken); }
+  if (location_id !== undefined) { updates.push('location_id=?'); params.push(location_id); }
+  if (detail_location !== undefined) { updates.push('detail_location=?'); params.push(detail_location); }
+  if (latitude !== undefined) { updates.push('latitude=?'); params.push(latitude); }
+  if (longitude !== undefined) { updates.push('longitude=?'); params.push(longitude); }
+  if (camera !== undefined) { updates.push('camera=?'); params.push(camera); }
+  if (lens !== undefined) { updates.push('lens=?'); params.push(lens); }
+  if (photographer !== undefined) { updates.push('photographer=?'); params.push(photographer); }
 
   if (!updates.length && tags === undefined) {
     return res.json({ updated: 0 });
   }
 
   try {
+    // Validate and initialize missing lat/lng from location city
+    const v = await validatePhotoUpdate(id, req.body);
     let updated = 0;
     if (updates.length) {
       params.push(id);
@@ -148,6 +262,24 @@ router.put('/:id', async (req, res) => {
     let appliedTags;
     if (tags !== undefined) {
       appliedTags = await savePhotoTags(id, Array.isArray(tags) ? tags : []);
+    }
+
+    // Auto-add location to roll if missing
+    if (v.location_id) {
+      const row = await getAsync('SELECT roll_id FROM photos WHERE id = ?', [id]);
+      if (row && row.roll_id) {
+        await runAsync('INSERT OR IGNORE INTO roll_locations (roll_id, location_id) VALUES (?, ?)', [row.roll_id, v.location_id]);
+      }
+    }
+
+    // Add gear values to roll_gear without replacing roll fields
+    if (camera || lens || photographer) {
+      const photo = await getAsync('SELECT roll_id FROM photos WHERE id = ?', [id]);
+      if (photo && photo.roll_id) {
+        if (camera) await runAsync('INSERT OR IGNORE INTO roll_gear (roll_id, type, value) VALUES (?,?,?)', [photo.roll_id, 'camera', camera]);
+        if (lens) await runAsync('INSERT OR IGNORE INTO roll_gear (roll_id, type, value) VALUES (?,?,?)', [photo.roll_id, 'lens', lens]);
+        if (photographer) await runAsync('INSERT OR IGNORE INTO roll_gear (roll_id, type, value) VALUES (?,?,?)', [photo.roll_id, 'photographer', photographer]);
+      }
     }
 
     res.json({ ok: true, updated, tags: appliedTags });

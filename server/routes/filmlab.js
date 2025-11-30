@@ -160,4 +160,138 @@ router.post('/preview', async (req, res) => {
   }
 });
 
+// POST /api/filmlab/render
+// Body: { photoId, params }
+router.post('/render', async (req, res) => {
+  const { photoId, params } = req.body || {};
+  if (!photoId) return res.status(400).json({ error: 'photoId required' });
+  try {
+    const row = await new Promise((resolve, reject) => {
+      db.get('SELECT id, roll_id, original_rel_path, positive_rel_path, full_rel_path, negative_rel_path, filename FROM photos WHERE id = ?', [photoId], (err, r) => err ? reject(err) : resolve(r));
+    });
+    if (!row) return res.status(404).json({ error: 'photo not found' });
+    const relSource = row.original_rel_path || row.positive_rel_path || row.full_rel_path || row.negative_rel_path;
+    if (!relSource) return res.status(400).json({ error: 'no usable source path' });
+    const abs = path.join(uploadsDir, relSource);
+    if (!fs.existsSync(abs)) return res.status(404).json({ error: 'source missing on disk' });
+
+    // Full resolution pipeline
+    let img = await buildPipeline(abs, params || {}, { maxWidth: 4000, cropRect: (params && params.cropRect) || null, toneAndCurvesInJs: true });
+
+    const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
+    const width = info.width;
+    const height = info.height;
+    const channels = info.channels;
+    const out = Buffer.allocUnsafe(width * height * 3);
+
+    const toneLUT = buildToneLUT({
+      exposure: params?.exposure || 0,
+      contrast: params?.contrast || 0,
+      highlights: params?.highlights || 0,
+      shadows: params?.shadows || 0,
+      whites: params?.whites || 0,
+      blacks: params?.blacks || 0,
+    });
+    const curves = params?.curves || { rgb: [{ x: 0, y: 0 }, { x: 255, y: 255 }], red: [{ x: 0, y: 0 }, { x: 255, y: 255 }], green: [{ x: 0, y: 0 }, { x: 255, y: 255 }], blue: [{ x: 0, y: 0 }, { x: 255, y: 255 }] };
+    const lutRGB = buildCurveLUT(curves.rgb || []);
+    const lutR = buildCurveLUT(curves.red || []);
+    const lutG = buildCurveLUT(curves.green || []);
+    const lutB = buildCurveLUT(curves.blue || []);
+
+    for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
+      let r = data[i];
+      let g = data[i + 1];
+      let b = data[i + 2];
+      r = toneLUT[r]; g = toneLUT[g]; b = toneLUT[b];
+      r = lutRGB[r]; g = lutRGB[g]; b = lutRGB[b];
+      r = lutR[r]; g = lutG[g]; b = lutB[b];
+      out[j] = r; out[j + 1] = g; out[j + 2] = b;
+    }
+
+    // Save to new positive file
+    const rollDir = path.dirname(path.join(uploadsDir, relSource));
+    const ext = path.extname(row.filename || 'image.jpg') || '.jpg';
+    const base = path.basename(row.filename || 'image.jpg', ext);
+    const newName = `${base}_pos_${Date.now()}${ext}`;
+    
+    let outDir = rollDir;
+    if (relSource.includes('/negative')) {
+        outDir = rollDir.replace(/negative$/, 'full').replace(/negative[\\/]$/, 'full');
+        if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+    }
+    
+    const outPath = path.join(outDir, newName);
+    
+    await sharp(out, { raw: { width, height, channels: 3 } }).jpeg({ quality: 95 }).toFile(outPath);
+    
+    const relOut = path.relative(uploadsDir, outPath).replace(/\\/g, '/');
+    
+    await new Promise((resolve, reject) => {
+        db.run('UPDATE photos SET positive_rel_path = ?, full_rel_path = ? WHERE id = ?', [relOut, relOut, photoId], (err) => err ? reject(err) : resolve());
+    });
+
+    res.json({ ok: true, path: relOut });
+  } catch (e) {
+    console.error('[FILMLAB] render error', e);
+    res.status(500).json({ error: e && e.message });
+  }
+});
+
+// POST /api/filmlab/export
+// Body: { photoId, params }
+router.post('/export', async (req, res) => {
+  const { photoId, params } = req.body || {};
+  if (!photoId) return res.status(400).json({ error: 'photoId required' });
+  try {
+    const row = await new Promise((resolve, reject) => {
+      db.get('SELECT id, roll_id, original_rel_path, positive_rel_path, full_rel_path, negative_rel_path FROM photos WHERE id = ?', [photoId], (err, r) => err ? reject(err) : resolve(r));
+    });
+    if (!row) return res.status(404).json({ error: 'photo not found' });
+    const relSource = row.original_rel_path || row.positive_rel_path || row.full_rel_path || row.negative_rel_path;
+    if (!relSource) return res.status(400).json({ error: 'no usable source path' });
+    const abs = path.join(uploadsDir, relSource);
+    if (!fs.existsSync(abs)) return res.status(404).json({ error: 'source missing on disk' });
+
+    let img = await buildPipeline(abs, params || {}, { maxWidth: 4000, cropRect: (params && params.cropRect) || null, toneAndCurvesInJs: true });
+
+    const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
+    const width = info.width;
+    const height = info.height;
+    const channels = info.channels;
+    const out = Buffer.allocUnsafe(width * height * 3);
+
+    const toneLUT = buildToneLUT({
+      exposure: params?.exposure || 0,
+      contrast: params?.contrast || 0,
+      highlights: params?.highlights || 0,
+      shadows: params?.shadows || 0,
+      whites: params?.whites || 0,
+      blacks: params?.blacks || 0,
+    });
+    const curves = params?.curves || { rgb: [{ x: 0, y: 0 }, { x: 255, y: 255 }], red: [{ x: 0, y: 0 }, { x: 255, y: 255 }], green: [{ x: 0, y: 0 }, { x: 255, y: 255 }], blue: [{ x: 0, y: 0 }, { x: 255, y: 255 }] };
+    const lutRGB = buildCurveLUT(curves.rgb || []);
+    const lutR = buildCurveLUT(curves.red || []);
+    const lutG = buildCurveLUT(curves.green || []);
+    const lutB = buildCurveLUT(curves.blue || []);
+
+    for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
+      let r = data[i];
+      let g = data[i + 1];
+      let b = data[i + 2];
+      r = toneLUT[r]; g = toneLUT[g]; b = toneLUT[b];
+      r = lutRGB[r]; g = lutRGB[g]; b = lutRGB[b];
+      r = lutR[r]; g = lutG[g]; b = lutB[b];
+      out[j] = r; out[j + 1] = g; out[j + 2] = b;
+    }
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Content-Disposition', `attachment; filename="export_${photoId}.jpg"`);
+    const buf = await sharp(out, { raw: { width, height, channels: 3 } }).jpeg({ quality: 95 }).toBuffer();
+    res.end(buf);
+  } catch (e) {
+    console.error('[FILMLAB] export error', e);
+    res.status(500).json({ error: e && e.message });
+  }
+});
+
 module.exports = router;
