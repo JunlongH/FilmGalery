@@ -51,10 +51,49 @@ class LockManager {
 
           if (isValid && age < STALE_THRESHOLD_MS) {
             // Lock is active and valid
-            return { 
-              acquired: false, 
-              message: `Database is locked by another instance (${owner}). Please close it first.` 
-            };
+            // [ZOMBIE RECOVERY] Check if process is actually alive
+            const [hostname, pid] = owner.split('-');
+            if (hostname === os.hostname() && pid) {
+              try {
+                // Check if process exists
+                process.kill(parseInt(pid), 0);
+                
+                // Process exists. Since we are the Single Instance (guaranteed by Electron),
+                // this must be a zombie process from a previous crash.
+                console.log(`[LockManager] Found zombie process ${pid}. Attempting to kill...`);
+                try {
+                  process.kill(parseInt(pid), 'SIGTERM');
+                  // Give it a moment to die
+                  await new Promise(r => setTimeout(r, 1000));
+                } catch (killErr) {
+                  console.error('[LockManager] Failed to kill zombie:', killErr.message);
+                  // If we can't kill it, we can't bind the port anyway.
+                  return { 
+                    acquired: false, 
+                    message: `Database locked by zombie process ${pid} which could not be terminated.` 
+                  };
+                }
+                
+                console.log('[LockManager] Zombie killed. Stealing lock.');
+                // Proceed to overwrite lock
+              } catch (e) {
+                if (e.code === 'ESRCH') {
+                  console.log('[LockManager] Lock owner process not found (stale). Stealing lock.');
+                  // Proceed to overwrite lock
+                } else {
+                  // Permission error or other
+                  return { 
+                    acquired: false, 
+                    message: `Database locked by ${owner}. Unable to verify process status: ${e.message}` 
+                  };
+                }
+              }
+            } else {
+              return { 
+                acquired: false, 
+                message: `Database is locked by another instance (${owner}). Please close it first.` 
+              };
+            }
           } else {
             console.log(`[LockManager] Overwriting lock (Valid: ${isValid}, Age: ${age}ms)`);
           }
