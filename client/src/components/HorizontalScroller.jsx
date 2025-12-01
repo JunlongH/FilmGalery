@@ -8,7 +8,6 @@ function HorizontalScroller({ children, height = 260, padding = 12, gap = 16, ba
   const lastTimeRef = useRef(0);
   const isDraggingRef = useRef(false);
   const startXRef = useRef(0);
-  const movedRef = useRef(false);
   const rafRef = useRef(null);
   const [segmentWidth, setSegmentWidth] = useState(0);
   const uid = useMemo(() => `hs-${Math.random().toString(36).slice(2)}`, []);
@@ -27,13 +26,12 @@ function HorizontalScroller({ children, height = 260, padding = 12, gap = 16, ba
     const el = ref.current;
     if (!el) return;
     isDraggingRef.current = true;
-    movedRef.current = false;
     stopInertia();
     lastXRef.current = e.clientX;
     startXRef.current = e.clientX;
     lastTimeRef.current = performance.now();
     // Do not capture pointer: allow child onClick to fire when not moved
-    el.style.cursor = 'grab';
+    el.style.cursor = 'grabbing';
   }, [stopInertia, shouldLoop]);
 
   const onPointerMove = useCallback((e) => {
@@ -42,13 +40,9 @@ function HorizontalScroller({ children, height = 260, padding = 12, gap = 16, ba
     if (!el) return;
     const now = performance.now();
     const dx = e.clientX - lastXRef.current;
-    if (!movedRef.current && Math.abs(e.clientX - startXRef.current) > 3) {
-      movedRef.current = true;
-      const el2 = ref.current; if (el2) el2.style.cursor = 'grabbing';
-    }
-    if (movedRef.current) {
-      el.scrollLeft -= dx; // invert to drag feel after threshold
-    }
+    
+    el.scrollLeft -= dx; // invert to drag feel
+    
     const dt = now - lastTimeRef.current || 16;
     velocityRef.current = (dx) / dt; // px per ms
     lastXRef.current = e.clientX;
@@ -70,15 +64,15 @@ function HorizontalScroller({ children, height = 260, padding = 12, gap = 16, ba
     if (!isDraggingRef.current) return;
     const el = ref.current;
     if (!el) return;
-    const moved = movedRef.current;
     isDraggingRef.current = false;
-    movedRef.current = false;
     el.style.cursor = '';
-    if (!moved) {
+    
+    if (Math.abs(e.clientX - startXRef.current) < 3) {
       // treat as click; do not run inertia/normalize
       velocityRef.current = 0;
       return;
     }
+
     normalize();
     // inertia
     const decay = 0.95; // friction
