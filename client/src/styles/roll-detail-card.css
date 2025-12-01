@@ -1,0 +1,216 @@
+/* client/src/styles/roll-detail-card.css */
+
+.roll-card {
+  background-color: var(--color-bg-alt);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 32px;
+  margin: 24px;
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 48px;
+  align-items: start;
+  border: 1px solid var(--color-border);
+}
+
+.roll-info-column {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.roll-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 24px;
+}
+
+.roll-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roll-id {
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  opacity: 0.7;
+}
+
+.roll-title {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.roll-action-btn {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background-color: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.roll-action-btn:hover {
+  background-color: var(--color-bg);
+  border-color: var(--color-text-muted);
+}
+
+.roll-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 32px 24px;
+}
+
+.meta-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.meta-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.meta-value-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.date-inline {
+  white-space: nowrap;
+}
+
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-pill {
+  font-size: 13px;
+  padding: 4px 10px;
+  background-color: var(--color-bg);
+  border-radius: 6px;
+  color: var(--color-text);
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.tag-pill:hover {
+  border-color: var(--color-border);
+  background-color: var(--color-bg-alt);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.roll-visual-column {
+  position: relative;
+}
+
+.roll-cover-frame {
+  width: 100%;
+  aspect-ratio: 1;
+  background-color: var(--color-bg);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
+  border: 1px solid rgba(255,255,255,0.5);
+}
+
+.roll-collapsible {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 12px;
+}
+
+.roll-collapsible:last-child {
+  border-bottom: none;
+}
+
+.roll-collapsible summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.roll-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.roll-collapsible summary:hover .meta-label {
+  color: var(--color-text);
+}
+
+.roll-collapsible[open] summary {
+  margin-bottom: 12px;
+}
+
+.roll-collapsible-content {
+  padding-left: 4px;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.chevron-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--color-text-muted);
+  transition: transform 0.2s ease;
+}
+
+.roll-collapsible[open] .chevron-icon {
+  transform: rotate(180deg);
+}
+
+.roll-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.empty-cover-placeholder {
+  width: 100%;
+  height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  border-radius: var(--radius-md);
+  border: 2px dashed var(--color-border);
+}
+
+@media (max-width: 900px) {
+  .roll-card {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  
+  .roll-cover-frame {
+    max-width: 300px;
+  }
+}

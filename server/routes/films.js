@@ -56,4 +56,49 @@ router.delete('/:id', (req, res) => {
   });
 });
 
+// update film (name, iso, category, optional new thumb)
+router.put('/:id', uploadFilm.single('thumb'), (req, res) => {
+  const id = req.params.id;
+  db.get('SELECT * FROM films WHERE id = ?', [id], (err, filmRow) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!filmRow) return res.status(404).json({ error: 'film_not_found' });
+
+    const { name, iso, category } = req.body || {};
+    const updates = {};
+    if (name) updates.name = name;
+    if (iso) updates.iso = Number(iso);
+    if (category) updates.category = category;
+
+    // handle thumb replacement
+    if (req.file) {
+      const newThumbPath = `/uploads/films/${req.file.filename}`;
+      updates.thumbPath = newThumbPath;
+    }
+
+    const keys = Object.keys(updates);
+    if (keys.length === 0) {
+      return db.get('SELECT * FROM films WHERE id = ?', [id], (e2, fresh) => {
+        if (e2) return res.status(500).json({ error: e2.message });
+        return res.json(fresh);
+      });
+    }
+
+    const setClause = keys.map(k => `${k} = ?`).join(', ');
+    const values = keys.map(k => updates[k]);
+    db.run(`UPDATE films SET ${setClause} WHERE id = ?`, [...values, id], function(e3) {
+      if (e3) return res.status(500).json({ error: e3.message });
+      // delete old thumb if replaced
+      if (req.file && filmRow.thumbPath && filmRow.thumbPath !== updates.thumbPath) {
+        const rel = filmRow.thumbPath.replace(/^\/uploads\//, '');
+        const oldPath = path.join(uploadsDir, rel);
+        fs.unlink(oldPath, () => { /* ignore error */ });
+      }
+      db.get('SELECT * FROM films WHERE id = ?', [id], (e4, updated) => {
+        if (e4) return res.status(500).json({ error: e4.message });
+        res.json(updated);
+      });
+    });
+  });
+});
+
 module.exports = router;

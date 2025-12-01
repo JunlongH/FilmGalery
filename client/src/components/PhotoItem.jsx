@@ -43,7 +43,7 @@ function NoteEditModal({ initialValue, onSave, onClose }) {
   );
 }
 
-export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUpdatePhoto, filmName, onEditTags, viewMode = 'positive' }) {
+export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUpdatePhoto, filmName, onEditTags, viewMode = 'positive', multiSelect=false, selected=false, onToggleSelect }) {
   const navigate = useNavigate();
   const [fullUrl, setFullUrl] = React.useState(null);
   const [thumbUrl, setThumbUrl] = React.useState(null);
@@ -73,38 +73,55 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
     // Cache buster
     const ts = p.updated_at ? new Date(p.updated_at).getTime() : Date.now(); 
     
-    if (viewMode === 'negative' && p.negative_rel_path) {
-        fullCandidate = `/uploads/${p.negative_rel_path}`;
-        
-        // Try to infer negative thumb path
-        try {
-            // p.negative_rel_path is like "rolls/10/negative/10_01_neg.jpg"
-            // We want "rolls/10/negative/thumb/10_01-thumb.jpg"
+    if (viewMode === 'negative') {
+      // Prefer new negative paths
+      if (p.negative_rel_path) fullCandidate = `/uploads/${p.negative_rel_path}`;
+      else if (p.full_rel_path) fullCandidate = `/uploads/${p.full_rel_path}`; // legacy fallback
+      else if (p.filename) fullCandidate = p.filename;
+
+      if (p.negative_thumb_rel_path) {
+        thumbCandidate = `/uploads/${p.negative_thumb_rel_path}`;
+      } else if (p.thumb_rel_path) {
+        thumbCandidate = `/uploads/${p.thumb_rel_path}`; // legacy thumb fallback
+      } else {
+        // Infer from negative path if possible
+        if (p.negative_rel_path) {
+          try {
             const parts = p.negative_rel_path.split('/');
-            const filename = parts.pop(); 
-            const dir = parts.join('/'); 
+            const filename = parts.pop();
+            const dir = parts.join('/');
             const dotIndex = filename.lastIndexOf('.');
             const nameNoExt = filename.substring(0, dotIndex);
             const base = nameNoExt.endsWith('_neg') ? nameNoExt.slice(0, -4) : nameNoExt;
             const thumbName = `${base}-thumb.jpg`;
-            const thumbPath = `${dir}/thumb/${thumbName}`;
-            thumbCandidate = `/uploads/${thumbPath}`;
-        } catch (e) {
+            thumbCandidate = `/uploads/${dir}/thumb/${thumbName}`;
+          } catch {
             thumbCandidate = fullCandidate;
+          }
+        } else {
+          thumbCandidate = fullCandidate;
         }
+      }
     } else {
-        if (p.full_rel_path) fullCandidate = `/uploads/${p.full_rel_path}`;
-        else if (p.filename) fullCandidate = p.filename;
-        
-        if (p.thumb_rel_path) thumbCandidate = `/uploads/${p.thumb_rel_path}`;
-        else thumbCandidate = fullCandidate;
+      // Positive/main view prefers positive_rel_path & positive_thumb_rel_path
+      if (p.positive_rel_path) fullCandidate = `/uploads/${p.positive_rel_path}`;
+      else if (p.full_rel_path) fullCandidate = `/uploads/${p.full_rel_path}`;
+      else if (p.filename) fullCandidate = p.filename;
+
+      if (p.positive_thumb_rel_path) {
+        thumbCandidate = `/uploads/${p.positive_thumb_rel_path}`;
+      } else if (p.thumb_rel_path) {
+        thumbCandidate = `/uploads/${p.thumb_rel_path}`; // legacy fallback
+      } else {
+        thumbCandidate = fullCandidate;
+      }
     }
     
     // Append timestamp to force reload if file changed
     const bust = `?t=${Date.now()}`; 
 
     // If viewMode is positive but no positive image exists, show placeholder or handle gracefully
-    if (viewMode === 'positive' && !p.full_rel_path) {
+    if (viewMode === 'positive' && !p.full_rel_path && !p.positive_rel_path) {
         setFullUrl(null); // Or a placeholder URL
         setThumbUrl(null);
     } else {
@@ -140,6 +157,8 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
     if (onEditTags) onEditTags(p);
   };
 
+  // Removed inline meta modal in favor of ImageViewer sidebar
+
   const handleDeleteTag = async (tagId) => {
     showConfirm('Remove Tag', 'Remove this tag?', async () => {
         const nextTags = tags.filter(t => t.id !== tagId).map(t => t.name);
@@ -151,8 +170,21 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
     });
   };
 
+  const handleRootClick = () => {
+    if (multiSelect) {
+      onToggleSelect && onToggleSelect(p);
+      return;
+    }
+    onSelect && onSelect();
+  };
+
   return (
-    <div className="photo-item">
+    <div className={`photo-item ${selected ? 'selected' : ''}`} onClick={handleRootClick} style={multiSelect ? { outline: selected ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', position:'relative', cursor:'pointer' } : {}}>
+      {multiSelect && (
+        <div style={{ position:'absolute', top:6, left:6, zIndex:10 }}>
+          <input type="checkbox" checked={selected} onChange={(e)=>{ e.stopPropagation(); onToggleSelect && onToggleSelect(p); }} />
+        </div>
+      )}
       <ModalDialog 
         isOpen={dialog.isOpen} 
         type={dialog.type} 
@@ -161,7 +193,7 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
         onConfirm={dialog.onConfirm}
         onCancel={dialog.onCancel}
       />
-      <div className="photo-like-btn" onClick={toggleLike} title={liked ? "Unlike" : "Like"}>
+      <div className="photo-like-btn" onClick={multiSelect ? undefined : toggleLike} title={liked ? "Unlike" : "Like"} style={multiSelect ? { pointerEvents:'none', opacity:0.5 } : {}}>
         <HeartIcon filled={liked} />
       </div>
       <div className="photo-tags-overlay" onClick={(e)=>e.stopPropagation()}>
@@ -190,21 +222,24 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
             ))}
           </div>
         ) : null}
-        <button className="photo-tag-add-btn" onClick={handleEditTags} title="Add / Edit tags">
+        <button className="photo-tag-add-btn" onClick={multiSelect ? undefined : handleEditTags} title="Add / Edit tags" style={multiSelect ? { pointerEvents:'none', opacity:0.5 } : {}}>
           <PlusIcon />
         </button>
       </div>
-      <div className="photo-actions">
-        <button onClick={(e)=>{e.stopPropagation(); onSetCover(p.id);}}>Set cover</button>
-        <button onClick={handleEditNote}>Note</button>
-        <button onClick={(e)=>{e.stopPropagation(); onDeletePhoto(p.id);}}>Delete</button>
-      </div>
+      {!multiSelect && (
+        <div className="photo-actions">
+          <button onClick={(e)=>{e.stopPropagation(); onSetCover(p.id);}}>Set cover</button>
+          <button onClick={handleEditNote}>Note</button>
+          {/* Edit Meta moved to fullscreen ImageViewer sidebar */}
+          <button onClick={(e)=>{e.stopPropagation(); onDeletePhoto(p.id);}}>Delete</button>
+        </div>
+      )}
       {p.caption && (
         <div className="photo-caption-overlay bottom">
           {p.caption}
         </div>
       )}
-      <div className="photo-thumb" onClick={onSelect}>
+      <div className="photo-thumb">
         {(thumbUrl || fullUrl) ? (
           <LazyLoadImage
             alt={p.caption || ''}
@@ -240,6 +275,7 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
           onClose={() => setEditingNote(false)} 
         />
       )}
+      
     </div>
   );
 }

@@ -1,0 +1,136 @@
+:root {
+  /* Accent color can be overridden if needed */
+  --sidepanel-border: var(--color-border-strong, #2d2f33);
+  --sidepanel-bg: var(--color-bg-alt);
+  --sidepanel-header-bg: var(--color-bg); 
+  --sidepanel-shadow: -4px 0 18px rgba(0,0,0,0.18);
+}
+
+[data-theme="dark"] :root {
+  --sidepanel-border: var(--color-border-strong);
+  --sidepanel-bg: var(--color-bg-alt);
+  --sidepanel-header-bg: var(--color-bg);
+}
+
+.fg-sidepanel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 420px;
+  max-width: 100%;
+  height: 100%;
+  background: var(--sidepanel-bg);
+  box-shadow: var(--sidepanel-shadow);
+  z-index: 10020;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 18px 26px; /* tighter visuals with extra bottom space */
+  gap: 20px;
+  overflow-y: auto;
+  border-left: 1px solid var(--sidepanel-border);
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+
+.fg-sidepanel::-webkit-scrollbar {
+  width: 10px;
+}
+.fg-sidepanel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.fg-sidepanel::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 6px;
+}
+
+.fg-sidepanel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--sidepanel-header-bg);
+  padding: 4px 0 0;
+}
+
+.fg-sidepanel-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: .5px;
+}
+
+.fg-sidepanel-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--fg-muted);
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background .15s ease;
+}
+.fg-sidepanel-close:hover { background: var(--color-bg-hover); }
+.fg-sidepanel-close:focus { outline: 2px solid var(--color-primary); }
+
+.fg-sidepanel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* tighter within section */
+  margin-bottom: 18px; /* larger space between sections */
+}
+
+.fg-sidepanel-groupGrid {
+  display: grid;
+  gap: 12px;
+}
+
+@media (min-width: 700px) {
+  .fg-sidepanel-groupGrid.cols-2 { grid-template-columns: repeat(2,minmax(140px,1fr)); }
+  .fg-sidepanel-groupGrid.cols-3 { grid-template-columns: repeat(3,minmax(140px,1fr)); }
+}
+
+.fg-section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: .6px;
+  color: var(--fg-muted);
+  margin-bottom: 4px; /* shrink title-to-content spacing */
+}
+
+.fg-separator { display: none; }
+
+.fg-sidepanel-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  margin-bottom: 10px; /* lift buttons slightly from edge */
+  border-top: 1px solid var(--color-border);
+}
+
+/* Optional: gentle shadow variant for actions (use class when needed) */
+.fg-sidepanel-actions.shadow {
+  box-shadow: 0 -6px 12px rgba(0,0,0,0.08);
+}
+
+.fade-slide-enter-active {
+  animation: slideIn .28s cubic-bezier(.24,.8,.32,1.0);
+}
+@keyframes slideIn {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.fade-slide-exit-active {
+  animation: slideOut .22s ease-in forwards;
+}
+@keyframes slideOut {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(40px); opacity: 0; }
+}
+
+/* Constrain inputs to panel width and avoid overflow */
+.fg-sidepanel * { box-sizing: border-box; }
+.fg-input, .fg-select, .fg-textarea { max-width: 100%; width: 100%; }
+.fg-pill { white-space: nowrap; }

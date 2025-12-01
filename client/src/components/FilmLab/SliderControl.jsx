@@ -1,6 +1,6 @@
 import React from 'react';
 
-const SliderControl = ({ label, value, onChange, min, max, step=1, onMouseDown, suffix='' }) => {
+const SliderControl = ({ label, value, onChange, min, max, step=1, onMouseDown, onMouseUp, suffix='' }) => {
   const handleMinus = () => {
     onMouseDown && onMouseDown();
     onChange(Math.max(min, Number((value - step).toFixed(2))));
@@ -24,6 +24,9 @@ const SliderControl = ({ label, value, onChange, min, max, step=1, onMouseDown, 
             step={step}
             value={value} 
             onMouseDown={onMouseDown}
+            onMouseUp={onMouseUp}
+            onTouchStart={onMouseDown}
+            onTouchEnd={onMouseUp}
             onChange={e => onChange(Number(e.target.value))} 
             style={{ flex: 1, margin: '0 4px' }}
           />

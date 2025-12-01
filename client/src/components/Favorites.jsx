@@ -75,11 +75,16 @@ function FavItem({ p, onSelect, onUnlike }) {
   const [liked, setLiked] = useState(true);
   const navigate = useNavigate();
   useEffect(() => {
+    // Prefer new positive thumb/full paths, fallback to legacy
     let candidate = null;
-    if (p.thumb_rel_path) candidate = `/uploads/${p.thumb_rel_path}`;
+    if (p.positive_thumb_rel_path) candidate = `/uploads/${p.positive_thumb_rel_path}`;
+    else if (p.thumb_rel_path) candidate = `/uploads/${p.thumb_rel_path}`; // legacy fallback
+    else if (p.positive_rel_path) candidate = `/uploads/${p.positive_rel_path}`;
     else if (p.full_rel_path) candidate = `/uploads/${p.full_rel_path}`;
     else if (p.filename) candidate = p.filename;
-    setUrl(buildUploadUrl(candidate));
+    if (!candidate) candidate = '';
+    const bust = `?t=${Date.now()}`;
+    setUrl(buildUploadUrl(candidate) + bust);
     setLiked((p.rating|0) === 1);
   }, [p]);
   const toggleLike = async (e) => {
@@ -96,7 +101,7 @@ function FavItem({ p, onSelect, onUnlike }) {
       {/* Delete/Trash icon on top-left */}
       <div 
         className="photo-delete-btn" 
-        onClick={(e) => { e.stopPropagation(); if(confirm('Remove from favorites?')) onUnlike(p.id); }}
+        onClick={(e) => { e.stopPropagation(); if(window.confirm('Remove from favorites?')) onUnlike(p.id); }}
         title="Remove from favorites"
         style={{
           position: 'absolute',

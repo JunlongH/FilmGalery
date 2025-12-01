@@ -265,69 +265,69 @@ form button:hover {
 .overview-thumb:hover .thumb-title { transform: translateY(0); }
 .no-cover { width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#999; }
 
-.timeline-container { margin-top:22px; }
-.timeline { background:#fff; border-radius:6px; padding:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
-.timeline-header { display:grid; grid-template-columns: 140px 1fr; gap:12px; align-items:center; font-size:12px; color:#444; border-bottom:1px solid #dfeee0; padding-bottom:8px; margin-bottom:8px; }
-.timeline-label { font-weight:600; white-space:normal; display:flex; align-items:center; justify-content:flex-start; padding-left: 6px; }
-.timeline-months { display:flex; gap:0; overflow:visible; padding-bottom:0; align-items:center; justify-content: center; }
-.month-cell { width:64px; height:44px; background:#f3faf3; box-sizing:border-box; border-radius:6px; display:flex; align-items:center; justify-content:center; border:none; margin:0; padding:6px; }
-.month-cell.big { width:72px; font-size:12px; display:flex; align-items:center; justify-content:center; color:#2f7d32; }
-.month-cell.active { transition: background 0.18s ease; box-shadow:inset 0 -3px 6px rgba(0,0,0,0.08); }
-.timeline-rows { margin-top:4px; max-height:500px; overflow:auto; }
-.timeline-row { display:grid; grid-template-columns: 140px 1fr; gap:12px; align-items:center; padding:2px 0; border-top:none; }
+
+/* Timeline container */
+.timeline-container { margin-top:10px; }
+.timeline {
+  --label-col: clamp(120px, 18vw, 240px);
+  background:#fff;
+  border-radius:6px;
+  padding:10px;
+  box-shadow:0 1px 4px rgba(0,0,0,0.06);
+  width: 100%;
+}
+
+/* Timeline Header & Rows */
+.timeline-header { display:grid; grid-template-columns: var(--label-col) 1fr; gap:12px; align-items:center; font-size:12px; color:#444; border-bottom:1px solid #dfeee0; padding-bottom:8px; margin-bottom:8px; }
+.timeline-row { display:grid; grid-template-columns: var(--label-col) 1fr; gap:12px; align-items:center; padding:4px 0; border-top:none; }
+.timeline-rows { margin-top:6px; max-height: min(52vh, 560px); overflow:auto; }
+
+/* Labels */
+.timeline-label { font-weight:600; white-space:nowrap; display:flex; align-items:center; justify-content:flex-start; padding-left: 6px; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .timeline-row .timeline-label { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-/* Center the timeline/calendar content */
-.timeline-container { margin-top:6px; }
+/* Month Grid (Timeline Mode) */
+/* Month areas use CSS Grid; columns are set inline from JSX */
+.timeline-months { display:grid; gap:6px; overflow:visible; padding-bottom:0; align-items:center; width: 100%; }
+.timeline-header .timeline-months { width: 100%; }
+.timeline-row .timeline-months, .timeline-row .year-month-grid { width: 100%; }
 
-/* Keep the timeline full-width but center the month grid inside it. */
-.timeline { width: 100%; }
+/* Month Cells */
+.month-cell { height:40px; background:#eef8ee; box-sizing:border-box; border-radius:6px; display:flex; align-items:center; justify-content:center; border:none; margin:0; min-width: 0; }
+.month-cell.big { height:40px; font-size:12px; display:flex; align-items:center; justify-content:center; color:#2f7d32; min-width: 0; }
+.month-cell.active { transition: background 0.18s ease; box-shadow:inset 0 -3px 6px rgba(0,0,0,0.08); }
 
-/* Let the months area take remaining space and center its content */
-.timeline-header .timeline-months { flex: 1; display: flex; justify-content: center; }
-.timeline-row .timeline-months, .timeline-row .year-month-grid { flex: 1; display: flex; justify-content: center; }
-
-/* slightly reduce left label width so calendar appears more centered visually */
-.timeline .timeline-label, .timeline-row .timeline-label { width: 160px; flex: 0 0 160px; }
-/* Timeline UI polish */
-.timeline-container { margin-top:10px; }
-.timeline { padding:10px; }
-.timeline .timeline-label { width:200px; flex:0 0 200px; }
-.timeline-months { align-items:center; overflow:visible; }
-.month-cell { width:64px; height:40px; border-radius:4px; background:#eef8ee; display:flex; align-items:center; justify-content:center; }
-.month-cell.big { width:72px; height:40px; display:flex; align-items:center; justify-content:center; font-size:12px; color:#2f7d32; }
-.month-cell.active { /* color applied inline per-roll */ box-shadow:inset 0 -3px 6px rgba(0,0,0,0.08); }
 .month-btn { padding:0; margin:0; border:0; background:transparent; cursor:pointer; }
 .month-btn:hover { transform:translateY(-2px); }
 .month-btn:focus { outline:2px solid #cfe9d1; }
-.timeline-header .timeline-label, .timeline-row .timeline-label { padding-left:6px; }
-.overview-grid { margin-top:14px; }
 
 /* Month label two-line style */
 .month-label { display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1; }
 .month-year { font-size:10px; color:#3b6b3e; }
 .month-month { font-size:12px; font-weight:700; color:#1f4f1a; }
 
-/* When a year is selected, show months wrapped like thumbnails */
-.year-month-grid { display:flex; flex-wrap:nowrap; gap:0; padding:0; align-items:center; justify-content:flex-start; }
-.year-month-grid .month-cell { width:64px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:4px; margin:0; }
+/* Year-Month Grid (Selected Year) */
+/* Year-Month Grid (Selected Year) */
+.year-month-grid { display:grid; gap:6px; padding:0; align-items:center; justify-content:flex-start; width: 100%; }
+.year-month-grid .month-cell { height:40px; display:flex; align-items:center; justify-content:center; border-radius:6px; margin:0; min-width: 0; }
 
-/* Calendar (day-mode) styles */
-.calendar-header { display:flex; flex-direction:column; gap:6px; align-items:center; }
-.weekday-row { display:grid; grid-template-columns:repeat(7,52px); gap:0; padding:0; justify-content:center; margin-bottom:6px; }
-.weekday-cell { width:52px; height:22px; display:flex; align-items:center; justify-content:center; font-size:13px; color:#2f7d32; }
-.calendar-weeks { display:flex; flex-direction:column; gap:8px; align-items:center; }
-.calendar-week-block { display:flex; flex-direction:column; gap:6px; }
-.calendar-week { display:grid; grid-template-columns:repeat(7,52px); gap:0; justify-content:center; }
+/* Calendar (Day Mode) */
+.calendar-header { display:flex; flex-direction:column; gap:6px; align-items:center; width: 100%; }
+.weekday-row { display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; padding:0; width: 100%; margin-bottom:6px; }
+.weekday-cell { width:auto; height:22px; display:flex; align-items:center; justify-content:center; font-size:13px; color:#2f7d32; }
 
-.day-column { display:flex; flex-direction:column; align-items:center; }
-.day-cell { width:52px; height:52px; border-radius:6px; background:#eaf6ea; display:flex; align-items:center; justify-content:center; border:none; padding:0; }
+.calendar-weeks { display:flex; flex-direction:column; gap:8px; align-items:center; width: 100%; }
+.calendar-week-block { display:flex; flex-direction:column; gap:6px; width: 100%; }
+.calendar-week { display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; width: 100%; }
+
+.day-column { display:flex; flex-direction:column; align-items:center; width: 100%; }
+.day-cell { width:100%; aspect-ratio: 1; height:auto; border-radius:6px; background:#eaf6ea; display:flex; align-items:center; justify-content:center; border:none; padding:0; }
 .day-cell .day-num { font-size:15px; font-weight:700; color:#234b26; }
 .day-cell.active { box-shadow: inset 0 -3px 6px rgba(0,0,0,0.06); background: #eaf6ea !important; }
 .day-cell.out-of-month .day-num { color:#9aa0a6 !important; font-weight:500; }
 
-.indicators { display:flex; flex-direction:column; gap:4px; margin-top:6px; align-items:center; }
-.indicator-seg { width:52px; height:6px; border-radius:3px; cursor:pointer; }
+.indicators { display:flex; flex-direction:column; gap:4px; margin-top:6px; align-items:center; width: 100%; }
+.indicator-seg { width:100%; height:6px; border-radius:3px; cursor:pointer; }
 
 /* Ensure date squares stay light green even when 'active' */
 .day-column .day-cell { background: #eef8ee !important; }
@@ -353,19 +353,9 @@ form button:hover {
 .header-year, .header-year-only { font-size:16px; font-weight:700; color:#243b22; }
 .header-month { font-size:13px; color:#3b6b3e; margin-top:2px; }
 
-/* Adjust left label width to shift calendar slightly left while keeping it centered */
-.timeline .timeline-label, .timeline-row .timeline-label { width: 120px; flex: 0 0 120px; }
-
 /* Remove the thin divider under the timeline header and hide any hr inside timeline */
 .timeline-header { border-bottom: none !important; }
 .timeline hr { display: none !important; }
-
-/* Day-mode (when a specific month is selected) - compact cells without gaps */
-.timeline.days .timeline-months { gap:0; }
-.timeline.days .month-cell { width:28px; height:26px; padding:2px; border-radius:4px; }
-.timeline.days .month-year { font-size:10px; }
-.timeline.days .month-month { font-size:12px; }
-.timeline.days .timeline-row .timeline-months { gap:0; }
 
 /* Image Viewer */
 .iv-overlay {
@@ -1005,14 +995,14 @@ form button:hover {
 }
 
 .segment-btn {
-  padding: 8px 20px;
+  padding: 10px 26px;
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: #777;
+  color: #555;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 10px;
   transition: all 0.2s;
 }
 

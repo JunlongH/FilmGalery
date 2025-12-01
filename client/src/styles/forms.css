@@ -1,0 +1,74 @@
+:root {
+  --fg-bg: #f0f7f4;
+  --fg-card-bg: #ffffff;
+  --fg-primary: #2563eb;
+  --fg-accent: #10b981;
+  --fg-text: #1f2937;
+  --fg-muted: #6b7280;
+  --fg-border: #e5e7eb;
+}
+
+.fg-card {
+  background: var(--fg-card-bg);
+  border: 1px solid var(--fg-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+  padding: 20px 18px;
+}
+.fg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.fg-label {
+  font-size: 12px;
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+.fg-input, .fg-select, .fg-textarea {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  outline: none;
+  background: #fff;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 14px;
+}
+
+/* Chip style buttons for multi-select */
+.chip-option {
+  appearance: none;
+  border: 1px solid var(--chip-border);
+  background: var(--chip-bg);
+  color: var(--color-text);
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast), border-color var(--transition-fast);
+}
+.chip-option:hover { transform: translateY(-1px); }
+.chip-option[aria-pressed="true"] {
+  background: rgba(37, 99, 235, 0.12); /* primary tint */
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.08) inset;
+}
+.fg-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.fg-row > * { flex: 1 1 min(260px, 100%); }
+.fg-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.fg-btn {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+}
+.fg-btn-primary { background: var(--fg-primary); color: #fff; }
+.fg-btn-secondary { background: #6b7280; color: #fff; }
+.fg-pill { border: 1px solid #d1d5db; border-radius: 999px; padding: 4px 12px; font-size: 12px; color: #374151; background: #f8fafc; }
+
+/* Roll header tweaks */
+.roll-meta-label { color: var(--fg-muted); font-size: 12px; }
+.roll-meta-value { color: var(--fg-text); font-weight: 500; }

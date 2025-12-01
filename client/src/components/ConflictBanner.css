@@ -1,0 +1,126 @@
+.conflict-banner {
+  position: fixed;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  background: linear-gradient(135deg, #ff9a00 0%, #ff6b00 100%);
+  color: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(255, 107, 0, 0.4);
+  padding: 16px 24px;
+  max-width: 800px;
+  width: 90%;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.conflict-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.conflict-icon {
+  font-size: 32px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.conflict-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.conflict-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.conflict-details {
+  font-size: 13px;
+  opacity: 0.95;
+}
+
+.conflict-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.conflict-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.conflict-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.conflict-btn-resolve {
+  background: white;
+  color: #ff6b00;
+}
+
+.conflict-btn-resolve:hover:not(:disabled) {
+  background: #f0f0f0;
+  transform: translateY(-1px);
+}
+
+.conflict-btn-dismiss {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.conflict-btn-dismiss:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.conflict-details-list {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+  font-size: 12px;
+}
+
+.conflict-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  flex-wrap: wrap;
+}
+
+.conflict-filename {
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+
+.conflict-time {
+  opacity: 0.8;
+  font-size: 11px;
+}
+
+.conflict-table-info {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}

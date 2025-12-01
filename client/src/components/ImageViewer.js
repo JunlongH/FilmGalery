@@ -2,18 +2,19 @@ import React, { useEffect, useRef, useState } from 'react';
 import { buildUploadUrl, updatePositiveFromNegative } from '../api';
 import FilmLab from './FilmLab/FilmLab';
 import ModalDialog from './ModalDialog';
+import PhotoDetailsSidebar from './PhotoDetailsSidebar.jsx';
 
-export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUpdate, viewMode = 'positive' }) {
+export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUpdate, viewMode = 'positive', roll }) {
   const [i, setI] = useState(index);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [showInverter, setShowInverter] = useState(false);
   const [isNegativeMode, setIsNegativeMode] = useState(false);
   const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
-  const [pendingBlob, setPendingBlob] = useState(null);
   const dragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const containerRef = useRef();
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     setI(index);
@@ -95,25 +96,37 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
   if (!images || images.length === 0) return null;
   const img = images[i];
   let rawCandidate = null;
-  
-  // Respect viewMode for main viewer
-  if (viewMode === 'negative' && img.negative_rel_path) {
-      rawCandidate = `/uploads/${img.negative_rel_path}`;
+
+  // Prefer new positive/negative paths with thumbs; fallback to legacy fields
+  if (viewMode === 'negative') {
+    if (img.negative_rel_path) rawCandidate = `/uploads/${img.negative_rel_path}`;
+    else if (img.full_rel_path) rawCandidate = `/uploads/${img.full_rel_path}`; // legacy fallback
+    else if (img.filename) rawCandidate = img.filename; else rawCandidate = img;
   } else {
-      if (img && img.full_rel_path) rawCandidate = `/uploads/${img.full_rel_path}`;
-      else if (img && img.filename) rawCandidate = img.filename;
-      else rawCandidate = img;
+    // Positive/main view
+    if (img.positive_rel_path) rawCandidate = `/uploads/${img.positive_rel_path}`;
+    else if (img.full_rel_path) rawCandidate = `/uploads/${img.full_rel_path}`; // legacy fallback
+    else if (img.filename) rawCandidate = img.filename; else rawCandidate = img;
   }
-  
-  // Add cache buster
+
   const imgUrl = buildUploadUrl(rawCandidate) + `?t=${Date.now()}`;
 
   if (showInverter) {
-    // For FilmLab, we might want to explicitly choose source
-    // If we clicked "Negative" button, we force negative source
-    // If we clicked "Film Lab" button, we use current viewMode source or positive
-    const targetUrl = (isNegativeMode && img.negative_rel_path)
-        ? buildUploadUrl(`/uploads/${img.negative_rel_path}`) 
+    // For FilmLab, we always want to edit the ORIGINAL source (Negative or Raw Scan), 
+    // not the already-processed Positive JPG.
+    // Priority: Original (TIFF/Raw) > Negative > Full/Positive
+    let sourcePath = img.original_rel_path || img.negative_rel_path;
+    
+    // Fallback to full path if no separate source exists
+    if (!sourcePath) sourcePath = img.full_rel_path || img.positive_rel_path;
+
+    // If explicitly in negative mode, prefer negative path
+    if (isNegativeMode && img.negative_rel_path) {
+        sourcePath = img.negative_rel_path;
+    }
+
+    const targetUrl = sourcePath 
+        ? buildUploadUrl(`/uploads/${sourcePath}`) 
         : imgUrl;
 
     return (
@@ -129,9 +142,10 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
         <FilmLab 
           imageUrl={targetUrl}
           rollId={img.roll_id}
+          photoId={img.id}
+          onPhotoUpdate={onPhotoUpdate}
           onClose={() => { setShowInverter(false); setIsNegativeMode(false); }} 
           onSave={(blob) => { 
-              setPendingBlob(blob);
               // Directly save without confirmation if user clicked Save in FilmLab
               // Or keep confirmation if preferred. User asked to fix "save not working".
               // The issue might be that the confirmation dialog was hidden (fixed in previous step).
@@ -174,6 +188,35 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
     );
   }
 
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(imgUrl);
+      const blob = await response.blob();
+      
+      if (window.__electron) {
+        // Use Electron "Save As" dialog
+        const defaultName = img.filename ? img.filename.split('/').pop() : `image_${i+1}.jpg`;
+        const res = await window.__electron.filmLabSaveAs({ blob, defaultName });
+        if (res && res.error) {
+           showAlert('Error', 'Save failed: ' + res.error);
+        }
+      } else {
+        // Fallback for web
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = img.filename ? img.filename.split('/').pop() : `image_${i+1}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      console.error('Download failed', e);
+      showAlert('Error', 'Download failed');
+    }
+  };
+
   return (
     <div
       className="iv-overlay"
@@ -196,7 +239,9 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
       <div className="iv-topbar">
         <div className="iv-title">{img.caption || img.frame_number || `Image ${i+1} / ${images.length}`}</div>
         <div className="iv-controls">
+          <button className="iv-btn" onClick={() => setShowDetails(true)} title="Edit Meta">Edit Meta</button>
           <button className="iv-btn" onClick={() => { setIsNegativeMode(true); setShowInverter(true); }} title="Film Lab (Invert/Color)">Film Lab</button>
+          <button className="iv-btn" onClick={handleDownload} title="Save to Disk">Download</button>
           <button className="iv-btn" onClick={zoomOut}>−</button>
           <button className="iv-btn" onClick={reset}>Reset</button>
           <button className="iv-btn" onClick={zoomIn}>+</button>
@@ -230,6 +275,15 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
         <div className="iv-small">{i+1} / {images.length}</div>
         <button className="iv-btn" onClick={()=>setI(k => Math.min(images.length-1, k + 1))} disabled={i===images.length-1}>Next</button>
       </div>
+
+      {showDetails && (
+        <PhotoDetailsSidebar
+          photo={img}
+          roll={roll}
+          onClose={() => setShowDetails(false)}
+          onSaved={() => { setShowDetails(false); onPhotoUpdate && onPhotoUpdate(); }}
+        />
+      )}
     </div>
   );
 }

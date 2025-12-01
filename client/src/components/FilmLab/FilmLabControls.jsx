@@ -14,8 +14,12 @@ export default function FilmLabControls({
   history, future,
   handleAutoLevels,
   isCropping, setIsCropping,
-  keepRatio, setKeepRatio,
+  onCropDone,
+  ratioMode, setRatioMode,
+  ratioSwap, setRatioSwap,
   rotation, setRotation,
+  onRotateStart,
+  onRotateEnd,
   setOrientation,
   exposure, setExposure,
   contrast, setContrast,
@@ -43,7 +47,13 @@ export default function FilmLabControls({
   onApplyPreset,
   onDeletePreset,
   onApplyPresetToRoll,
-  handleDownload, handleSave, onClose
+  handleDownload, handleSave, onClose,
+  onHighQualityExport,
+  highQualityBusy,
+  onGpuExport,
+  gpuBusy,
+  exportFormat,
+  setExportFormat
 }) {
   const [presetName, setPresetName] = React.useState('');
   const handleSavePresetClick = () => {
@@ -58,44 +68,38 @@ export default function FilmLabControls({
   };
   return (
     <div className="iv-sidebar iv-scroll" style={{ width: 320, background: '#1e1e1e', padding: 24, color: '#eee', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto', borderLeft: '1px solid #333', boxShadow: '-5px 0 15px rgba(0,0,0,0.5)' }}>
-      {/* Compare Mode Controls */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#252525', padding: 10, borderRadius: 6 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: '#aaa' }}>COMPARE</span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              className="iv-btn"
-              style={{ fontSize: 10, padding: '4px 8px', background: compareMode === 'original' ? '#2e7d32' : '#333', borderColor: compareMode === 'original' ? '#1b5e20' : '#444' }}
-              onClick={() => cycleCompare('original')}
-            >ORIGINAL</button>
-            <button
-              className="iv-btn"
-              style={{ fontSize: 10, padding: '4px 8px', background: compareMode === 'split' ? '#2e7d32' : '#333', borderColor: compareMode === 'split' ? '#1b5e20' : '#444' }}
-              onClick={() => cycleCompare('split')}
-            >SPLIT</button>
-          </div>
-        </div>
-        {compareMode === 'split' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={compareSlider}
-              onChange={(e) => setCompareSlider(Number(e.target.value))}
-            />
-            <div style={{ fontSize: 10, color: '#888', textAlign: 'center' }}>Split: {(compareSlider * 100).toFixed(0)}%</div>
-          </div>
-        )}
-      </div>
+        {/* Undo / Redo block will appear first, compare block moved just above it */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0, color: '#fff', fontSize: 18, fontWeight: 600, letterSpacing: 0.5 }}>Film Lab</h3>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="iv-btn" onClick={handleDownload} style={{ padding: '4px 12px' }}>SAVE AS</button>
-          <button className="iv-btn iv-btn-primary" onClick={handleSave} style={{ padding: '4px 12px' }}>SAVE</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="iv-btn iv-btn-primary" onClick={handleSave} style={{ padding: '4px 12px' }} title="保存处理结果到正片库（始终写入JPEG）">SAVE</button>
+          <button className="iv-btn" onClick={onHighQualityExport} disabled={highQualityBusy} style={{ padding: '4px 12px', background: highQualityBusy ? '#555' : '#444', borderColor: highQualityBusy ? '#666' : '#555' }} title="服务器基于原始高位深扫描生成高质量正片">
+            {highQualityBusy ? 'EXPORTING…' : 'HQ EXPORT'}
+          </button>
+          {typeof window !== 'undefined' && window.__electron && (
+            <button className="iv-btn" onClick={onGpuExport} disabled={gpuBusy} style={{ padding: '4px 12px' }} title="Electron+WebGL GPU 导出（离线工作窗口）">
+              {gpuBusy ? 'GPU…' : 'GPU EXPORT'}
+            </button>
+          )}
           <button className="iv-btn-icon" onClick={onClose} style={{ fontSize: 20 }}>×</button>
         </div>
+      </div>
+
+      {/* Save As (non-destructive) */}
+      <div style={{ display:'flex', flexDirection:'column', gap:8, background:'#252525', padding:10, borderRadius:6 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <span style={{ fontSize:11, fontWeight:600, color:'#aaa' }}>SAVE AS</span>
+          <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+            <label style={{ fontSize:10, color:'#aaa' }}>Format</label>
+            <select value={exportFormat} onChange={(e)=>setExportFormat(e.target.value)} style={{ background:'#333', color:'#eee', border:'1px solid #444', fontSize:10, borderRadius:3, padding:'2px 4px' }}>
+              <option value="jpeg">JPEG</option>
+              <option value="tiff16">TIFF 16-bit</option>
+              <option value="both">Both</option>
+            </select>
+            <button className="iv-btn" onClick={handleDownload} style={{ padding: '4px 12px' }} title="下载当前处理结果（不写入正片库）">DOWNLOAD</button>
+          </div>
+        </div>
+        <div style={{ fontSize:10, color:'#666', lineHeight:1.4 }}>“SAVE” 写入正片库（JPEG）。 “SAVE AS”/“DOWNLOAD” 为临时文件，可选择格式，不改变库。</div>
       </div>
       
       <div style={{ background: '#252525', padding: 10, borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -144,7 +148,10 @@ export default function FilmLabControls({
           <div style={{ display: 'flex', gap: 4 }}>
             <button 
               className="iv-btn"
-              onClick={() => setIsPickingBase(!isPickingBase)}
+              onClick={() => {
+                if (!isPickingBase) setIsCropping(false);
+                setIsPickingBase(!isPickingBase);
+              }}
               style={{ 
                 flex: 1,
                 background: isPickingBase ? '#e65100' : '#333', 
@@ -171,7 +178,10 @@ export default function FilmLabControls({
           <div style={{ display: 'flex', gap: 4 }}>
             <button 
               className="iv-btn"
-              onClick={() => setIsPickingWB(!isPickingWB)}
+              onClick={() => {
+                if (!isPickingWB) setIsCropping(false);
+                setIsPickingWB(!isPickingWB);
+              }}
               style={{ 
                 flex: 1,
                 background: isPickingWB ? '#e65100' : '#333', 
@@ -199,6 +209,38 @@ export default function FilmLabControls({
         <button className="iv-btn iv-btn-danger" onClick={handleReset} style={{ flex: 1 }}>Reset</button>
       </div>
 
+      {/* Compare Mode Controls moved here */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#252525', padding: 10, borderRadius: 6 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#aaa' }}>COMPARE</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              className="iv-btn"
+              style={{ fontSize: 10, padding: '4px 8px', background: compareMode === 'original' ? '#2e7d32' : '#333', borderColor: compareMode === 'original' ? '#1b5e20' : '#444' }}
+              onClick={() => cycleCompare('original')}
+            >ORIGINAL</button>
+            <button
+              className="iv-btn"
+              style={{ fontSize: 10, padding: '4px 8px', background: compareMode === 'split' ? '#2e7d32' : '#333', borderColor: compareMode === 'split' ? '#1b5e20' : '#444' }}
+              onClick={() => cycleCompare('split')}
+            >SPLIT</button>
+          </div>
+        </div>
+        {compareMode === 'split' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={compareSlider}
+              onChange={(e) => setCompareSlider(Number(e.target.value))}
+            />
+            <div style={{ fontSize: 10, color: '#888', textAlign: 'center' }}>Split: {(compareSlider * 100).toFixed(0)}%</div>
+          </div>
+        )}
+      </div>
+
       <div style={{ display: 'flex', gap: 8 }}>
         <button className="iv-btn iv-btn-primary" onClick={handleAutoLevels} style={{ flex: 1, padding: '8px 0', fontWeight: 600, fontSize: 11 }}>AUTO LEVELS</button>
       </div>
@@ -208,7 +250,15 @@ export default function FilmLabControls({
            <label className="iv-control-label" style={{ fontSize: 12, color: '#eee' }}>CROP & ROTATE</label>
            <button 
              className={`iv-btn ${isCropping ? 'iv-btn-primary' : ''}`}
-             onClick={() => setIsCropping(!isCropping)}
+             onClick={() => {
+               if (isCropping) {
+                 // DONE clicked: commit crop
+                 onCropDone && onCropDone();
+               } else {
+                 // CROP clicked: enter crop mode
+                 setIsCropping(true);
+               }
+             }}
              style={{ padding: '4px 12px', fontSize: 11 }}
            >
              {isCropping ? 'DONE' : 'CROP'}
@@ -217,17 +267,33 @@ export default function FilmLabControls({
          
          {isCropping && (
            <div style={{ marginBottom: 12, background: '#252525', padding: 8, borderRadius: 4 }}>
-             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', marginBottom: 8 }}>
-               <input type="checkbox" checked={keepRatio} onChange={e => setKeepRatio(e.target.checked)} />
-               Keep Original Ratio
-             </label>
+             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: 8 }}>
+               <label className="iv-control-label" style={{ fontSize: 12, color: '#eee' }}>Aspect</label>
+               <select value={ratioMode} onChange={(e)=>setRatioMode(e.target.value)} style={{ background:'#333', color:'#eee', border:'1px solid #444', fontSize:12, borderRadius:4, padding:'4px 6px' }}>
+                 <option value="free">Free</option>
+                 <option value="original">Original</option>
+                 <option value="1:1">1 : 1</option>
+                 <option value="3:2">3 : 2</option>
+                 <option value="4:3">4 : 3</option>
+                 <option value="16:9">16 : 9</option>
+               </select>
+               {ratioMode !== 'free' && ratioMode !== '1:1' && ratioMode !== 'original' && (
+                 <button
+                   className="iv-btn"
+                   onClick={() => setRatioSwap(v => !v)}
+                   title="Swap aspect orientation (Lightroom: X)"
+                   style={{ padding:'4px 8px', fontSize:11 }}
+                 >{ratioSwap ? 'Swap: Portrait' : 'Swap: Landscape'}</button>
+               )}
+             </div>
              <SliderControl 
                label="ROTATION" 
                value={rotation} 
                min={-45} max={45} 
                step={0.1}
                onChange={setRotation} 
-               onMouseDown={pushToHistory}
+               onMouseDown={() => { pushToHistory(); onRotateStart && onRotateStart(); }}
+               onMouseUp={() => { onRotateEnd && onRotateEnd(); }}
                suffix="°"
              />
            </div>

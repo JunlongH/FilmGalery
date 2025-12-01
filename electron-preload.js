@@ -1,5 +1,5 @@
 // electron-preload.js
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, shell } = require('electron');
 
 // 暴露安全的 API 到前端（如果需要）
 contextBridge.exposeInMainWorld('__electron', {
@@ -12,5 +12,18 @@ contextBridge.exposeInMainWorld('__electron', {
   pickUploadsRoot: () => ipcRenderer.invoke('pick-uploads-root'),
   setUploadsRoot: (dir) => ipcRenderer.invoke('config-set-uploads-root', dir),
   pickDataRoot: () => ipcRenderer.invoke('pick-data-root'),
-  setDataRoot: (dir) => ipcRenderer.invoke('config-set-data-root', dir)
+  setDataRoot: (dir) => ipcRenderer.invoke('config-set-data-root', dir),
+  // FilmLab GPU processing (offscreen worker)
+  filmlabGpuProcess: (payload) => ipcRenderer.invoke('filmlab-gpu:process', payload),
+  filmLabSaveAs: async ({ blob, defaultName }) => {
+    try {
+      if (!blob) return { ok:false, error:'no_blob' };
+      const arrBuf = await blob.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(arrBuf));
+      return ipcRenderer.invoke('filmlab-save-as', { defaultName, bytes });
+    } catch (e) {
+      return { ok:false, error: e && e.message };
+    }
+  },
+  showInFolder: (filePath) => { try { if (filePath) shell.showItemInFolder(filePath); } catch(_){} }
 });

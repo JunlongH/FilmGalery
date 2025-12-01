@@ -6,7 +6,7 @@ WHERE NOT EXISTS (
   SELECT 1 FROM films WHERE name = 'Kodak Portra 400' AND iso = 400 AND category = 'color-negative'
 );
 
-INSERT INTO rolls (title, start_date, end_date, camera, lens, shooter, filmId, film_type, exposures, coverPath, folderName, notes)
+INSERT INTO rolls (title, start_date, end_date, camera, lens, photographer, filmId, film_type, exposures, coverPath, folderName, notes)
 SELECT 'Sardinia trip', '2024-09-12','2024-09-12', 'Nikon FM2', '50mm 1.8', 'Junlong', f.id, NULL, NULL, NULL, NULL, 'Bright daylight, coastal'
 FROM films f
 WHERE f.name = 'Kodak Portra 400' AND f.iso = 400 AND f.category = 'color-negative'

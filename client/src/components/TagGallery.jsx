@@ -101,7 +101,7 @@ export default function TagGallery() {
                   } catch (err) { console.error(err); }
                 }}
                 onRemoveFromTheme={async (photo) => {
-                  if (!confirm(`Remove this photo from theme "${selectedTag.name}"?`)) return;
+                  if (!window.confirm(`Remove this photo from theme "${selectedTag.name}"?`)) return;
                   const currentTags = photo.tags || [];
                   const newTags = currentTags.filter(t => t.id !== selectedTag.id).map(t => t.name);
                   try {
@@ -131,11 +131,17 @@ function TagPhotoItem({ photo, index, onOpenViewer, onToggleFavorite, onRemoveFr
   const [liked, setLiked] = useState((photo.rating|0) === 1);
 
   useEffect(() => {
+    // Prefer new positive/negative thumbs; fallback to legacy
     let candidate = null;
-    if (photo.thumb_rel_path) candidate = `/uploads/${photo.thumb_rel_path}`;
+    if (photo.positive_thumb_rel_path) candidate = `/uploads/${photo.positive_thumb_rel_path}`;
+    else if (photo.negative_thumb_rel_path) candidate = `/uploads/${photo.negative_thumb_rel_path}`; // if viewing generic tag gallery, still show something
+    else if (photo.thumb_rel_path) candidate = `/uploads/${photo.thumb_rel_path}`;
+    else if (photo.positive_rel_path) candidate = `/uploads/${photo.positive_rel_path}`;
     else if (photo.full_rel_path) candidate = `/uploads/${photo.full_rel_path}`;
     else if (photo.filename) candidate = photo.filename;
-    setUrl(buildUploadUrl(candidate));
+    if (!candidate) candidate = '';
+    const bust = `?t=${Date.now()}`;
+    setUrl(buildUploadUrl(candidate) + bust);
     setLiked((photo.rating|0) === 1);
   }, [photo]);
 

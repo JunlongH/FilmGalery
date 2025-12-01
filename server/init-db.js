@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS rolls (
   end_date TEXT,
   camera TEXT,
   lens TEXT,
-  shooter TEXT,
+  photographer TEXT,
   filmId INTEGER,
   film_type TEXT,
   exposures INTEGER,
@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS rolls (
   iso INTEGER,
   notes TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  display_seq INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (filmId) REFERENCES films(id) ON DELETE SET NULL
 );
 

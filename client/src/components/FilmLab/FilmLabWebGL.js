@@ -52,9 +52,49 @@ export function processImageWebGL(canvas, image, params = {}) {
     processImageWebGL._cache.set(canvas, cache);
   }
 
-  // Set canvas size to image size
-  canvas.width = image.width;
-  canvas.height = image.height;
+  // Rotate-then-crop pre-processing via 2D canvas for geometry parity with CPU/export
+  let srcImage = image;
+  const rotateDeg = typeof params.rotate === 'number' ? params.rotate : 0;
+  const rad = rotateDeg * Math.PI / 180;
+  const s = Math.abs(Math.sin(rad));
+  const c = Math.abs(Math.cos(rad));
+  const rotW = Math.round(image.width * c + image.height * s);
+  const rotH = Math.round(image.width * s + image.height * c);
+  const r2d = document.createElement('canvas');
+  r2d.width = rotW;
+  r2d.height = rotH;
+  const rg = r2d.getContext('2d');
+  rg.translate(rotW / 2, rotH / 2);
+  rg.rotate(rad);
+  rg.drawImage(srcImage, -image.width / 2, -image.height / 2);
+  srcImage = r2d;
+
+  // Clamp cropRect and crop in rotated space
+  let outW = rotW;
+  let outH = rotH;
+  const crop = params.cropRect;
+  if (crop && typeof crop.x === 'number') {
+    let crx = Math.max(0, Math.min(1, crop.x));
+    let cry = Math.max(0, Math.min(1, crop.y));
+    let crw = Math.max(0, Math.min(1 - crx, crop.w || crop.width / outW));
+    let crh = Math.max(0, Math.min(1 - cry, crop.h || crop.height / outH));
+    const cx = Math.round(crx * outW);
+    const cy = Math.round(cry * outH);
+    const cw = Math.max(1, Math.round(crw * outW));
+    const ch = Math.max(1, Math.round(crh * outH));
+    const c2d = document.createElement('canvas');
+    c2d.width = cw;
+    c2d.height = ch;
+    const g2 = c2d.getContext('2d');
+    g2.drawImage(srcImage, cx, cy, cw, ch, 0, 0, cw, ch);
+    srcImage = c2d;
+    outW = cw;
+    outH = ch;
+  }
+
+  // Set canvas size to processed image size (rotated-then-cropped)
+  canvas.width = outW;
+  canvas.height = outH;
   gl.viewport(0, 0, canvas.width, canvas.height);
 
   // Vertex shader (shared)
@@ -293,7 +333,7 @@ export function processImageWebGL(canvas, image, params = {}) {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, srcImage);
 
   // Uniform locations
   const locs = cache.locs || {};
