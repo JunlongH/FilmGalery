@@ -42,12 +42,13 @@ function HorizontalScroller({ children, height = 260, padding = 12, gap = 16, ba
     const dx = e.clientX - lastXRef.current;
     
     el.scrollLeft -= dx; // invert to drag feel
+    normalize(); // Normalize during drag to prevent hitting edges
     
     const dt = now - lastTimeRef.current || 16;
     velocityRef.current = (dx) / dt; // px per ms
     lastXRef.current = e.clientX;
     lastTimeRef.current = now;
-  }, []);
+  }, [normalize]);
 
   const normalize = useCallback(() => {
     if (!shouldLoop) return;
@@ -76,11 +77,23 @@ function HorizontalScroller({ children, height = 260, padding = 12, gap = 16, ba
     normalize();
     // inertia
     const decay = 0.95; // friction
+    let lastTime = performance.now();
     const step = () => {
+      const now = performance.now();
+      const dt = now - lastTime;
+      lastTime = now;
+      
       const v = velocityRef.current;
       if (Math.abs(v) < 0.01) { stopInertia(); return; }
-      el.scrollLeft -= v * 16; // assume ~60fps
-      velocityRef.current = v * decay;
+      
+      // Use dt to make animation frame-rate independent
+      // v is px/ms, so v * dt is pixels to move
+      el.scrollLeft -= v * dt; 
+      
+      // Decay velocity based on time (e.g. 0.95 per 16ms)
+      // decay factor for dt: Math.pow(decay, dt / 16)
+      velocityRef.current = v * Math.pow(decay, dt / 16);
+      
       normalize();
       rafRef.current = requestAnimationFrame(step);
     };
