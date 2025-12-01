@@ -16,7 +16,13 @@ async function addOrUpdateGear(rollId, type, newValue) {
   }
 
   const trimmedValue = newValue.trim();
-  if (!trimmedValue) {
+  // Ignore placeholder or empty values
+  const isPlaceholder = trimmedValue === '-' || trimmedValue === '--' || trimmedValue === '—';
+  if (!trimmedValue || isPlaceholder) {
+    // Proactively remove any existing placeholder entries for this type
+    try {
+      await runAsync('DELETE FROM roll_gear WHERE roll_id = ? AND type = ? AND (value = "" OR value = "-" OR value = "--" OR value = "—")', [rollId, type]);
+    } catch(e) {}
     return { added: false, removed: [] };
   }
 
@@ -40,6 +46,13 @@ async function addOrUpdateGear(rollId, type, newValue) {
     for (const oldValue of existingValues) {
       // Skip self
       if (oldValue === trimmedValue) continue;
+
+      // Remove placeholders
+      if (!oldValue || oldValue === '-' || oldValue === '--' || oldValue === '—') {
+        await runAsync('DELETE FROM roll_gear WHERE roll_id = ? AND type = ? AND value = ?', [rollId, type, oldValue]);
+        removed.push(oldValue);
+        continue;
+      }
 
       // Case 1: Old value is a substring of new value
       // Example: "Junlong" contains "Jun" -> remove "Jun"

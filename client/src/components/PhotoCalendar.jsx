@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, 
   eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, 
-  addYears, subYears, setMonth, setYear 
+  addYears, subYears, setMonth 
 } from 'date-fns';
 import { buildUploadUrl } from '../api';
 import { LazyLoadImage } from 'react-lazy-load-image-component';
@@ -13,8 +13,6 @@ import ImageViewer from './ImageViewer';
 // Icons
 const ChevronLeft = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>;
 const ChevronRight = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>;
-const ArrowLeft = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>;
-const ArrowRight = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>;
 const HeartIcon = ({ filled }) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill={filled ? "#ff7875" : "none"} stroke={filled ? "none" : "white"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>
     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
@@ -58,20 +56,18 @@ export default function PhotoCalendar() {
     }
   });
 
-  // Ensure photos is always an array
-  const photosArray = Array.isArray(photos) ? photos : [];
-
-  // Group photos by date
+  // Group photos by date (guard for non-array)
   const photosByDay = useMemo(() => {
+    const src = Array.isArray(photos) ? photos : [];
     const map = new Map();
-    photosArray.forEach(p => {
+    src.forEach(p => {
       if (!p.date_taken) return;
       const d = p.date_taken.split('T')[0];
       if (!map.has(d)) map.set(d, []);
       map.get(d).push(p);
     });
     return map;
-  }, [photosArray]);
+  }, [photos]);
 
   // Navigation
   const handlePrev = () => {

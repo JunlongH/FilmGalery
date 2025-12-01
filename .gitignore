@@ -6,3 +6,5 @@ temp_expo_orig/
 *.log
 .DS_Store
 .env
+film.db
+server/film.db

@@ -27,6 +27,15 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 // Ensure tables exist
 db.serialize(() => {
+  // Pragmas: safe performance improvements
+  // WAL improves concurrency; NORMAL keeps durability reasonable
+  db.run('PRAGMA journal_mode = WAL');
+  db.run('PRAGMA synchronous = NORMAL');
+  // negative cache_size sets size in KB (here ~16MB)
+  db.run('PRAGMA cache_size = -16000');
+  db.run('PRAGMA temp_store = MEMORY');
+  db.run('PRAGMA foreign_keys = ON');
+
   db.run(`CREATE TABLE IF NOT EXISTS films (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,

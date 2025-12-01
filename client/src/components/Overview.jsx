@@ -64,9 +64,9 @@ export default function Overview() {
           transition={{ duration: 0.5 }}
         >
           {mode==='rolls' ? (
-            <RollGrid rolls={rollsQuery.data || []} />
+            <RollGrid rolls={rollsQuery.data || []} horizontal />
           ) : (
-            <PhotoGrid photos={photosQuery.data || []} />
+            <PhotoGrid photos={photosQuery.data || []} horizontal />
           )}
         </motion.div>
       )}

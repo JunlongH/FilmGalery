@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { buildUploadUrl } from '../api';
 import ImageViewer from './ImageViewer';
@@ -7,24 +7,36 @@ export default function HeroRandomPhotos() {
   const [photos, setPhotos] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    const API = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:4000';
-    fetch(`${API}/api/photos/random?limit=5`)
-      .then(r => r.json())
-      .then(data => {
-        if (Array.isArray(data)) setPhotos(data);
-      })
-      .catch(console.error);
+  const loadRandom = useCallback(async () => {
+    try {
+      setIsRefreshing(true);
+      const API = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:4000';
+      const r = await fetch(`${API}/api/photos/random?limit=5`);
+      const data = await r.json();
+      if (Array.isArray(data)) {
+        setPhotos(data);
+        setCurrentIndex(0);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (photos.length <= 1) return;
+    loadRandom();
+  }, [loadRandom]);
+
+  useEffect(() => {
+    if (viewerOpen || photos.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentIndex(prev => (prev + 1) % photos.length);
     }, 6000); // Change every 6 seconds
     return () => clearInterval(timer);
-  }, [photos]);
+  }, [photos, viewerOpen]);
 
   if (photos.length === 0) return null;
 
@@ -55,6 +67,79 @@ export default function HeroRandomPhotos() {
         />
       </AnimatePresence>
       
+      {/* Controls: Left/Right Arrows */}
+      <button
+        aria-label="Previous photo"
+        onClick={(e) => { e.stopPropagation(); setCurrentIndex((prev) => (prev - 1 + photos.length) % photos.length); }}
+        style={{
+          position: 'absolute',
+          left: '12px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          background: 'rgba(0,0,0,0.45)',
+          color: 'white',
+          border: 'none',
+          borderRadius: '999px',
+          width: '40px',
+          height: '40px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          backdropFilter: 'blur(2px)'
+        }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </button>
+      <button
+        aria-label="Next photo"
+        onClick={(e) => { e.stopPropagation(); setCurrentIndex((prev) => (prev + 1) % photos.length); }}
+        style={{
+          position: 'absolute',
+          right: '12px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          background: 'rgba(0,0,0,0.45)',
+          color: 'white',
+          border: 'none',
+          borderRadius: '999px',
+          width: '40px',
+          height: '40px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          backdropFilter: 'blur(2px)'
+        }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </button>
+
+      {/* Refresh random batch */}
+      <button
+        aria-label="Refresh random photos"
+        onClick={(e) => { e.stopPropagation(); if (!isRefreshing) loadRandom(); }}
+        style={{
+          position: 'absolute',
+          top: '12px',
+          right: '12px',
+          background: 'rgba(0,0,0,0.45)',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          padding: '8px 10px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          cursor: isRefreshing ? 'default' : 'pointer',
+          opacity: isRefreshing ? 0.7 : 1,
+          backdropFilter: 'blur(2px)'
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path><path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path></svg>
+        {isRefreshing ? 'Refreshing...' : 'Refresh'}
+      </button>
+
       <div style={{
         position: 'absolute',
         bottom: 0,

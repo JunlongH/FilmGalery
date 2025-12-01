@@ -24,7 +24,7 @@ export default function RollDetail() {
   const [availableFilms, setAvailableFilms] = useState([]);
   const [options, setOptions] = useState({ cameras: [], lenses: [], photographers: [] });
   const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
-  const [isExpanded, setIsExpanded] = useState(false); // Add state for collapsible card
+  // Removed unused collapsible state
   const [multiSelect, setMultiSelect] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [showBatchSidebar, setShowBatchSidebar] = useState(false);

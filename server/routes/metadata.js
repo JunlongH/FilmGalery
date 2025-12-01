@@ -7,21 +7,21 @@ const db = require('../db');
 router.get('/options', (req, res) => {
   const queries = {
     cameras: `
-      SELECT DISTINCT camera as value FROM rolls WHERE camera IS NOT NULL AND camera != ""
+      SELECT DISTINCT camera as value FROM rolls WHERE camera IS NOT NULL AND camera != "" AND camera NOT IN ('-','--','—')
       UNION
-      SELECT DISTINCT camera as value FROM photos WHERE camera IS NOT NULL AND camera != ""
+      SELECT DISTINCT camera as value FROM photos WHERE camera IS NOT NULL AND camera != "" AND camera NOT IN ('-','--','—')
       ORDER BY value
     `,
     lenses: `
-      SELECT DISTINCT lens as value FROM rolls WHERE lens IS NOT NULL AND lens != ""
+      SELECT DISTINCT lens as value FROM rolls WHERE lens IS NOT NULL AND lens != "" AND lens NOT IN ('-','--','—')
       UNION
-      SELECT DISTINCT lens as value FROM photos WHERE lens IS NOT NULL AND lens != ""
+      SELECT DISTINCT lens as value FROM photos WHERE lens IS NOT NULL AND lens != "" AND lens NOT IN ('-','--','—')
       ORDER BY value
     `,
     photographers: `
-      SELECT DISTINCT photographer as value FROM rolls WHERE photographer IS NOT NULL AND photographer != ""
+      SELECT DISTINCT photographer as value FROM rolls WHERE photographer IS NOT NULL AND photographer != "" AND photographer NOT IN ('-','--','—')
       UNION
-      SELECT DISTINCT photographer as value FROM photos WHERE photographer IS NOT NULL AND photographer != ""
+      SELECT DISTINCT photographer as value FROM photos WHERE photographer IS NOT NULL AND photographer != "" AND photographer NOT IN ('-','--','—')
       ORDER BY value
     `,
     years: `

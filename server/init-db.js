@@ -81,12 +81,50 @@ CREATE TABLE IF NOT EXISTS roll_files (
 `;
 
 db.serialize(() => {
-  db.exec(schema, (err) => {
+  db.exec(schema, async (err) => {
     if (err) {
       console.error('Failed to initialize DB schema', err);
       process.exit(1);
     }
     console.log('Database schema initialized.');
+
+    // Ensure legacy databases get new columns used by seed.sql and app code
+    const run = (sql) => new Promise((resolve) => db.run(sql, [], () => resolve()));
+    const ensureColumns = async () => {
+      const filmAlters = [
+        `ALTER TABLE films ADD COLUMN category TEXT`,
+        `ALTER TABLE films ADD COLUMN thumbPath TEXT`,
+        `ALTER TABLE films ADD COLUMN createdAt DATETIME DEFAULT CURRENT_TIMESTAMP`,
+        `ALTER TABLE films ADD COLUMN updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP`
+      ];
+      const rollAlters = [
+        `ALTER TABLE rolls ADD COLUMN title TEXT`,
+        `ALTER TABLE rolls ADD COLUMN start_date TEXT`,
+        `ALTER TABLE rolls ADD COLUMN end_date TEXT`,
+        `ALTER TABLE rolls ADD COLUMN camera TEXT`,
+        `ALTER TABLE rolls ADD COLUMN lens TEXT`,
+        `ALTER TABLE rolls ADD COLUMN photographer TEXT`,
+        `ALTER TABLE rolls ADD COLUMN filmId INTEGER`,
+        `ALTER TABLE rolls ADD COLUMN film_type TEXT`,
+        `ALTER TABLE rolls ADD COLUMN exposures INTEGER`,
+        `ALTER TABLE rolls ADD COLUMN coverPath TEXT`,
+        `ALTER TABLE rolls ADD COLUMN folderName TEXT`,
+        `ALTER TABLE rolls ADD COLUMN notes TEXT`
+      ];
+      const photoAlters = [
+        `ALTER TABLE photos ADD COLUMN frame_number TEXT`,
+        `ALTER TABLE photos ADD COLUMN full_rel_path TEXT`,
+        `ALTER TABLE photos ADD COLUMN thumb_rel_path TEXT`,
+        `ALTER TABLE photos ADD COLUMN caption TEXT`,
+        `ALTER TABLE photos ADD COLUMN taken_at TEXT`,
+        `ALTER TABLE photos ADD COLUMN rating INTEGER`
+      ];
+      for (const a of [...filmAlters, ...rollAlters, ...photoAlters]) {
+        try { await run(a); } catch (_) { /* ignore if exists */ }
+      }
+    };
+
+    try { await ensureColumns(); } catch (_) {}
 
     if (fs.existsSync(seedPath)) {
       const sql = fs.readFileSync(seedPath, 'utf8');

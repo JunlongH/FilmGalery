@@ -119,6 +119,23 @@ function runSchemaMigration() {
         await run(sql);
       }
 
+      // 1b. Helpful indexes (idempotent; ignore errors if columns missing)
+      const indexes = [
+        `CREATE INDEX IF NOT EXISTS idx_photos_roll ON photos(roll_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_photos_date_taken ON photos(date_taken)`,
+        `CREATE INDEX IF NOT EXISTS idx_photos_rating ON photos(rating)`,
+        `CREATE INDEX IF NOT EXISTS idx_photo_tags_photo ON photo_tags(photo_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_photo_tags_tag ON photo_tags(tag_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_rolls_start ON rolls(start_date)`,
+        `CREATE INDEX IF NOT EXISTS idx_rolls_end ON rolls(end_date)`,
+        `CREATE INDEX IF NOT EXISTS idx_rolls_film ON rolls(filmId)`,
+        // compound indexes for common filters/orderings
+        `CREATE INDEX IF NOT EXISTS idx_photos_date_id ON photos(date_taken, id)`,
+        `CREATE INDEX IF NOT EXISTS idx_photos_roll_date_id ON photos(roll_id, date_taken, id)`,
+        `CREATE INDEX IF NOT EXISTS idx_photos_rating_id ON photos(rating, id)`
+      ];
+      for (const idx of indexes) { await run(idx); }
+
       // 2. Ensure Columns
       const columns = [
         // Rolls - Basic

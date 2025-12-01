@@ -70,8 +70,7 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
     let fullCandidate = null;
     let thumbCandidate = null;
 
-    // Cache buster
-    const ts = p.updated_at ? new Date(p.updated_at).getTime() : Date.now(); 
+    // Cache buster (implicit below via Date.now())
     
     if (viewMode === 'negative') {
       // Prefer new negative paths

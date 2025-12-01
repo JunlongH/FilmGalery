@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Tray, Menu, nativeImage, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -17,6 +17,39 @@ let serverProcess = null;
 let appConfig = {};
 let gpuWindow = null;
 let gpuJobs = new Map();
+let windowState = null;
+
+function getWindowStatePath() {
+  try { return path.join(app.getPath('userData'), 'window-state.json'); } catch (_) { return path.join(__dirname, 'window-state.json'); }
+}
+
+function loadWindowState() {
+  const p = getWindowStatePath();
+  try {
+    if (fs.existsSync(p)) {
+      const raw = fs.readFileSync(p, 'utf-8');
+      const s = JSON.parse(raw);
+      if (s && typeof s === 'object') return s;
+    }
+  } catch (_) {}
+  return { width: 1200, height: 800, isMaximized: false };
+}
+
+function saveWindowState(win) {
+  try {
+    if (!win || win.isDestroyed()) return;
+    const bounds = win.getBounds();
+    const data = {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+      isMaximized: win.isMaximized(),
+    };
+    const p = getWindowStatePath();
+    fs.writeFileSync(p, JSON.stringify(data));
+  } catch (_) {}
+}
 
 // Helper to load sharp reliably in both Dev and Prod environments
 const getSharp = () => {
@@ -225,9 +258,28 @@ function createTray() {
 }
 
 function createWindow() {
+  windowState = loadWindowState();
+  const display = screen.getPrimaryDisplay();
+  const bounds = display && display.workArea ? display.workArea : { x:0, y:0, width: 1600, height: 900 };
+  const desired = {
+    x: (typeof windowState.x === 'number') ? windowState.x : undefined,
+    y: (typeof windowState.y === 'number') ? windowState.y : undefined,
+    width: Math.max(900, Math.min(windowState.width || 1200, bounds.width)),
+    height: Math.max(600, Math.min(windowState.height || 800, bounds.height)),
+  };
+  // Validate position within any display
+  const displays = screen.getAllDisplays();
+  const isVisibleOnSomeDisplay = (x, y) => displays.some(d => {
+    const a = d.workArea; return x >= a.x && y >= a.y && x < a.x + a.width && y < a.y + a.height;
+  });
+  const position = (desired.x != null && desired.y != null && isVisibleOnSomeDisplay(desired.x, desired.y))
+    ? { x: desired.x, y: desired.y }
+    : {};
+
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    ...position,
+    width: desired.width,
+    height: desired.height,
     minWidth: 900,
     minHeight: 600,
     show: false,
@@ -297,9 +349,15 @@ function createWindow() {
   mainWindow.on('close', (e) => {
     if (isQuitting) return;
     e.preventDefault();
+    saveWindowState(mainWindow);
     mainWindow.hide();
     createTray();
   });
+
+  mainWindow.on('move', () => saveWindowState(mainWindow));
+  mainWindow.on('resize', () => saveWindowState(mainWindow));
+  mainWindow.on('maximize', () => saveWindowState(mainWindow));
+  mainWindow.on('unmaximize', () => saveWindowState(mainWindow));
 
   if (isDev) {
     // dev server
@@ -347,6 +405,9 @@ function createWindow() {
       LOG('loadFile failed', err && err.message);
       dialog.showErrorBox('加载前端失败', `loadFile 失败: ${err && err.message}\n请检查 ${indexHtml}`);
     });
+    if (windowState && windowState.isMaximized) {
+      try { mainWindow.maximize(); } catch (_) {}
+    }
   })();
 }
 

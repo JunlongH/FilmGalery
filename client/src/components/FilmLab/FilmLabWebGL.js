@@ -474,7 +474,9 @@ export function processImageWebGL(canvas, image, params = {}) {
   return canvas;
 }
 
-export default {
+const FilmLabWebGL = {
   isWebGLAvailable,
   processImageWebGL
 };
+
+export default FilmLabWebGL;

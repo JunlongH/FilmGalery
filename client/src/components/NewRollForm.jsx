@@ -1,6 +1,6 @@
 // src/components/NewRollForm.jsx
 import React, { useState, useEffect } from 'react';
-import { getFilms, getMetadataOptions, createRollUnified, updateRoll, uploadTmpFiles } from '../api';
+import { getFilms, getMetadataOptions, createRollUnified, updateRoll } from '../api';
 import LocationSelect from './LocationSelect.jsx';
 import '../styles/forms.css';
 import FilmSelector from './FilmSelector';
@@ -49,15 +49,7 @@ export default function NewRollForm({ onCreated }) {
     setFiles(list);
   }
 
-  async function handleTwoStepUpload() {
-    if (!files.length) throw new Error('No files selected');
-    setUploadProgress(0);
-    const res = await uploadTmpFiles(files, p => setUploadProgress(p));
-    setUploadProgress(null);
-    // res.files => [{ tmpName, url }]
-    setPreviews(res.files.map(f => ({ url: f.url, tmpName: f.tmpName, originalName: f.originalName })));
-    return res.files;
-  }
+  
 
   async function handleSubmit(e) {
     e.preventDefault();

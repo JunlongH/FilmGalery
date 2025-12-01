@@ -100,32 +100,31 @@ export default function TimelineView() {
       const firstDay = new Date(y, m - 1, 1).getDay(); 
       const prevMonthLast = new Date(y, m - 1, 0).getDate();
       let day = 1;
-      const firstWeek = new Array(7).fill(null).map((_, i) => {
+      const firstWeek = [];
+      for (let i = 0; i < 7; i++) {
         if (i < firstDay) {
           const d = prevMonthLast - (firstDay - 1 - i);
-          const dateObj = new Date(y, m - 2, d);
-          return { day: d, inMonth: false, date: dateObj };
+          firstWeek.push({ day: d, inMonth: false, date: new Date(y, m - 2, d) });
+        } else {
+          const curDay = day;
+          firstWeek.push({ day: curDay, inMonth: true, date: new Date(y, m - 1, curDay) });
+          day++;
         }
-        const dateObj = new Date(y, m - 1, day);
-        const out = { day: day, inMonth: true, date: dateObj };
-        day++;
-        return out;
-      });
+      }
       weeks.push(firstWeek);
         let nextDay = 1;
         while (day <= daysInMonth) {
-          const w = new Array(7).fill(null).map(() => {
+          const w = [];
+          for (let j = 0; j < 7; j++) {
             if (day > daysInMonth) {
-              const dateObj = new Date(y, m, nextDay);
-              const cell = { day: nextDay, inMonth: false, date: dateObj };
+              w.push({ day: nextDay, inMonth: false, date: new Date(y, m, nextDay) });
               nextDay++;
-              return cell;
+            } else {
+              const curDay = day;
+              w.push({ day: curDay, inMonth: true, date: new Date(y, m - 1, curDay) });
+              day++;
             }
-            const dateObj = new Date(y, m - 1, day);
-            const cell = { day: day, inMonth: true, date: dateObj };
-            day++;
-            return cell;
-          });
+          }
           weeks.push(w);
       }
 

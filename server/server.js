@@ -1,5 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const compression = require('compression');
 const cors = require('cors');
 const path = require('path');
 const sharp = require('sharp');
@@ -10,6 +11,8 @@ sharp.cache(false);
 const { uploadsDir, tmpUploadDir, rollsDir } = require('./config/paths');
 const { runMigration } = require('./utils/migration');
 const { runSchemaMigration } = require('./utils/schema-migration');
+const { cacheSeconds } = require('./utils/cache');
+const { requestProfiler, getProfilerStats, scheduleProfilerLog } = require('./utils/profiler');
 
 console.log('[PATHS]', {
 	DATA_ROOT: process.env.DATA_ROOT,
@@ -30,7 +33,11 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const app = express();
+// lightweight request profiler for API
+app.use(requestProfiler());
 app.use(bodyParser.json({ limit: '10mb' }));
+// gzip/deflate for API JSON responses (not applied to static uploads)
+app.use(compression({ threshold: 1024 }));
 // CORS: reflect origin (including 'null' from file://) and allow private network
 app.use(cors({ origin: true, credentials: false, preflightContinue: true }));
 app.use((req, res, next) => {
@@ -114,18 +121,22 @@ app.use('/uploads/rolls', express.static(rollsDir, staticOptions));
 
 // --- Routes (mount after schema is ensured just before listen) ---
 const mountRoutes = () => {
-	app.use('/api/rolls', require('./routes/rolls'));
-	app.use('/api/photos', require('./routes/photos'));
-	app.use('/api/films', require('./routes/films'));
-	app.use('/api/tags', require('./routes/tags'));
-	app.use('/api/uploads', require('./routes/uploads'));
-	app.use('/api/metadata', require('./routes/metadata'));
-	app.use('/api/search', require('./routes/search'));
-	app.use('/api/presets', require('./routes/presets'));
-	app.use('/api/locations', require('./routes/locations'));
-	app.use('/api/stats', require('./routes/stats'));
-	app.use('/api/filmlab', require('./routes/filmlab'));
-	app.use('/api/conflicts', require('./routes/conflicts'));
+  // short-lived response caching for relatively static endpoints
+  app.use('/api/films', cacheSeconds(120), require('./routes/films'));
+  app.use('/api/tags', cacheSeconds(120), require('./routes/tags'));
+  app.use('/api/locations', cacheSeconds(300), require('./routes/locations'));
+  app.use('/api/stats', cacheSeconds(60), require('./routes/stats'));
+  // rolls/photos change more often; keep very short cache to help bursts
+  app.use('/api/rolls', cacheSeconds(10), require('./routes/rolls'));
+  app.use('/api/photos', cacheSeconds(10), require('./routes/photos'));
+  // functional endpoints: no caching
+  app.use('/api/uploads', require('./routes/uploads'));
+  app.use('/api/metadata', require('./routes/metadata'));
+  app.use('/api/search', require('./routes/search'));
+  app.use('/api/presets', require('./routes/presets'));
+  app.use('/api/filmlab', require('./routes/filmlab'));
+  app.use('/api/conflicts', require('./routes/conflicts'));
+  app.get('/api/_profiler', (req, res) => res.json(getProfilerStats()));
 };
 
 // Ensure database schema exists before accepting requests (first-run install)
@@ -244,7 +255,10 @@ const seedLocations = async () => {
 		
 		const PORT = process.env.PORT || 4000;
 		// Listen on all interfaces (0.0.0.0) to allow mobile access
-		const server = app.listen(PORT, '0.0.0.0', () => console.log(`Server running on http://0.0.0.0:${PORT}`));
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on http://0.0.0.0:${PORT}`);
+      scheduleProfilerLog();
+    });
 		
 		// Graceful shutdown on signals
 		const gracefulShutdown = (signal) => {

@@ -22,15 +22,15 @@ router.get('/gear', (req, res) => {
   // This is a bit complex, so we'll do two queries and merge in JS or use a UNION
   
   const sqlCameras = `
-    SELECT value as name, COUNT(*) as count FROM roll_gear WHERE type='camera' GROUP BY value
+    SELECT value as name, COUNT(*) as count FROM roll_gear WHERE type='camera' AND value NOT IN ('', '-', '--', '—') GROUP BY value
     UNION ALL
-    SELECT camera as name, COUNT(*) as count FROM rolls WHERE camera IS NOT NULL AND camera != '' GROUP BY camera
+    SELECT camera as name, COUNT(*) as count FROM rolls WHERE camera IS NOT NULL AND camera != '' AND camera NOT IN ('-','--','—') GROUP BY camera
   `;
 
   const sqlLenses = `
-    SELECT value as name, COUNT(*) as count FROM roll_gear WHERE type='lens' GROUP BY value
+    SELECT value as name, COUNT(*) as count FROM roll_gear WHERE type='lens' AND value NOT IN ('', '-', '--', '—') GROUP BY value
     UNION ALL
-    SELECT lens as name, COUNT(*) as count FROM rolls WHERE lens IS NOT NULL AND lens != '' GROUP BY lens
+    SELECT lens as name, COUNT(*) as count FROM rolls WHERE lens IS NOT NULL AND lens != '' AND lens NOT IN ('-','--','—') GROUP BY lens
   `;
 
   const sqlFilms = `

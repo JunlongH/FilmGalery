@@ -2,10 +2,10 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
-  LineChart, Line, CartesianGrid, PieChart, Pie, Cell, Legend,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  LineChart, CartesianGrid, PieChart, Pie, Cell, Legend,
   AreaChart, Area
 } from 'recharts';
+import WordCloud from './WordCloud';
 
 const API = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:4000';
 
@@ -108,15 +108,13 @@ export default function Statistics({ mode = 'stats' }) {
   ];
   
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const dayData = (temporal?.byDay || []).map(d => ({ day: dayNames[d.day], count: d.count }));
-  
-  const photosPerRoll = summary?.total_rolls > 0 ? Math.round((summary?.total_photos || 0) / summary.total_rolls) : 0;
   
   const themesShare = (themes || []).slice(0, 8).map(t => ({ name: t.name, value: t.photo_count }));
+  const locationWords = (locationsArray.slice(0, 30) || []).map((l) => ({ text: l.city_name, weight: l.photo_count }));
   
   const costBreakdown = costs?.summary ? [
-    { name: 'Purchase', value: Math.round(costs.summary.total_purchase || 0) },
-    { name: 'Development', value: Math.round(costs.summary.total_develop || 0) }
+    { name: 'Purchase', value: Number(costs.summary.total_purchase || 0) },
+    { name: 'Development', value: Number(costs.summary.total_develop || 0) }
   ] : [];
 
   const chartCard = {
@@ -344,31 +342,8 @@ export default function Statistics({ mode = 'stats' }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
             <div style={chartCard}>
               <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px', fontWeight: 700, color: '#334155' }}>Top Shooting Locations</h3>
-              <div style={{ height: '300px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '20px' }}>
-                {locationsArray.slice(0, 15).map((loc, index) => {
-                  const maxCount = locationsArray.length > 0 ? Math.max(...locationsArray.map(l => l.photo_count)) : 1;
-                  const minSize = 14;
-                  const maxSize = 48;
-                  const fontSize = minSize + ((loc.photo_count / maxCount) * (maxSize - minSize));
-                  return (
-                    <span 
-                      key={index} 
-                      style={{ 
-                        fontSize: `${fontSize}px`, 
-                        fontWeight: 700, 
-                        color: palette[index % palette.length],
-                        cursor: 'pointer',
-                        transition: 'transform 0.2s',
-                        lineHeight: 1.2
-                      }}
-                      title={`${loc.city_name}: ${loc.photo_count} photos`}
-                      onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
-                      onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                    >
-                      {loc.city_name}
-                    </span>
-                  );
-                })}
+              <div style={{ height: 300, padding: '8px 8px 0' }}>
+                <WordCloud words={locationWords} width={600} height={280} minSize={12} maxSize={46} palette={palette} />
               </div>
             </div>
 
@@ -475,9 +450,9 @@ export default function Statistics({ mode = 'stats' }) {
 
             <div style={chartCard}>
               <h3 style={{ marginTop: 0, marginBottom: '24px', fontSize: '18px', fontWeight: 700, color: '#334155' }}>Monthly Spending Trend</h3>
-              <div style={{ height: '340px' }}>
+              <div style={{ height: '360px', paddingBottom: 20 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={costs?.monthly || []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <AreaChart data={(costs?.monthly || []).map(d => ({ month: d.month, purchase: Number(d.purchase || 0), develop: Number(d.develop || 0) }))} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
                     <defs>
                       <linearGradient id="colorPurchase" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
@@ -494,6 +469,7 @@ export default function Statistics({ mode = 'stats' }) {
                       tick={{ fontSize: 12, fill: '#64748b' }} 
                       tickLine={{ inside: true, stroke: '#cbd5e1' }}
                       axisLine={{ stroke: '#e2e8f0' }}
+                      tickMargin={12}
                     />
                     <XAxis 
                       xAxisId="top"
@@ -521,7 +497,7 @@ export default function Statistics({ mode = 'stats' }) {
                     <Legend wrapperStyle={{ fontSize: 13, fontWeight: 600 }} />
                     <Area type="monotone" dataKey="purchase" stroke="#10b981" strokeWidth={2} fill="url(#colorPurchase)" name="Purchase" />
                     <Area type="monotone" dataKey="develop" stroke="#f59e0b" strokeWidth={2} fill="url(#colorDevelop)" name="Development" />
-                  </LineChart>
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -529,18 +505,24 @@ export default function Statistics({ mode = 'stats' }) {
 
           {/* Spending by Film */}
           <div style={chartCard}>
-            <h3 style={{ marginTop: 0, marginBottom: '24px', fontSize: '18px', fontWeight: 700, color: '#334155' }}>Spending by Film Type</h3>
-            <div style={{ height: '360px' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '24px', fontSize: '18px', fontWeight: 700, color: '#334155' }}>Avg Cost per Roll by Film</h3>
+            <div style={{ height: '380px', paddingBottom: 24 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={costs?.byFilm || []} margin={{ top: 10, right: 10, left: 0, bottom: 70 }}>
+                <BarChart data={(costs?.byFilm || []).map(f => ({
+                  name: f.name,
+                  avgTotal: f.rolls ? Number(((f.purchase || 0) + (f.develop || 0)) / f.rolls) : 0,
+                  avgPurchase: f.rolls ? Number((f.purchase || 0) / f.rolls) : 0,
+                  avgDevelop: f.rolls ? Number((f.develop || 0) / f.rolls) : 0
+                }))} margin={{ top: 10, right: 10, left: 0, bottom: 80 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis 
                     dataKey="name" 
                     tick={{ fontSize: 12, fill: '#64748b' }} 
                     angle={-20} 
-                    height={80}
+                    height={90}
                     tickLine={{ inside: true, stroke: '#cbd5e1' }}
                     axisLine={{ stroke: '#e2e8f0' }}
+                    tickMargin={12}
                   />
                   <XAxis 
                     xAxisId="top"
@@ -563,11 +545,12 @@ export default function Statistics({ mode = 'stats' }) {
                   />
                   <Tooltip 
                     contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    formatter={(value) => `¥${value}`}
+                    formatter={(value) => `¥${Math.round(Number(value)||0)}`}
                   />
                   <Legend wrapperStyle={{ fontSize: 13, fontWeight: 600 }} />
-                  <Bar dataKey="purchase" fill="#10b981" radius={[8, 8, 0, 0]} name="Purchase" stackId="cost" />
-                  <Bar dataKey="develop" fill="#f59e0b" radius={[8, 8, 0, 0]} name="Development" stackId="cost" />
+                  {/* Stacked bars: Avg Purchase + Avg Development */}
+                  <Bar dataKey="avgPurchase" stackId="avg" fill="#10b981" radius={[8, 8, 0, 0]} name="Avg Purchase" />
+                  <Bar dataKey="avgDevelop" stackId="avg" fill="#f59e0b" radius={[8, 8, 0, 0]} name="Avg Development" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
