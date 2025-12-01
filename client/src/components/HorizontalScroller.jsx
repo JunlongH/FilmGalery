@@ -114,13 +114,17 @@ function HorizontalScroller({ children, height = 260, padding = 12, gap = 16, ba
     const inner = contentRef.current;
     if (!el || !inner) return;
     const total = inner.scrollWidth;
-    const seg = shouldLoop ? Math.round(total / 3) : total;
+    // For flex gap, the total width is (3 * content) + (3 * count - 1) * gap?
+    // Actually, with gap on parent, it's just space between items.
+    // If we have 3 sets of items, we want the period to be (Total + Gap) / 3
+    // This accounts for the missing gap at the very end of the scrollWidth
+    const seg = shouldLoop ? (total + (typeof gap === 'number' ? gap : 0)) / 3 : total;
     setSegmentWidth(seg);
     if (shouldLoop) {
       // start from middle segment for seamless scroll
       el.scrollLeft = seg;
     }
-  }, [children, shouldLoop]);
+  }, [children, shouldLoop, gap]);
 
   const items = useMemo(() => {
     const arr = React.Children.toArray(children);
