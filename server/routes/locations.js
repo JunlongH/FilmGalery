@@ -29,12 +29,40 @@ router.get('/:id', async (req, res) => {
 
 // GET /api/locations?country=CN&query=shang
 router.get('/', async (req, res) => {
-  const { country, query } = req.query;
+  const { country, query, hasRecords, withCounts } = req.query;
   const params = [];
   const where = [];
-  if (country) { where.push('country_code = ?'); params.push(country); }
-  if (query) { where.push('(city_name LIKE ? OR country_name LIKE ?)'); params.push(`%${query}%`, `%${query}%`); }
-  const sql = `SELECT id, country_code, country_name, city_name, city_lat, city_lng FROM locations ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY country_name, city_name`;
+  if (country) { where.push('l.country_code = ?'); params.push(country); }
+  if (query) { where.push('(l.city_name LIKE ? OR l.country_name LIKE ?)'); params.push(`%${query}%`, `%${query}%`); }
+
+  // If hasRecords is truthy, only include locations that appear in photos or roll_locations
+  if (hasRecords) {
+    where.push(`(
+      EXISTS (SELECT 1 FROM photos p WHERE p.location_id = l.id)
+      OR EXISTS (SELECT 1 FROM roll_locations rl WHERE rl.location_id = l.id)
+    )`);
+  }
+
+  // Base select
+  let select = `SELECT l.id, l.country_code, l.country_name, l.city_name, l.city_lat, l.city_lng`;
+
+  // Optional counts for maintainability / future UI
+  if (withCounts) {
+    select += `,
+      (SELECT COUNT(1) FROM photos p WHERE p.location_id = l.id) AS photo_count,
+      (
+        SELECT COUNT(DISTINCT rl.roll_id)
+        FROM roll_locations rl
+        WHERE rl.location_id = l.id
+      ) AS roll_count`;
+  }
+
+  const sql = `
+    ${select}
+    FROM locations l
+    ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+    ORDER BY l.country_name, l.city_name
+  `;
   try {
     const rows = await allAsync(sql, params);
     res.json(rows);

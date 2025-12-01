@@ -123,8 +123,13 @@ export async function getRoll(id) {
 export async function getRollLocations(rollId) {
   return jsonFetch(`/api/rolls/${rollId}/locations`);
 }
-export async function getLocations() {
-  return jsonFetch('/api/locations');
+export async function getLocations({ hasRecords = true, country, query } = {}) {
+  const params = new URLSearchParams();
+  if (hasRecords) params.append('hasRecords', '1');
+  if (country) params.append('country', country);
+  if (query) params.append('query', query);
+  const qs = params.toString();
+  return jsonFetch(`/api/locations${qs ? '?' + qs : ''}`);
 }
 export async function getMetadataOptions() {
   return jsonFetch('/api/metadata/options');
