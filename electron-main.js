@@ -7,9 +7,30 @@ const https = require('https');
 
 const isDev = process.env.ELECTRON_DEV === 'true' || !app.isPackaged;
 
-// Ensure Windows uses our packaged icon for taskbar/start shortcuts
-// Must be set before any BrowserWindow is created
-try { app.setAppUserModelId('com.yourorg.filmgallery'); } catch (_) {}
+// [SINGLE INSTANCE LOCK]
+// Ensure only one instance of the application is running.
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  LOG('Another instance is already running. Quitting...');
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // Someone tried to run a second instance, we should focus our window.
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+
+  // Continue with app initialization...
+  // Ensure Windows uses our packaged icon for taskbar/start shortcuts
+  // Must be set before any BrowserWindow is created
+  try { app.setAppUserModelId('com.yourorg.filmgallery'); } catch (_) {}
+  
+  // ... (rest of the initialization)
+}
+
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
@@ -85,6 +106,10 @@ const LOG = (...args) => {
 };
 
 function startServer() {
+  if (serverProcess) {
+    LOG('startServer: server already running, skipping spawn');
+    return;
+  }
   const serverDir = path.join(process.resourcesPath || __dirname, 'server');
   LOG('startServer, serverDir=', serverDir);
 
@@ -739,6 +764,7 @@ ipcMain.handle('config-set-data-root', async (e, dir) => {
 });
 
 app.on('ready', async () => {
+  if (!gotTheLock) return;
   LOG('app ready, isDev=', isDev);
   appConfig = loadConfig();
   createWindow();

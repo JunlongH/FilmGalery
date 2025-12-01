@@ -79,6 +79,9 @@ function HorizontalScroller({ children, height = 260, padding = 12, gap = 16, ba
     const decay = 0.95; // friction
     let lastTime = performance.now();
     const step = () => {
+      const el = ref.current;
+      if (!el) { stopInertia(); return; } // Safety check if unmounted
+
       const now = performance.now();
       const dt = now - lastTime;
       lastTime = now;
@@ -92,7 +95,9 @@ function HorizontalScroller({ children, height = 260, padding = 12, gap = 16, ba
       
       // Decay velocity based on time (e.g. 0.95 per 16ms)
       // decay factor for dt: Math.pow(decay, dt / 16)
-      velocityRef.current = v * Math.pow(decay, dt / 16);
+      // Safety: clamp dt to avoid huge decay on tab resume
+      const safeDt = Math.min(dt, 100); 
+      velocityRef.current = v * Math.pow(decay, safeDt / 16);
       
       normalize();
       rafRef.current = requestAnimationFrame(step);
@@ -100,6 +105,9 @@ function HorizontalScroller({ children, height = 260, padding = 12, gap = 16, ba
     stopInertia();
     rafRef.current = requestAnimationFrame(step);
   }, [stopInertia, normalize]);
+
+  // Cleanup inertia on unmount
+  useEffect(() => stopInertia, [stopInertia]);
 
   useEffect(() => {
     const el = ref.current;

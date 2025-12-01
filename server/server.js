@@ -13,6 +13,7 @@ const { runMigration } = require('./utils/migration');
 const { runSchemaMigration } = require('./utils/schema-migration');
 const { cacheSeconds } = require('./utils/cache');
 const { requestProfiler, getProfilerStats, scheduleProfilerLog } = require('./utils/profiler');
+const lockManager = require('./utils/lock-manager');
 
 console.log('[PATHS]', {
 	DATA_ROOT: process.env.DATA_ROOT,
@@ -207,6 +208,19 @@ const seedLocations = async () => {
 
 (async () => {
 	try {
+		// 0. Acquire Lock (Multi-client protection)
+		console.log('[SERVER] Acquiring database lock...');
+		const lockResult = await lockManager.acquire();
+		if (!lockResult.acquired) {
+			console.error('[SERVER] Failed to acquire lock:', lockResult.message);
+			// We must exit if we can't get the lock to prevent corruption
+			// But we should probably let the UI know? 
+			// For now, just exit, and Electron will see the process die.
+			// Ideally, we'd serve a "Locked" page, but that's complex.
+			process.exit(1); 
+		}
+		console.log('[SERVER] Database lock acquired.');
+
 		// 1. Run Migration BEFORE loading DB
 		console.log('[SERVER] Starting migration check...');
 		await runMigration();
@@ -245,9 +259,16 @@ const seedLocations = async () => {
 			res.json({ ok: true, message: 'Shutting down...' });
 			// Close DB and exit after sending response
 			setTimeout(() => {
-				if (db.close) {
-					db.close();
+				console.log('[SERVER] Closing database connection...');
+				if (db && typeof db.close === 'function') {
+					db.close((err) => {
+						if (err) console.error('[SERVER] Error closing DB:', err);
+						else console.log('[SERVER] Database closed.');
+						lockManager.release();
+						process.exit(0);
+					});
 				} else {
+					lockManager.release();
 					process.exit(0);
 				}
 			}, 100);
@@ -265,15 +286,22 @@ const seedLocations = async () => {
 			console.log(`[SERVER] Received ${signal}, closing HTTP server...`);
 			server.close(() => {
 				console.log('[SERVER] HTTP server closed');
-				if (db.close) {
-					db.close();
+				if (db && typeof db.close === 'function') {
+					db.close((err) => {
+						if (err) console.error('[SERVER] Error closing DB:', err);
+						else console.log('[SERVER] Database closed.');
+						lockManager.release();
+						process.exit(0);
+					});
 				} else {
+					lockManager.release();
 					process.exit(0);
 				}
 			});
 			// Force exit if graceful shutdown takes too long
 			setTimeout(() => {
 				console.error('[SERVER] Forced exit after timeout');
+				lockManager.release();
 				process.exit(1);
 			}, 5000);
 		};

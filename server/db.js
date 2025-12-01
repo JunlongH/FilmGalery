@@ -28,8 +28,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
 // Ensure tables exist
 db.serialize(() => {
   // Pragmas: safe performance improvements
-  // WAL improves concurrency; NORMAL keeps durability reasonable
-  db.run('PRAGMA journal_mode = WAL');
+  // [ONEDRIVE-FIX] Use DELETE mode instead of WAL to prevent .db-wal/.db-shm files
+  // which cause sync conflicts and locking issues in OneDrive.
+  db.run('PRAGMA journal_mode = DELETE'); 
   db.run('PRAGMA synchronous = NORMAL');
   // negative cache_size sets size in KB (here ~16MB)
   db.run('PRAGMA cache_size = -16000');
