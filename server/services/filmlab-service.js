@@ -53,17 +53,20 @@ async function buildPipeline(inputPath, params = {}, options = {}) {
     img = img.extract({ left, top, width, height });
   }
 
-  // Inversion first (to match client ordering better)
-  if (inverted) {
-    if (inversionMode === 'log') img = img.negate().gamma(0.85);
-    else img = img.negate();
-  }
+  // Defer color ops (invert, gains, exposure/contrast) to JS when requested
+  if (!toneAndCurvesInJs) {
+    // Inversion first (to match client ordering better)
+    if (inverted) {
+      if (inversionMode === 'log') img = img.negate().gamma(0.85); // legacy approximation
+      else img = img.negate();
+    }
 
-  // White balance via per-channel gains
-  const rBal = (Number(red) || 1) + (Number(temp) || 0)/200 + (Number(tint) || 0)/200;
-  const gBal = (Number(green) || 1) + (Number(temp) || 0)/200 - (Number(tint) || 0)/200;
-  const bBal = (Number(blue) || 1) - (Number(temp) || 0)/200;
-  img = img.linear([rBal, gBal, bBal], [0,0,0]);
+    // White balance via per-channel gains
+    const rBal = (Number(red) || 1) + (Number(temp) || 0)/200 + (Number(tint) || 0)/200;
+    const gBal = (Number(green) || 1) + (Number(temp) || 0)/200 - (Number(tint) || 0)/200;
+    const bBal = (Number(blue) || 1) - (Number(temp) || 0)/200;
+    img = img.linear([rBal, gBal, bBal], [0,0,0]);
+  }
 
   if (!toneAndCurvesInJs) {
     // Exposure as brightness factor

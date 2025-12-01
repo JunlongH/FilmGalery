@@ -102,7 +102,7 @@ router.post('/preview', async (req, res) => {
     const abs = path.join(uploadsDir, relSource);
     if (!fs.existsSync(abs)) return res.status(404).json({ error: 'source missing on disk' });
 
-    // Build pipeline: rotate/resize/crop + invert + WB. Tone & curves applied in JS below for parity with client.
+    // Build pipeline: rotate/resize/crop only. All color ops (invert, WB, tone, curves) applied in JS for parity with client.
     let img = await buildPipeline(abs, params || {}, { maxWidth: maxWidth || 1600, cropRect: (params && params.cropRect) || null, toneAndCurvesInJs: true });
 
     // Pull raw buffer
@@ -127,11 +127,38 @@ router.post('/preview', async (req, res) => {
     const lutG = buildCurveLUT(curves.green || []);
     const lutB = buildCurveLUT(curves.blue || []);
 
+    // Precompute gains for WB to mirror client order (after inversion, before tone)
+    const red = Number(params?.red ?? 1);
+    const green = Number(params?.green ?? 1);
+    const blue = Number(params?.blue ?? 1);
+    const temp = Number(params?.temp ?? 0);
+    const tint = Number(params?.tint ?? 0);
+    const rBal = red + temp/200 + tint/200;
+    const gBal = green + temp/200 - tint/200;
+    const bBal = blue - temp/200;
+
     // Process per pixel
     for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
       let r = data[i];
       let g = data[i + 1];
       let b = data[i + 2];
+
+      // Inversion first
+      if (params?.inverted) {
+        if (params?.inversionMode === 'log') {
+          r = 255 * (1 - Math.log(r + 1) / Math.log(256));
+          g = 255 * (1 - Math.log(g + 1) / Math.log(256));
+          b = 255 * (1 - Math.log(b + 1) / Math.log(256));
+        } else {
+          r = 255 - r; g = 255 - g; b = 255 - b;
+        }
+      }
+
+      // White balance gains
+      r = r * rBal; g = g * gBal; b = b * bBal;
+      r = Math.min(255, Math.max(0, r));
+      g = Math.min(255, Math.max(0, g));
+      b = Math.min(255, Math.max(0, b));
 
       // Tone LUT
       r = toneLUT[r];
@@ -175,7 +202,7 @@ router.post('/render', async (req, res) => {
     const abs = path.join(uploadsDir, relSource);
     if (!fs.existsSync(abs)) return res.status(404).json({ error: 'source missing on disk' });
 
-    // Full resolution pipeline
+    // Full resolution pipeline: geometry only; color ops in JS
     let img = await buildPipeline(abs, params || {}, { maxWidth: 4000, cropRect: (params && params.cropRect) || null, toneAndCurvesInJs: true });
 
     const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
@@ -198,10 +225,36 @@ router.post('/render', async (req, res) => {
     const lutG = buildCurveLUT(curves.green || []);
     const lutB = buildCurveLUT(curves.blue || []);
 
+    // Precompute WB gains
+    {
+      const red = Number(params?.red ?? 1);
+      const green = Number(params?.green ?? 1);
+      const blue = Number(params?.blue ?? 1);
+      const temp = Number(params?.temp ?? 0);
+      const tint = Number(params?.tint ?? 0);
+      var rBal = red + temp/200 + tint/200;
+      var gBal = green + temp/200 - tint/200;
+      var bBal = blue - temp/200;
+    }
+
     for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
       let r = data[i];
       let g = data[i + 1];
       let b = data[i + 2];
+
+      if (params?.inverted) {
+        if (params?.inversionMode === 'log') {
+          r = 255 * (1 - Math.log(r + 1) / Math.log(256));
+          g = 255 * (1 - Math.log(g + 1) / Math.log(256));
+          b = 255 * (1 - Math.log(b + 1) / Math.log(256));
+        } else { r = 255 - r; g = 255 - g; b = 255 - b; }
+      }
+
+      // WB gains
+      r = Math.min(255, Math.max(0, r * rBal));
+      g = Math.min(255, Math.max(0, g * gBal));
+      b = Math.min(255, Math.max(0, b * bBal));
+
       r = toneLUT[r]; g = toneLUT[g]; b = toneLUT[b];
       r = lutRGB[r]; g = lutRGB[g]; b = lutRGB[b];
       r = lutR[r]; g = lutG[g]; b = lutB[b];
@@ -282,10 +335,35 @@ router.post('/export', async (req, res) => {
     const lutG = buildCurveLUT(curves.green || []);
     const lutB = buildCurveLUT(curves.blue || []);
 
+    // Precompute WB gains
+    {
+      const red = Number(params?.red ?? 1);
+      const green = Number(params?.green ?? 1);
+      const blue = Number(params?.blue ?? 1);
+      const temp = Number(params?.temp ?? 0);
+      const tint = Number(params?.tint ?? 0);
+      var rBal2 = red + temp/200 + tint/200;
+      var gBal2 = green + temp/200 - tint/200;
+      var bBal2 = blue - temp/200;
+    }
+
     for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
       let r = data[i];
       let g = data[i + 1];
       let b = data[i + 2];
+
+      if (params?.inverted) {
+        if (params?.inversionMode === 'log') {
+          r = 255 * (1 - Math.log(r + 1) / Math.log(256));
+          g = 255 * (1 - Math.log(g + 1) / Math.log(256));
+          b = 255 * (1 - Math.log(b + 1) / Math.log(256));
+        } else { r = 255 - r; g = 255 - g; b = 255 - b; }
+      }
+
+      r = Math.min(255, Math.max(0, r * rBal2));
+      g = Math.min(255, Math.max(0, g * gBal2));
+      b = Math.min(255, Math.max(0, b * bBal2));
+
       r = toneLUT[r]; g = toneLUT[g]; b = toneLUT[b];
       r = lutRGB[r]; g = lutRGB[g]; b = lutRGB[b];
       r = lutR[r]; g = lutG[g]; b = lutB[b];
