@@ -75,6 +75,11 @@ export default function Statistics({ mode = 'stats' }) {
     queryFn: () => fetch(`${API}/api/stats/themes`).then(r => r.json())
   });
 
+  const { data: inventory } = useQuery({
+    queryKey: ['stats-inventory'],
+    queryFn: () => fetch(`${API}/api/stats/inventory`).then(r => r.json())
+  });
+
   const isSpending = mode === 'spending';
 
   const filmShare = (gear?.films || []).map(f => ({ name: f.name, value: f.count }));
@@ -148,6 +153,15 @@ export default function Statistics({ mode = 'stats' }) {
               value={`¥${summary?.total_rolls ? Math.round((summary?.total_cost || 0) / summary.total_rolls) : 0}`}
               sub="Per roll investment"
             />
+          </div>
+
+          {/* Inventory Section */}
+          <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#334155', marginBottom: '20px' }}>Inventory</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(200px, 1fr))', gap: '20px', marginBottom: '48px' }}>
+             <StatCard title="In Stock" value={inventory?.value?.total_count || 0} sub="Rolls ready to shoot" />
+             <StatCard title="Inventory Value" value={`¥${Math.round(inventory?.value?.total_value || 0)}`} sub="Total asset value" />
+             <StatCard title="Expiring Soon" value={inventory?.expiring?.length || 0} sub="Within 180 days" trend={inventory?.expiring?.length > 0 ? -10 : 0} />
+             <StatCard title="Top Channel" value={inventory?.channels?.[0]?.purchase_channel || '-'} sub={inventory?.channels?.[0] ? `${inventory.channels[0].count} rolls` : ''} />
           </div>
 
           {/* Shooting Activity - Most Important */}

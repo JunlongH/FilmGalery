@@ -1,0 +1,13 @@
+{
+  "watch": ["."],
+  "ext": "js,json",
+  "ignore": [
+    "film.db",
+    "film.db-journal",
+    "database.sqlite",
+    "uploads/*",
+    "logs/*",
+    "*.log"
+  ],
+  "exec": "node server.js"
+}

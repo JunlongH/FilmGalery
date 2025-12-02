@@ -1,4 +1,5 @@
 const { runAsync, allAsync } = require('../utils/db-helpers');
+const PreparedStmt = require('../utils/prepared-statements');
 
 const normalizeTagNames = (input) => {
   if (!Array.isArray(input)) return [];
@@ -15,7 +16,7 @@ const normalizeTagNames = (input) => {
 
 async function ensureTagsExist(names) {
   if (!names.length) return [];
-  await Promise.all(names.map(name => runAsync('INSERT OR IGNORE INTO tags (name) VALUES (?)', [name])));
+  await Promise.all(names.map(name => PreparedStmt.runAsync('tags.insert', [name])));
   const placeholders = names.map(() => '?').join(',');
   const rows = await allAsync(`SELECT id, name FROM tags WHERE name IN (${placeholders})`, names);
   return rows;
@@ -25,7 +26,7 @@ async function savePhotoTags(photoId, rawNames) {
   const names = normalizeTagNames(rawNames);
   
   // 1. Remove existing links for this photo
-  await runAsync('DELETE FROM photo_tags WHERE photo_id = ?', [photoId]);
+  await PreparedStmt.runAsync('photo_tags.deleteByPhoto', [photoId]);
   
   if (!names.length) {
     // If no tags left for this photo, we might need to cleanup tags that are now orphaned
@@ -41,7 +42,7 @@ async function savePhotoTags(photoId, rawNames) {
       names
         .map(name => tagMap.get(name.toLowerCase()))
         .filter(Boolean)
-        .map(tag => runAsync('INSERT OR IGNORE INTO photo_tags (photo_id, tag_id) VALUES (?, ?)', [photoId, tag.id]))
+        .map(tag => PreparedStmt.runAsync('photo_tags.insert', [photoId, tag.id]))
     );
   }
 

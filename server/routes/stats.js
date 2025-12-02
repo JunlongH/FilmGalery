@@ -8,7 +8,16 @@ router.get('/summary', (req, res) => {
     SELECT 
       (SELECT COUNT(*) FROM rolls) as total_rolls,
       (SELECT COUNT(*) FROM photos WHERE roll_id IN (SELECT id FROM rolls)) as total_photos,
-      (SELECT SUM(purchase_cost) + SUM(develop_cost) FROM rolls) as total_cost
+      (
+        -- Inventory Purchase
+        (SELECT COALESCE(SUM(purchase_price + COALESCE(purchase_shipping_share, 0)), 0) FROM film_items WHERE deleted_at IS NULL)
+        +
+        -- Inventory Develop
+        (SELECT COALESCE(SUM(develop_price), 0) FROM film_items WHERE deleted_at IS NULL)
+        +
+        -- Legacy Rolls (not linked to inventory)
+        (SELECT COALESCE(SUM(purchase_cost + develop_cost), 0) FROM rolls WHERE film_item_id IS NULL)
+      ) as total_cost
   `;
   db.get(sql, (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -88,37 +97,103 @@ router.get('/activity', (req, res) => {
 
 // GET /api/stats/costs
 router.get('/costs', (req, res) => {
+  // Costs are now aggregated from film_items (for inventory/spending accuracy)
+  // plus legacy rolls that are not linked to film_items.
+  
   const summary = `
     SELECT 
-      COALESCE(SUM(purchase_cost), 0) as total_purchase,
-      COALESCE(SUM(develop_cost), 0) as total_develop,
-      COALESCE(AVG(purchase_cost), 0) as avg_purchase,
-      COALESCE(AVG(develop_cost), 0) as avg_develop,
-      COUNT(*) as roll_count
-    FROM rolls
+      (
+        (SELECT COALESCE(SUM(purchase_price + COALESCE(purchase_shipping_share, 0)), 0) FROM film_items WHERE deleted_at IS NULL)
+        +
+        (SELECT COALESCE(SUM(purchase_cost), 0) FROM rolls WHERE film_item_id IS NULL)
+      ) as total_purchase,
+      (
+        (SELECT COALESCE(SUM(develop_price), 0) FROM film_items WHERE deleted_at IS NULL)
+        +
+        (SELECT COALESCE(SUM(develop_cost), 0) FROM rolls WHERE film_item_id IS NULL)
+      ) as total_develop,
+      0 as avg_purchase, -- Deprecated or needs complex calc
+      0 as avg_develop,  -- Deprecated
+      (SELECT COUNT(*) FROM rolls) as roll_count
   `;
   
   const monthly = `
+    WITH monthly_data AS (
+      -- 1. Inventory Purchases
+      SELECT 
+        strftime('%Y-%m', COALESCE(purchase_date, created_at)) as month,
+        SUM(purchase_price + COALESCE(purchase_shipping_share, 0)) as purchase,
+        0 as develop
+      FROM film_items
+      WHERE deleted_at IS NULL
+      GROUP BY month
+
+      UNION ALL
+
+      -- 2. Inventory Development
+      SELECT 
+        strftime('%Y-%m', develop_date) as month,
+        0 as purchase,
+        SUM(develop_price) as develop
+      FROM film_items
+      WHERE deleted_at IS NULL AND develop_date IS NOT NULL
+      GROUP BY month
+
+      UNION ALL
+
+      -- 3. Legacy Rolls (Purchase & Develop)
+      SELECT 
+        strftime('%Y-%m', start_date) as month,
+        SUM(purchase_cost) as purchase,
+        SUM(develop_cost) as develop
+      FROM rolls
+      WHERE film_item_id IS NULL AND start_date IS NOT NULL
+      GROUP BY month
+    )
     SELECT 
-      strftime('%Y-%m', start_date) as month,
-      COALESCE(SUM(purchase_cost), 0) as purchase,
-      COALESCE(SUM(develop_cost), 0) as develop
-    FROM rolls
-    WHERE start_date IS NOT NULL
+      month,
+      SUM(purchase) as purchase,
+      SUM(develop) as develop
+    FROM monthly_data
+    WHERE month IS NOT NULL
     GROUP BY month
     ORDER BY month ASC
   `;
   
   const byFilm = `
+    WITH film_costs AS (
+      -- Inventory Items
+      SELECT 
+        f.name,
+        COUNT(*) as count,
+        SUM(fi.purchase_price + COALESCE(fi.purchase_shipping_share, 0)) as purchase,
+        SUM(fi.develop_price) as develop
+      FROM film_items fi
+      JOIN films f ON fi.film_id = f.id
+      WHERE fi.deleted_at IS NULL
+      GROUP BY f.name
+
+      UNION ALL
+
+      -- Legacy Rolls
+      SELECT 
+        f.name,
+        COUNT(*) as count,
+        SUM(r.purchase_cost) as purchase,
+        SUM(r.develop_cost) as develop
+      FROM rolls r
+      JOIN films f ON r.filmId = f.id
+      WHERE r.film_item_id IS NULL
+      GROUP BY f.name
+    )
     SELECT 
-      f.name,
-      COUNT(r.id) as rolls,
-      COALESCE(SUM(r.purchase_cost), 0) as purchase,
-      COALESCE(SUM(r.develop_cost), 0) as develop
-    FROM rolls r
-    JOIN films f ON r.filmId = f.id
-    GROUP BY f.name
-    ORDER BY rolls DESC
+      name,
+      SUM(count) as rolls,
+      SUM(purchase) as purchase,
+      SUM(develop) as develop
+    FROM film_costs
+    GROUP BY name
+    ORDER BY purchase DESC
   `;
 
   db.get(summary, (err, summaryRow) => {
@@ -279,6 +354,54 @@ router.get('/themes', (req, res) => {
   db.all(sql, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
+  });
+});
+
+// GET /api/stats/inventory
+router.get('/inventory', (req, res) => {
+  const sqlValue = `
+    SELECT 
+      SUM(purchase_price + COALESCE(purchase_shipping_share, 0)) as total_value,
+      COUNT(*) as total_count
+    FROM film_items 
+    WHERE status = 'in_stock' AND deleted_at IS NULL
+  `;
+
+  const sqlExpiring = `
+    SELECT f.name as film_name, fi.* 
+    FROM film_items fi
+    LEFT JOIN films f ON fi.film_id = f.id
+    WHERE fi.status = 'in_stock' 
+      AND fi.deleted_at IS NULL 
+      AND fi.expiry_date IS NOT NULL 
+      AND fi.expiry_date < date('now', '+180 days')
+    ORDER BY fi.expiry_date ASC
+  `;
+
+  const sqlChannel = `
+    SELECT purchase_channel, COUNT(*) as count, SUM(purchase_price) as total_spend
+    FROM film_items
+    WHERE deleted_at IS NULL
+    GROUP BY purchase_channel
+    ORDER BY total_spend DESC
+  `;
+
+  db.get(sqlValue, (err, valueRow) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    db.all(sqlExpiring, (err2, expiringRows) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+
+      db.all(sqlChannel, (err3, channelRows) => {
+        if (err3) return res.status(500).json({ error: err3.message });
+
+        res.json({
+          value: valueRow,
+          expiring: expiringRows,
+          channels: channelRows
+        });
+      });
+    });
   });
 });
 

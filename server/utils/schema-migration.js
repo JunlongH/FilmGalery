@@ -112,6 +112,46 @@ function runSchemaMigration() {
           PRIMARY KEY(roll_id, location_id),
           FOREIGN KEY(roll_id) REFERENCES rolls(id),
           FOREIGN KEY(location_id) REFERENCES locations(id)
+        )`,
+        // Film items (inventory). Keep in sync with migrations/2025-12-02-add-film-items.js
+        `CREATE TABLE IF NOT EXISTS film_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          film_id INTEGER NOT NULL,
+          roll_id INTEGER,
+          status TEXT NOT NULL DEFAULT 'in_stock',
+          label TEXT,
+          purchase_channel TEXT,
+          purchase_vendor TEXT,
+          purchase_order_id TEXT,
+          purchase_price REAL,
+          purchase_currency TEXT,
+          purchase_date TEXT,
+          expiry_date TEXT,
+          batch_number TEXT,
+          purchase_shipping_share REAL,
+          purchase_note TEXT,
+          develop_lab TEXT,
+          develop_process TEXT,
+          develop_price REAL,
+          develop_shipping REAL,
+          develop_date TEXT,
+          develop_channel TEXT,
+          develop_note TEXT,
+          loaded_camera TEXT,
+          loaded_at TEXT,
+          loaded_date TEXT,
+          finished_date TEXT,
+          shot_at TEXT,
+          sent_to_lab_at TEXT,
+          developed_at TEXT,
+          archived_at TEXT,
+          negative_archived INTEGER DEFAULT 0,
+          shot_logs TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME,
+          deleted_at DATETIME,
+          FOREIGN KEY(film_id) REFERENCES films(id),
+          FOREIGN KEY(roll_id) REFERENCES rolls(id)
         )`
       ];
 
@@ -121,18 +161,27 @@ function runSchemaMigration() {
 
       // 1b. Helpful indexes (idempotent; ignore errors if columns missing)
       const indexes = [
+        // Photo indexes
         `CREATE INDEX IF NOT EXISTS idx_photos_roll ON photos(roll_id)`,
         `CREATE INDEX IF NOT EXISTS idx_photos_date_taken ON photos(date_taken)`,
         `CREATE INDEX IF NOT EXISTS idx_photos_rating ON photos(rating)`,
         `CREATE INDEX IF NOT EXISTS idx_photo_tags_photo ON photo_tags(photo_id)`,
         `CREATE INDEX IF NOT EXISTS idx_photo_tags_tag ON photo_tags(tag_id)`,
+        // Roll indexes
         `CREATE INDEX IF NOT EXISTS idx_rolls_start ON rolls(start_date)`,
         `CREATE INDEX IF NOT EXISTS idx_rolls_end ON rolls(end_date)`,
         `CREATE INDEX IF NOT EXISTS idx_rolls_film ON rolls(filmId)`,
-        // compound indexes for common filters/orderings
+        // Film items indexes (for inventory queries)
+        `CREATE INDEX IF NOT EXISTS idx_film_items_roll_id ON film_items(roll_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_film_items_status ON film_items(status)`,
+        `CREATE INDEX IF NOT EXISTS idx_film_items_film_id ON film_items(film_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_film_items_deleted ON film_items(deleted_at)`,
+        // Compound indexes for common filters/orderings
         `CREATE INDEX IF NOT EXISTS idx_photos_date_id ON photos(date_taken, id)`,
         `CREATE INDEX IF NOT EXISTS idx_photos_roll_date_id ON photos(roll_id, date_taken, id)`,
-        `CREATE INDEX IF NOT EXISTS idx_photos_rating_id ON photos(rating, id)`
+        `CREATE INDEX IF NOT EXISTS idx_photos_rating_id ON photos(rating, id)`,
+        // Film items compound index for status queries
+        `CREATE INDEX IF NOT EXISTS idx_film_items_status_deleted ON film_items(status, deleted_at)`
       ];
       for (const idx of indexes) { await run(idx); }
 
@@ -161,6 +210,13 @@ function runSchemaMigration() {
         { table: 'rolls', col: 'develop_note', type: 'TEXT' },
         { table: 'rolls', col: 'purchase_channel', type: 'TEXT' },
         { table: 'rolls', col: 'batch_number', type: 'TEXT' },
+        // Rolls - link to film_items inventory
+        { table: 'rolls', col: 'film_item_id', type: 'INTEGER' },
+        // Film Items - usage tracking
+        { table: 'film_items', col: 'negative_archived', type: 'INTEGER DEFAULT 0' },
+        { table: 'film_items', col: 'loaded_date', type: 'TEXT' },
+        { table: 'film_items', col: 'finished_date', type: 'TEXT' },
+        { table: 'film_items', col: 'shot_logs', type: 'TEXT' },
 
         // Photos - Paths
         { table: 'photos', col: 'original_rel_path', type: 'TEXT' },
