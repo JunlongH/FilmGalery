@@ -20,9 +20,12 @@ import FloatingRefreshButton from './components/FloatingRefreshButton';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      staleTime: 1000 * 60 * 10, // 10 minutes (increased for desktop stability)
       cacheTime: 1000 * 60 * 30, // 30 minutes
       refetchOnWindowFocus: false,
+      refetchOnReconnect: false, // Desktop app doesn't need reconnect refetch
+      refetchOnMount: false, // Use cache if available
+      retry: 1, // Reduce retry attempts to speed up error feedback
     },
   },
 });
@@ -86,14 +89,14 @@ function Layout() {
               <li>
                 <Link to="/rolls">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h4l1.5-2h5L16 7h4v12H4z"/><circle cx="12" cy="14" r="3"/></svg>
-                  Roll Library
+                  Rolls
                 </Link>
               </li>
               {/* Upload moved to Roll Library */}
               <li>
                 <Link to="/films">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 7v10M17 7v10"/></svg>
-                  Film Library
+                  Films
                 </Link>
               </li>
               <li>

@@ -13,6 +13,7 @@ const { runMigration } = require('./utils/migration');
 const { runSchemaMigration } = require('./utils/schema-migration');
 const { cacheSeconds } = require('./utils/cache');
 const { requestProfiler, getProfilerStats, scheduleProfilerLog } = require('./utils/profiler');
+const PreparedStmt = require('./utils/prepared-statements');
 
 console.log('[PATHS]', {
 	DATA_ROOT: process.env.DATA_ROOT,
@@ -58,7 +59,7 @@ const staticOptions = {
 };
 
 // Middleware to handle case-insensitive file serving on Windows/Linux mismatch
-const caseInsensitiveStatic = (root) => {
+const caseInsensitiveStatic = (root, options = {}) => {
   return (req, res, next) => {
     let decodedPath;
     try {
@@ -77,7 +78,7 @@ const caseInsensitiveStatic = (root) => {
         if (stats.isDirectory()) return next();
       } catch (e) { return next(); }
 
-      return res.sendFile(filePath, (err) => {
+      return res.sendFile(filePath, options, (err) => {
         if (err) {
           // If headers sent, we can't do anything. Otherwise pass to next.
           if (res.headersSent) return;
@@ -97,7 +98,7 @@ const caseInsensitiveStatic = (root) => {
         const match = files.find(f => f.toLowerCase() === base.toLowerCase());
         if (match) {
           const matchedPath = path.join(dir, match);
-          return res.sendFile(matchedPath, (err) => {
+          return res.sendFile(matchedPath, options, (err) => {
              if (err) {
                if (res.headersSent) return;
                console.error('[STATIC] Error serving matched file:', matchedPath, err.message);
@@ -113,16 +114,17 @@ const caseInsensitiveStatic = (root) => {
   };
 };
 
-app.use('/uploads', caseInsensitiveStatic(uploadsDir));
+app.use('/uploads', caseInsensitiveStatic(uploadsDir, staticOptions));
 app.use('/uploads', express.static(uploadsDir, staticOptions));
 app.use('/uploads/tmp', express.static(tmpUploadDir)); // tmp files don't need long cache
-app.use('/uploads/rolls', caseInsensitiveStatic(rollsDir));
+app.use('/uploads/rolls', caseInsensitiveStatic(rollsDir, staticOptions));
 app.use('/uploads/rolls', express.static(rollsDir, staticOptions));
 
 // --- Routes (mount after schema is ensured just before listen) ---
 const mountRoutes = () => {
   // short-lived response caching for relatively static endpoints
   app.use('/api/films', cacheSeconds(120), require('./routes/films'));
+  app.use('/api/film-items', require('./routes/film-items')); // No server cache - let React Query handle it
   app.use('/api/tags', cacheSeconds(120), require('./routes/tags'));
   app.use('/api/locations', cacheSeconds(300), require('./routes/locations'));
   app.use('/api/stats', cacheSeconds(60), require('./routes/stats'));
@@ -136,7 +138,9 @@ const mountRoutes = () => {
   app.use('/api/presets', require('./routes/presets'));
   app.use('/api/filmlab', require('./routes/filmlab'));
   app.use('/api/conflicts', require('./routes/conflicts'));
+  app.use('/api/health', require('./routes/health'));
   app.get('/api/_profiler', (req, res) => res.json(getProfilerStats()));
+  app.get('/api/_prepared-statements', (req, res) => res.json(PreparedStmt.getStats()));
 };
 
 // Ensure database schema exists before accepting requests (first-run install)
@@ -246,6 +250,7 @@ const seedLocations = async () => {
 			// Close DB and exit after sending response
 			setTimeout(() => {
 				console.log('[SERVER] Closing database connection...');
+				PreparedStmt.finalizeAll(); // Finalize prepared statements
 				if (db && typeof db.close === 'function') {
 					db.close((err) => {
 						if (err) console.error('[SERVER] Error closing DB:', err);
@@ -262,29 +267,75 @@ const seedLocations = async () => {
 		// Listen on all interfaces (0.0.0.0) to allow mobile access
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on http://0.0.0.0:${PORT}`);
+      console.log('[PREPARED STATEMENTS] Ready for lazy initialization');
       scheduleProfilerLog();
     });
 		
 		// Graceful shutdown on signals
-		const gracefulShutdown = (signal) => {
-			console.log(`[SERVER] Received ${signal}, closing HTTP server...`);
-			server.close(() => {
-				console.log('[SERVER] HTTP server closed');
-				if (db && typeof db.close === 'function') {
-					db.close((err) => {
-						if (err) console.error('[SERVER] Error closing DB:', err);
-						else console.log('[SERVER] Database closed.');
-						process.exit(0);
-					});
-				} else {
-					process.exit(0);
-				}
-			});
-			// Force exit if graceful shutdown takes too long
-			setTimeout(() => {
-				console.error('[SERVER] Forced exit after timeout');
+		const gracefulShutdown = async (signal) => {
+			console.log(`\n[SERVER] Received ${signal}. Shutting down gracefully...`);
+			
+			// Force exit timeout
+			const forceExitTimer = setTimeout(() => {
+				console.error('[SERVER] ⚠️  Forced exit after 10 second timeout');
 				process.exit(1);
-			}, 5000);
+			}, 10000);
+			
+			try {
+				// Step 1: Stop accepting new connections
+				await new Promise((resolve) => {
+					server.close(() => {
+						console.log('[SERVER] ✅ HTTP server closed.');
+						resolve();
+					});
+				});
+				
+				// Step 2: Finalize prepared statements and checkpoint WAL
+				await PreparedStmt.finalizeAllWithCheckpoint();
+				
+				// Step 3: Close database connection
+				if (db && typeof db.close === 'function') {
+					await new Promise((resolve, reject) => {
+						db.close((err) => {
+							if (err) {
+								console.error('[SERVER] ❌ Error closing DB:', err);
+								reject(err);
+							} else {
+								console.log('[SERVER] ✅ Database closed.');
+								resolve();
+							}
+						});
+					});
+				}
+				
+				// Step 4: Verify WAL files are cleaned up
+				const fs = require('fs');
+				const { getDbPath } = require('./config/db-config');
+				const dbPath = getDbPath();
+				const walPath = dbPath + '-wal';
+				const shmPath = dbPath + '-shm';
+				
+				setTimeout(() => {
+					let filesRemaining = [];
+					if (fs.existsSync(walPath)) filesRemaining.push('WAL');
+					if (fs.existsSync(shmPath)) filesRemaining.push('SHM');
+					
+					if (filesRemaining.length > 0) {
+						console.warn(`[SERVER] ⚠️  ${filesRemaining.join(', ')} files still exist (will be cleaned on next startup)`);
+					} else {
+						console.log('[SERVER] ✅ All database files cleaned up');
+					}
+					
+					clearTimeout(forceExitTimer);
+					console.log('[SERVER] 🎉 Graceful shutdown complete');
+					process.exit(0);
+				}, 500);
+				
+			} catch (err) {
+				console.error('[SERVER] ❌ Error during shutdown:', err);
+				clearTimeout(forceExitTimer);
+				process.exit(1);
+			}
 		};
 		
 		process.on('SIGINT', () => gracefulShutdown('SIGINT'));

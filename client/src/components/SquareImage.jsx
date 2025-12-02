@@ -26,6 +26,7 @@ export default function SquareImage({ src, alt, className, style, radius = 4, as
           src={src}
           alt={alt || ''}
           loading="lazy"
+          decoding="async"
           style={{
             position: 'absolute',
             inset: 0,

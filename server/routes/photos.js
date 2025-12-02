@@ -11,6 +11,7 @@ const { savePhotoTags, attachTagsToPhotos } = require('../services/tag-service')
 const { uploadsDir } = require('../config/paths');
 const { uploadDefault } = require('../config/multer');
 const { moveFileSync } = require('../utils/file-helpers');
+const PreparedStmt = require('../utils/prepared-statements');
 
 // Helpers for tone and curves (mirror preview implementation)
 function buildToneLUT({ exposure = 0, contrast = 0, highlights = 0, shadows = 0, whites = 0, blacks = 0 }) {
@@ -318,12 +319,7 @@ router.put('/:id/update-positive', uploadDefault.single('image'), async (req, re
   if (!req.file) return res.status(400).json({ error: 'image file required' });
 
   try {
-    const row = await new Promise((resolve, reject) => {
-      db.get('SELECT roll_id, frame_number, full_rel_path, thumb_rel_path FROM photos WHERE id = ?', [id], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
+    const row = await PreparedStmt.getAsync('photos.getByRollSimple', [id]);
 
     if (!row) return res.status(404).json({ error: 'Photo not found' });
 
@@ -538,11 +534,9 @@ router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, r
       } catch (e) { console.warn('[INGEST-POSITIVE] Cleanup old thumb failed', e.message); }
     }
 
-    const updated = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM photos WHERE id=?', [id], (err, r) => err ? reject(err) : resolve(r));
-    });
+    const updatedPhoto = await PreparedStmt.getAsync('photos.getById', [id]);
     console.log('[INGEST-POSITIVE] Success! Returning updated photo');
-    res.json({ ok: true, photo: updated, positive_rel_path: newFullRelPath, positive_thumb_rel_path: relThumb });
+    res.json({ ok: true, photo: updatedPhoto, positive_rel_path: newFullRelPath, positive_thumb_rel_path: relThumb });
   } catch (err) {
     console.error('[INGEST-POSITIVE] error', err);
     res.status(500).json({ error: err.message });
@@ -705,11 +699,9 @@ router.post('/:id/export-positive', async (req, res) => {
     await runAsync('UPDATE photos SET positive_rel_path = ?, positive_thumb_rel_path = ?, full_rel_path = COALESCE(full_rel_path, ?) WHERE id = ?', [relDest, relThumb, relDest, id]);
 
     // Return updated row
-    const updated = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM photos WHERE id = ?', [id], (e, r) => e ? reject(e) : resolve(r));
-    });
+    const updatedPhoto = await PreparedStmt.getAsync('photos.getById', [id]);
     console.log('[POST] export-positive done', { id, positive_rel_path: relDest });
-    res.json({ ok: true, photo: updated, tiff_rel_path: tiffRelPath });
+    res.json({ ok: true, photo: updatedPhoto, tiff_rel_path: tiffRelPath });
   } catch (err) {
     console.error('[EXPORT-POSITIVE] Error:', err);
     res.status(500).json({ error: err.message });

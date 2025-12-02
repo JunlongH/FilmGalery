@@ -1,0 +1,302 @@
+/* Button Styles */
+.fg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.fg-btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* Primary (Blue) */
+.fg-btn-primary {
+  background-color: #3b82f6;
+  color: #fff;
+  border-color: #3b82f6;
+}
+.fg-btn-primary:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+}
+
+.fg-btn-primary svg {
+  transition: transform 0.2s ease;
+}
+
+.fg-btn-primary:hover svg {
+  transform: scale(1.1);
+}
+
+/* View Roll Button - Special styling for prominent CTA */
+.fg-btn-view-roll {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+  transition: all 0.3s ease;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.fg-btn-view-roll:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
+}
+
+.fg-btn-view-roll:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.fg-btn-view-roll svg:first-child {
+  transition: transform 0.3s ease;
+}
+
+.fg-btn-view-roll:hover svg:first-child {
+  transform: scale(1.15);
+}
+
+.fg-btn-view-roll svg:last-child {
+  transition: transform 0.3s ease;
+}
+
+.fg-btn-view-roll:hover svg:last-child {
+  transform: translateX(3px);
+}
+
+/* Success (Green) */
+.fg-btn-success {
+  background-color: #10b981;
+  color: #fff;
+  border-color: #10b981;
+}
+.fg-btn-success:hover {
+  background-color: #059669;
+  border-color: #059669;
+}
+
+/* Warning (Orange/Red) */
+.fg-btn-warning {
+  background-color: #f59e0b;
+  color: #fff;
+  border-color: #f59e0b;
+}
+.fg-btn-warning:hover {
+  background-color: #d97706;
+  border-color: #d97706;
+}
+
+/* Secondary (Grey) */
+.fg-btn-secondary {
+  background-color: #64748b;
+  color: #fff;
+  border-color: #64748b;
+}
+.fg-btn-secondary:hover {
+  background-color: #475569;
+  border-color: #475569;
+}
+
+/* Outline Styles */
+.fg-btn-outline-secondary {
+  background-color: transparent;
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+.fg-btn-outline-secondary:hover {
+  background-color: #f1f5f9;
+  color: #475569;
+  border-color: #94a3b8;
+}
+
+.fg-btn-outline-success {
+  background-color: transparent;
+  color: #10b981;
+  border-color: #10b981;
+}
+.fg-btn-outline-success:hover {
+  background-color: #ecfdf5;
+  color: #059669;
+}
+
+/* Modal Panel Fixes (Batch Modal) */
+.fg-modal-panel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  width: 95vw;
+  max-width: 1400px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+  max-height: 95vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  /* Ensure no horizontal scroll on the panel itself */
+  overflow-x: hidden;
+}
+
+.fg-modal-panel .fg-modal-header {
+  padding: 0 0 16px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.fg-modal-panel .fg-modal-header h4 {
+  font-size: 18px;
+  color: #1e293b;
+  font-weight: 600;
+}
+
+/* Top Form Grid */
+.fg-form-grid-top {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+/* Batch Grid Layout */
+.fg-batch-grid-container {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  /* Allow horizontal scroll only if absolutely necessary on small screens */
+  overflow-x: auto;
+}
+
+.fg-batch-grid {
+  display: grid;
+  /* Adjusted columns to fit better without overflow */
+  grid-template-columns: minmax(200px, 2.5fr) 70px 90px 130px 110px minmax(120px, 2fr) 40px;
+  gap: 12px;
+  align-items: center;
+  padding: 0 16px;
+  min-width: 800px; /* Ensure grid doesn't collapse too much */
+}
+
+.fg-batch-header {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.fg-batch-row {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background-color 0.1s;
+}
+
+.fg-batch-row:last-child {
+  border-bottom: none;
+}
+
+.fg-batch-row:hover {
+  background-color: #f8fafc;
+}
+
+/* Input Styles within Grid */
+.fg-input-cell, .fg-input-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  transition: all 0.2s;
+  height: 36px; /* Fixed height for consistency */
+  box-sizing: border-box;
+}
+
+.fg-input-cell:focus, .fg-input-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* Delete Button */
+.fg-btn-icon-danger {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.fg-btn-icon-danger:hover {
+  background: #fee2e2;
+}
+
+.fg-btn-icon-danger:disabled {
+  border-color: #cbd5e1;
+  color: #cbd5e1;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+/* Form Layout */
+.fg-form-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.fg-form-group {
+  flex: 1;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fg-form-group label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.fg-form-group input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.fg-form-group input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}

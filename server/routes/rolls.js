@@ -16,6 +16,8 @@ const { uploadsDir, tmpUploadDir, rollsDir } = require('../config/paths');
 const { moveFileSync, moveFileAsync } = require('../utils/file-helpers');
 const { runAsync, allAsync } = require('../utils/db-helpers');
 const { attachTagsToPhotos } = require('../services/tag-service');
+const { linkFilmItemToRoll } = require('../services/film/film-item-service');
+const PreparedStmt = require('../utils/prepared-statements');
 
 // Create roll
 const cpUpload = uploadTmp.array('files', 200);
@@ -34,11 +36,14 @@ router.post('/', (req, res) => {
       const lens = body.lens || null;
       const photographer = body.photographer || null;
       const film_type = body.film_type || null;
-      const filmId = body.filmId ? Number(body.filmId) : null;
+      const filmIdRaw = body.filmId ? Number(body.filmId) : null;
+      const film_item_id = body.film_item_id ? Number(body.film_item_id) : null;
+      let filmId = filmIdRaw;
       const notes = body.notes || null;
       const tmpFiles = body.tmpFiles ? (typeof body.tmpFiles === 'string' ? JSON.parse(body.tmpFiles) : body.tmpFiles) : null;
       const coverIndex = body.coverIndex ? Number(body.coverIndex) : null;
       const isNegativeGlobal = body.isNegative === 'true' || body.isNegative === true;
+      const fileMetadata = body.fileMetadata ? (typeof body.fileMetadata === 'string' ? JSON.parse(body.fileMetadata) : body.fileMetadata) : {};
       console.log('[CREATE ROLL] isNegativeGlobal:', isNegativeGlobal);
 
       if (start_date && end_date) {
@@ -49,9 +54,24 @@ router.post('/', (req, res) => {
       }
 
       // Insert Roll
-      const sql = `INSERT INTO rolls (title, start_date, end_date, camera, lens, photographer, filmId, film_type, notes) VALUES (?,?,?,?,?,?,?,?,?)`;
+      // If a film_item_id is provided, prefer its film_id for this roll
+      if (film_item_id) {
+        try {
+          const itemRow = await new Promise((resolve, reject) => {
+            db.get('SELECT film_id FROM film_items WHERE id = ? AND deleted_at IS NULL', [film_item_id], (err, row) => {
+              if (err) return reject(err);
+              resolve(row);
+            });
+          });
+          if (itemRow && itemRow.film_id) filmId = itemRow.film_id;
+        } catch (e) {
+          console.error('[CREATE ROLL] Failed to load film_item for filmId override', e.message);
+        }
+      }
+
+      const sql = `INSERT INTO rolls (title, start_date, end_date, camera, lens, photographer, filmId, film_type, notes, film_item_id) VALUES (?,?,?,?,?,?,?,?,?,?)`;
       await new Promise((resolve, reject) => {
-        db.run(sql, [title, start_date, end_date, camera, lens, photographer, filmId, film_type, notes], function(err) {
+        db.run(sql, [title, start_date, end_date, camera, lens, photographer, filmId, film_type, notes, film_item_id], function(err) {
           if (err) reject(err);
           else {
             this.lastID; // access this context
@@ -59,6 +79,20 @@ router.post('/', (req, res) => {
           }
         });
       }).then(async (rollId) => {
+        // If a film_item_id is provided, link it to this roll and
+        // synchronize purchase/develop metadata.
+        if (film_item_id) {
+          try {
+            await linkFilmItemToRoll({
+              filmItemId: film_item_id,
+              rollId,
+              loadedCamera: camera,
+              targetStatus: 'shot',
+            });
+          } catch (linkErr) {
+            console.error('[CREATE ROLL] Failed to link film_item to roll', linkErr.message || linkErr);
+          }
+        }
         const folderName = String(rollId); // numeric folder naming scheme
         const rollFolderPath = path.join(rollsDir, folderName);
         fs.mkdirSync(rollFolderPath, { recursive: true });
@@ -130,7 +164,7 @@ router.post('/', (req, res) => {
         let frameCounter = 0;
         
         // Prepare statement for insertion
-        const stmt = db.prepare(`INSERT INTO photos (roll_id, frame_number, filename, full_rel_path, thumb_rel_path, negative_rel_path, original_rel_path, positive_rel_path, positive_thumb_rel_path, negative_thumb_rel_path, is_negative_source) VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
+        const stmt = db.prepare(`INSERT INTO photos (roll_id, frame_number, filename, full_rel_path, thumb_rel_path, negative_rel_path, original_rel_path, positive_rel_path, positive_thumb_rel_path, negative_thumb_rel_path, is_negative_source, taken_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`);
         
         const runInsert = (params) => new Promise((resolve, reject) => {
             stmt.run(params, function(err) {
@@ -280,9 +314,10 @@ router.post('/', (req, res) => {
 
           // Insert immediately to prevent data loss on crash
           try {
-              await runInsert([rollId, frameNumber, finalName, fullRelPath, thumbRelPath, negativeRelPath, originalRelPath, positiveRelPath, positiveThumbRelPath, negativeThumbRelPath, isNegativeSource]);
+              const takenAt = fileMetadata[finalName] ? `${fileMetadata[finalName]}T12:00:00` : null;
+              await runInsert([rollId, frameNumber, finalName, fullRelPath, thumbRelPath, negativeRelPath, originalRelPath, positiveRelPath, positiveThumbRelPath, negativeThumbRelPath, isNegativeSource, takenAt]);
             inserted.push({ filename: finalName, fullRelPath, thumbRelPath, negativeRelPath, positiveRelPath });
-            console.log(`[CREATE ROLL] Inserted photo ${finalName}`);
+            console.log(`[CREATE ROLL] Inserted photo ${finalName} with date ${takenAt}`);
           } catch (dbErr) {
               console.error('Failed to insert photo record', dbErr);
           }
@@ -447,20 +482,26 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/rolls/:id
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   const id = req.params.id;
-  const sql = `
-    SELECT rolls.*, films.name AS film_name_joined, films.iso AS film_iso_joined
-    FROM rolls
-    LEFT JOIN films ON rolls.filmId = films.id
-    WHERE rolls.id = ?
-  `;
-  db.get(sql, [id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
+  try {
+    const sql = `
+      SELECT rolls.*, films.name AS film_name_joined, films.iso AS film_iso_joined
+      FROM rolls
+      LEFT JOIN films ON rolls.filmId = films.id
+      WHERE rolls.id = ?
+    `;
+    const row = await new Promise((resolve, reject) => {
+      db.get(sql, [id], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+    
     if (!row) return res.status(404).json({ error: 'Not found' });
     
     // Check if locations table exists before querying
-    db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='locations'", [], (checkErr, tableExists) => {
+    db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='locations'", [], async (checkErr, tableExists) => {
       const locationsQuery = tableExists ? 
         `SELECT l.id AS location_id, l.country_code, l.country_name, l.city_name, l.city_lat, l.city_lng
          FROM roll_locations rl JOIN locations l ON rl.location_id = l.id
@@ -503,7 +544,10 @@ router.get('/:id', (req, res) => {
         });
       }
     });
-  });
+  } catch (err) {
+    console.error('[GET] roll error', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/rolls/:id/locations
@@ -710,7 +754,7 @@ router.delete('/:id', (req, res) => {
 router.get('/:rollId/photos', async (req, res) => {
   const rollId = req.params.rollId;
   try {
-    const rows = await allAsync('SELECT * FROM photos WHERE roll_id = ? ORDER BY frame_number', [rollId]);
+    const rows = await PreparedStmt.allAsync('photos.listByRoll', [rollId]);
     
     // DEBUG: Log first row to check paths
     if (rows && rows.length > 0) {
@@ -746,12 +790,7 @@ router.post('/:rollId/photos', uploadDefault.single('image'), async (req, res) =
   fs.mkdirSync(rollFolder, { recursive: true });
   
   try {
-    const cntRow = await new Promise((resolve, reject) => {
-        db.get('SELECT COUNT(*) AS cnt FROM photos WHERE roll_id = ?', [rollId], (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-        });
-    });
+    const cntRow = await PreparedStmt.getAsync('rolls.countPhotos', [rollId]);
 
     const nextIndex = (cntRow && cntRow.cnt ? cntRow.cnt : 0) + 1;
     const frameNumber = String(nextIndex).padStart(2, '0');

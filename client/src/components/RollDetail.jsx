@@ -384,13 +384,13 @@ export default function RollDetail() {
             {(() => {
                const cover = roll.coverPath || roll.cover_photo;
                if (cover) {
-                 return <img src={buildUploadUrl(cover)} alt="Cover" className="roll-cover-img" />;
+                 return <img src={buildUploadUrl(cover)} alt="Cover" className="roll-cover-img" loading="lazy" decoding="async" />;
                }
                // Fallback to first photo
                const first = photos.find(p => p.positive_rel_path || p.full_rel_path || p.negative_rel_path);
                if (first) {
                  const path = first.positive_rel_path || first.full_rel_path || first.negative_rel_path;
-                 return <img src={buildUploadUrl(path)} alt="Cover (Auto)" className="roll-cover-img" />;
+                 return <img src={buildUploadUrl(path)} alt="Cover (Auto)" className="roll-cover-img" loading="lazy" decoding="async" />;
                }
                return <div className="empty-cover-placeholder">No Cover Image</div>;
             })()}

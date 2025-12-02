@@ -194,6 +194,63 @@ input, textarea, select, button {
   transform: translateY(-2px);
 }
 
+/* Tabs */
+.fg-tab {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: rgba(255,255,255,0.8);
+  font-size: 13px;
+  cursor: pointer;
+  color: #3c4a3c;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fg-tab:hover {
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.fg-tab-active {
+  background: #2f7d32;
+  color: #fff;
+  border-color: #2f7d32;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+}
+
+/* Film items inventory grid styles moved to FilmInventory.css */
+
+/* Lightweight modal shell for batch form */
+.fg-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10500;
+}
+
+.fg-modal-panel {
+  background: #f8f8f5;
+  border-radius: 10px;
+  padding: 16px 18px 14px;
+  width: min(880px, 100% - 40px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+
+.fg-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.fg-modal-header h4 {
+  margin: 0;
+  font-size: 16px;
+}
+
 /* Forms */
 form label {
   display: block;

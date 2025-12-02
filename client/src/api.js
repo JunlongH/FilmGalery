@@ -199,6 +199,61 @@ export async function getFilms() {
   return [];
 }
 
+// FilmItems API
+export async function createFilmItemsBatch(batch) {
+  const res = await fetch(`${API_BASE}/api/film-items/purchase-batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(batch || {}),
+  });
+  return res.json();
+}
+
+export async function getFilmItems(params = {}) {
+  const search = new URLSearchParams();
+  if (params.status) {
+    const v = Array.isArray(params.status) ? params.status : String(params.status).split(',');
+    search.set('status', v.join(','));
+  }
+  if (params.film_id) search.set('film_id', params.film_id);
+  if (params.includeDeleted) search.set('includeDeleted', 'true');
+  if (params.limit) search.set('limit', String(params.limit));
+  if (params.offset) search.set('offset', String(params.offset));
+  const qs = search.toString();
+  return jsonFetch(`/api/film-items${qs ? `?${qs}` : ''}`);
+}
+
+export async function getFilmItem(id) {
+  return jsonFetch(`/api/film-items/${id}`);
+}
+
+export async function updateFilmItem(id, patch) {
+  const res = await fetch(`${API_BASE}/api/film-items/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch || {}),
+  });
+  try {
+    const data = await res.json();
+    if (typeof data === 'object' && data !== null) {
+      if (!Object.prototype.hasOwnProperty.call(data, 'ok')) {
+        return { ok: res.ok, status: res.status, ...data };
+      }
+      return data;
+    }
+    return { ok: res.ok, status: res.status, data };
+  } catch (err) {
+    const text = await res.text().catch(() => '');
+    return { ok: res.ok, status: res.status, error: text || err.message || 'Failed to parse response' };
+  }
+}
+
+export async function deleteFilmItem(id, hard = false) {
+  const url = hard ? `${API_BASE}/api/film-items/${id}?hard=true` : `${API_BASE}/api/film-items/${id}`;
+  const res = await fetch(url, { method: 'DELETE' });
+  return res.json();
+}
+
 export async function createFilm({ name, iso, category, thumbFile }) {
   const fd = new FormData();
   fd.append('name', name);
@@ -343,7 +398,32 @@ export async function getLocation(id) {
 }
 
 export async function getCountries() {
-  return jsonFetch('/api/locations/countries');
+  // Simple in-memory cache for large, rarely-changing country list
+  if (!window.__fgCountriesCache) {
+    window.__fgCountriesCache = {
+      loaded: false,
+      promise: null,
+      data: [],
+    };
+  }
+  const cache = window.__fgCountriesCache;
+  if (cache.loaded && Array.isArray(cache.data) && cache.data.length) {
+    return cache.data;
+  }
+  if (cache.promise) return cache.promise;
+
+  cache.promise = jsonFetch('/api/locations/countries')
+    .then(rows => {
+      cache.loaded = true;
+      cache.data = Array.isArray(rows) ? rows : [];
+      return cache.data;
+    })
+    .catch(err => {
+      cache.promise = null;
+      throw err;
+    });
+
+  return cache.promise;
 }
 
 export async function createLocation(data) {

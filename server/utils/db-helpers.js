@@ -1,11 +1,27 @@
 const db = require('../db');
 
-const runAsync = (sql, params = []) => new Promise((resolve, reject) => {
-  db.run(sql, params, function(err) {
-    if (err) return reject(err);
-    resolve(this);
+const runAsync = (sql, params = []) => {
+  return new Promise((resolve, reject) => {
+    let retries = 0;
+    const maxRetries = 3;
+    
+    const attempt = () => {
+      db.run(sql, params, function(err) {
+        if (err) {
+          if (err.code === 'SQLITE_BUSY' && retries < maxRetries) {
+            retries++;
+            console.warn(`[DB] SQLITE_BUSY, retrying (${retries}/${maxRetries})...`);
+            setTimeout(attempt, 200);
+            return;
+          }
+          return reject(err);
+        }
+        resolve(this);
+      });
+    };
+    attempt();
   });
-});
+};
 
 const allAsync = (sql, params = []) => new Promise((resolve, reject) => {
   db.all(sql, params, (err, rows) => {

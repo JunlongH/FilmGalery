@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { uploadFilm } = require('../config/multer');
 const { uploadsDir } = require('../config/paths');
+const PreparedStmt = require('../utils/prepared-statements');
 
 // create a film
 router.post('/', uploadFilm.single('thumb'), (req, res) => {

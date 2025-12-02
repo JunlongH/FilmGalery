@@ -1,0 +1,280 @@
+/* Film Inventory Grid */
+.fg-film-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 4px;
+  align-items: start; /* Prevents row height expansion */
+}
+
+.fg-film-items-grid-inner {
+  display: contents; /* Allows children to participate in the grid directly */
+}
+
+.fg-film-item-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  aspect-ratio: 1 / 1; /* Force 1:1 aspect ratio */
+}
+
+.fg-film-item-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+}
+
+/* Expanded State */
+.fg-film-item-card-expanded {
+  grid-column: span 2; /* Span 2 columns */
+  aspect-ratio: 2 / 1; /* Maintain aspect ratio for the expanded card */
+  display: flex;
+  flex-direction: row; /* Side-by-side layout */
+}
+
+/* Thumb Wrapper */
+.fg-film-item-thumb-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.fg-film-item-card-expanded .fg-film-item-thumb-wrapper {
+  width: 50%; /* Take half width when expanded */
+  height: 100%;
+}
+
+.fg-film-item-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.fg-film-item-card:hover .fg-film-item-thumb {
+  transform: scale(1.05);
+}
+
+.fg-film-item-thumb-empty {
+  width: 100%;
+  height: 100%;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Overlays */
+.fg-film-item-expiry {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff !important;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+}
+
+.fg-film-item-expiry-expired {
+  background: rgba(239, 68, 68, 0.9);
+}
+
+.fg-film-item-meta-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 12px 12px 12px;
+  background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,0) 100%);
+  color: #fff !important;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: flex-end;
+  min-height: 80px;
+}
+
+.fg-film-item-meta-type {
+  font-size: 16px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  color: #fff !important;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.fg-film-item-meta-status {
+  font-size: 12px;
+  opacity: 0.9;
+  display: inline-block;
+  background: rgba(0,0,0,0.4); /* Semi-transparent black background */
+  padding: 2px 8px;
+  border-radius: 4px;
+  align-self: flex-start;
+  backdrop-filter: blur(4px);
+  color: #fff !important;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+/* Details Panel (Right Side) */
+.fg-film-item-details {
+  width: 50%;
+  padding: 20px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  border-left: 1px solid #f1f5f9;
+}
+
+/* Action buttons container styling */
+.fg-film-item-details > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* View Roll button takes full width and stands out */
+.fg-film-item-details .fg-btn-view-roll {
+  order: -1; /* Place at the top */
+  flex: 1 1 100%;
+}
+
+.fg-film-item-details-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  border-bottom: 1px solid #f8fafc;
+  padding-bottom: 8px;
+}
+
+.fg-film-item-details-row span:first-child {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.fg-film-item-details-row span:last-child {
+  color: #334155;
+  font-weight: 600;
+  text-align: right;
+}
+
+.fg-film-item-details-notes {
+  font-size: 13px;
+  color: #64748b;
+  font-style: italic;
+  background: #f8fafc;
+  padding: 10px;
+  border-radius: 6px;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* Modal Fixes */
+.fg-modal-content {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  /* Hide scrollbar */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;  /* IE 10+ */
+}
+
+.fg-modal-content::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+.fg-modal-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 20px;
+  /* Hide scrollbar */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.fg-modal-body::-webkit-scrollbar {
+  display: none;
+}
+
+.fg-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fg-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #1e293b;
+}
+
+.fg-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+}
+
+.fg-modal-close:hover {
+  background: #f1f5f9;
+  color: #ef4444;
+}
+
+/* Responsive adjustments for expanded card */
+@media (max-width: 600px) {
+  .fg-film-items-grid {
+    grid-template-columns: 1fr; /* Single column on mobile */
+  }
+  
+  .fg-film-item-card-expanded {
+    grid-column: auto; /* Don't span on mobile */
+    aspect-ratio: auto;
+    flex-direction: column;
+    height: auto;
+  }
+  
+  .fg-film-item-card-expanded .fg-film-item-thumb-wrapper {
+    width: 100%;
+    aspect-ratio: 16/9;
+    height: auto;
+  }
+  
+  .fg-film-item-details {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid #f1f5f9;
+  }
+}
