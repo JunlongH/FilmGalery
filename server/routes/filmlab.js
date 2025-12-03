@@ -127,15 +127,15 @@ router.post('/preview', async (req, res) => {
     const lutG = buildCurveLUT(curves.green || []);
     const lutB = buildCurveLUT(curves.blue || []);
 
-    // Precompute gains for WB to mirror client order (after inversion, before tone)
-    const red = Number(params?.red ?? 1);
-    const green = Number(params?.green ?? 1);
-    const blue = Number(params?.blue ?? 1);
-    const temp = Number(params?.temp ?? 0);
-    const tint = Number(params?.tint ?? 0);
-    const rBal = red + temp/200 + tint/200;
-    const gBal = green + temp/200 - tint/200;
-    const bBal = blue - temp/200;
+    // Precompute gains for WB with clamping
+    const { computeWBGains } = require('../utils/filmlab-wb');
+    const [rBal, gBal, bBal] = computeWBGains({
+      red: Number(params?.red ?? 1),
+      green: Number(params?.green ?? 1),
+      blue: Number(params?.blue ?? 1),
+      temp: Number(params?.temp ?? 0),
+      tint: Number(params?.tint ?? 0)
+    });
 
     // Process per pixel
     for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
@@ -225,16 +225,17 @@ router.post('/render', async (req, res) => {
     const lutG = buildCurveLUT(curves.green || []);
     const lutB = buildCurveLUT(curves.blue || []);
 
-    // Precompute WB gains
+    // Precompute WB gains (clamped)
     {
-      const red = Number(params?.red ?? 1);
-      const green = Number(params?.green ?? 1);
-      const blue = Number(params?.blue ?? 1);
-      const temp = Number(params?.temp ?? 0);
-      const tint = Number(params?.tint ?? 0);
-      var rBal = red + temp/200 + tint/200;
-      var gBal = green + temp/200 - tint/200;
-      var bBal = blue - temp/200;
+      const { computeWBGains } = require('../utils/filmlab-wb');
+      const [r, g, b] = computeWBGains({
+        red: Number(params?.red ?? 1),
+        green: Number(params?.green ?? 1),
+        blue: Number(params?.blue ?? 1),
+        temp: Number(params?.temp ?? 0),
+        tint: Number(params?.tint ?? 0)
+      });
+      var rBal = r, gBal = g, bBal = b;
     }
 
     for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
@@ -335,16 +336,17 @@ router.post('/export', async (req, res) => {
     const lutG = buildCurveLUT(curves.green || []);
     const lutB = buildCurveLUT(curves.blue || []);
 
-    // Precompute WB gains
+    // Precompute WB gains (clamped)
     {
-      const red = Number(params?.red ?? 1);
-      const green = Number(params?.green ?? 1);
-      const blue = Number(params?.blue ?? 1);
-      const temp = Number(params?.temp ?? 0);
-      const tint = Number(params?.tint ?? 0);
-      var rBal2 = red + temp/200 + tint/200;
-      var gBal2 = green + temp/200 - tint/200;
-      var bBal2 = blue - temp/200;
+      const { computeWBGains } = require('../utils/filmlab-wb');
+      const [r2, g2, b2] = computeWBGains({
+        red: Number(params?.red ?? 1),
+        green: Number(params?.green ?? 1),
+        blue: Number(params?.blue ?? 1),
+        temp: Number(params?.temp ?? 0),
+        tint: Number(params?.tint ?? 0)
+      });
+      var rBal2 = r2, gBal2 = g2, bBal2 = b2;
     }
 
     for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {

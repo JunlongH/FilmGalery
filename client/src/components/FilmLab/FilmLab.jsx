@@ -4,6 +4,7 @@ import { getCurveLUT, parseCubeLUT, sampleLUT, getMaxSafeRect, getPresetRatio, g
 import FilmLabControls from './FilmLabControls';
 import FilmLabCanvas from './FilmLabCanvas';
 import { isWebGLAvailable, processImageWebGL } from './FilmLabWebGL';
+import { computeWBGains, gainsFromSample } from './wb';
 
 // Calculate the maximum inscribed rectangle (no black corners) after rotation
 
@@ -650,50 +651,16 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
         }
       }
 
-      // Robust WB Calculation
-      // 1. Clamp values to avoid division by zero or extreme gains on dark pixels
-      // We use a small epsilon (e.g. 2.0/255) to prevent instability
-      const safeR = Math.max(2.0, rInv);
-      const safeG = Math.max(2.0, gInv);
-      const safeB = Math.max(2.0, bInv);
-
-      // 2. Calculate raw gains needed to neutralize color
-      // We want safeR * kR = safeG * kG = safeB * kB = Constant
-      let kR = 1 / safeR;
-      let kG = 1 / safeG;
-      let kB = 1 / safeB;
-      
-      // 3. Normalize gains so the average gain is 1.0 (preserves luminance)
-      const avgGain = (kR + kG + kB) / 3;
-      if (avgGain > 0) {
-          kR /= avgGain;
-          kG /= avgGain;
-          kB /= avgGain;
-      } else {
-          kR = kG = kB = 1;
-      }
-
-      // 4. Calculate Temp/Tint to achieve these gains relative to current base
-      // rBal = red + (temp/200) + (tint/200) = kR
-      // gBal = green + (temp/200) - (tint/200) = kG
-      // bBal = blue - (temp/200) = kB
-      
-      // From Blue: temp = (blue - kB) * 200
-      const newTemp = (blue - kB) * 200;
-      
-      // From Red: tint = (kR - red - (newTemp/200)) * 200
-      const newTint = (kR - red - (newTemp / 200)) * 200;
-      
-      // Adjust Green base to match exactly
-      const newGreen = kG - (newTemp / 200) + (newTint / 200);
-
-      pushToHistory();
-      setTemp(Number(newTemp.toFixed(2)));
-      setTint(Number(newTint.toFixed(2)));
-      setGreen(newGreen);
-
-      setIsPickingWB(false);
-      return;
+        // Derive per-channel gains directly (normalized), then apply as base gains.
+        const [kR, kG, kB] = gainsFromSample([rInv, gInv, bInv]);
+        pushToHistory();
+        setRed(kR);
+        setGreen(kG);
+        setBlue(kB);
+        setTemp(0);
+        setTint(0);
+        setIsPickingWB(false);
+        return;
     }
 
     // Apply Pre-Curve Pipeline
@@ -709,9 +676,7 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
       }
     }
 
-    const rBal = red + (temp / 200) + (tint / 200);
-    const gBal = green + (temp / 200) - (tint / 200);
-    const bBal = blue - (temp / 200);
+    const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
     r *= rBal;
     g *= gBal;
     b *= bBal;
@@ -862,10 +827,7 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     let webglSuccess = false;
     if (image && useGPU && isWebGLAvailable()) {
       try {
-        const rBal = red + (temp / 200) + (tint / 200);
-        const gBal = green + (temp / 200) - (tint / 200);
-        const bBal = blue - (temp / 200);
-        const gains = [rBal, gBal, bBal];
+        const gains = computeWBGains({ red, green, blue, temp, tint });
 
         // Build combined 3D LUT (if present) for GPU path (skip when intensities are zero)
         let combinedLUT = null;

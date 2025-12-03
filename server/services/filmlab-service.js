@@ -61,11 +61,10 @@ async function buildPipeline(inputPath, params = {}, options = {}) {
       else img = img.negate();
     }
 
-    // White balance via per-channel gains
-    const rBal = (Number(red) || 1) + (Number(temp) || 0)/200 + (Number(tint) || 0)/200;
-    const gBal = (Number(green) || 1) + (Number(temp) || 0)/200 - (Number(tint) || 0)/200;
-    const bBal = (Number(blue) || 1) - (Number(temp) || 0)/200;
-    img = img.linear([rBal, gBal, bBal], [0,0,0]);
+    // White balance via per-channel gains (clamped)
+    const { computeWBGains } = require('../utils/filmlab-wb');
+    const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
+    img = img.linear([rBal, gBal, bBal], [0, 0, 0]);
   }
 
   if (!toneAndCurvesInJs) {

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { computeWBGains } from './FilmLab/wb';
 
 const SliderControl = ({ label, value, onChange, min, max, step=1, onMouseDown, suffix='' }) => {
   const handleMinus = () => {
@@ -332,9 +333,7 @@ export default function FilmInverter({ imageUrl, onClose, onSave }) {
       b = 255 - b;
     }
 
-    const rBal = red + (temp / 200) + (tint / 200);
-    const gBal = green + (temp / 200) - (tint / 200);
-    const bBal = blue - (temp / 200);
+    const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
     r *= rBal;
     g *= gBal;
     b *= bBal;
@@ -578,10 +577,8 @@ export default function FilmInverter({ imageUrl, onClose, onSave }) {
     const lutG = getCurveLUT(curves.green);
     const lutB = getCurveLUT(curves.blue);
     
-    // Temp/Tint adjustments
-    const rBal = red + (temp / 200) + (tint / 200);
-    const gBal = green + (temp / 200) - (tint / 200);
-    const bBal = blue - (temp / 200);
+    // Temp/Tint adjustments (clamped gains)
+    const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
 
     // Histogram buckets
     const histRGB = new Array(256).fill(0);
@@ -1116,9 +1113,7 @@ export default function FilmInverter({ imageUrl, onClose, onSave }) {
     const lutG = getCurveLUT(curves.green);
     const lutB = getCurveLUT(curves.blue);
     
-    const rBal = red + (temp / 200) + (tint / 200);
-    const gBal = green + (temp / 200) - (tint / 200);
-    const bBal = blue - (temp / 200);
+    const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
 
     for (let b = 0; b < size; b++) {
       for (let g = 0; g < size; g++) {
