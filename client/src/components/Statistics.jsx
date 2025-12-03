@@ -9,6 +9,14 @@ import WordCloud from './WordCloud';
 
 const API = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:4000';
 
+const formatStat = (val) => {
+  const num = Number(val);
+  if (isNaN(num)) return '0';
+  // If it's an integer (like counts), show as integer.
+  // If it's a float (like averages or precise costs), show 2 decimal places.
+  return Number.isInteger(num) ? num.toString() : num.toFixed(2);
+};
+
 function StatCard({ title, value, sub, trend }) {
   return (
     <div style={{ 
@@ -30,7 +38,7 @@ function StatCard({ title, value, sub, trend }) {
       <div style={{ fontSize: '13px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 600 }}>{title}</div>
       <div style={{ fontSize: '40px', fontWeight: 800, margin: '12px 0 4px', color: '#1e293b', lineHeight: 1 }}>{value}</div>
       {sub && <div style={{ fontSize: '14px', color: '#64748b', marginTop: '4px' }}>{sub}</div>}
-      {trend && <div style={{ fontSize: '12px', color: trend > 0 ? '#10b981' : '#ef4444', marginTop: '8px', fontWeight: 600 }}>{trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%</div>}
+      {trend && <div style={{ fontSize: '12px', color: trend > 0 ? '#10b981' : '#ef4444', marginTop: '8px', fontWeight: 600 }}>{trend > 0 ? '↑' : '↓'} {formatStat(Math.abs(trend))}%</div>}
     </div>
   );
 }
@@ -91,7 +99,7 @@ export default function Statistics({ mode = 'stats' }) {
   const lensPercentage = lensData
     .map(l => ({
       name: l.name,
-      percentage: totalLensUsage > 0 ? Math.round((l.count / totalLensUsage) * 100) : 0
+      percentage: totalLensUsage > 0 ? Number(((l.count / totalLensUsage) * 100).toFixed(2)) : 0
     }))
     .sort((a, b) => b.percentage - a.percentage)
     .slice(0, 6);
@@ -145,12 +153,12 @@ export default function Statistics({ mode = 'stats' }) {
         <>
           {/* Key Metrics Cards - Priority Metrics */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(200px, 1fr))', gap: '20px', marginBottom: '48px' }}>
-            <StatCard title="Total Rolls" value={summary?.total_rolls || 0} />
-            <StatCard title="Total Photos" value={summary?.total_photos || 0} />
-            <StatCard title="Total Spending" value={`¥${Math.round(summary?.total_cost || 0)}`} sub="Purchase + Development" />
+            <StatCard title="Total Rolls" value={formatStat(summary?.total_rolls || 0)} />
+            <StatCard title="Total Photos" value={formatStat(summary?.total_photos || 0)} />
+            <StatCard title="Total Spending" value={`¥${formatStat(summary?.total_cost || 0)}`} sub="Purchase + Development" />
             <StatCard 
               title="Avg Cost/Roll" 
-              value={`¥${summary?.total_rolls ? Math.round((summary?.total_cost || 0) / summary.total_rolls) : 0}`}
+              value={`¥${summary?.total_rolls ? formatStat((summary?.total_cost || 0) / summary.total_rolls) : '0.00'}`}
               sub="Per roll investment"
             />
           </div>
@@ -158,10 +166,10 @@ export default function Statistics({ mode = 'stats' }) {
           {/* Inventory Section */}
           <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#334155', marginBottom: '20px' }}>Inventory</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(200px, 1fr))', gap: '20px', marginBottom: '48px' }}>
-             <StatCard title="In Stock" value={inventory?.value?.total_count || 0} sub="Rolls ready to shoot" />
-             <StatCard title="Inventory Value" value={`¥${Math.round(inventory?.value?.total_value || 0)}`} sub="Total asset value" />
-             <StatCard title="Expiring Soon" value={inventory?.expiring?.length || 0} sub="Within 180 days" trend={inventory?.expiring?.length > 0 ? -10 : 0} />
-             <StatCard title="Top Channel" value={inventory?.channels?.[0]?.purchase_channel || '-'} sub={inventory?.channels?.[0] ? `${inventory.channels[0].count} rolls` : ''} />
+             <StatCard title="In Stock" value={formatStat(inventory?.value?.total_count || 0)} sub="Rolls ready to shoot" />
+             <StatCard title="Inventory Value" value={`¥${formatStat(inventory?.value?.total_value || 0)}`} sub="Total asset value" />
+             <StatCard title="Expiring Soon" value={formatStat(inventory?.expiring?.length || 0)} sub="Within 180 days" trend={inventory?.expiring?.length > 0 ? -10 : 0} />
+             <StatCard title="Top Channel" value={inventory?.channels?.[0]?.purchase_channel || '-'} sub={inventory?.channels?.[0] ? `${formatStat(inventory.channels[0].count)} rolls` : ''} />
           </div>
 
           {/* Shooting Activity - Most Important */}
@@ -405,22 +413,22 @@ export default function Statistics({ mode = 'stats' }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '24px', marginBottom: '48px' }}>
             <StatCard 
               title="Total Spending" 
-              value={`¥${Math.round((costs?.summary?.total_purchase || 0) + (costs?.summary?.total_develop || 0))}`}
+              value={`¥${formatStat((costs?.summary?.total_purchase || 0) + (costs?.summary?.total_develop || 0))}`}
               sub="Purchase + Development"
             />
             <StatCard 
               title="Avg Cost/Roll" 
-              value={`¥${costs?.summary?.roll_count ? Math.round(((costs?.summary?.total_purchase || 0) + (costs?.summary?.total_develop || 0)) / costs.summary.roll_count) : 0}`}
+              value={`¥${costs?.summary?.roll_count ? formatStat(((costs?.summary?.total_purchase || 0) + (costs?.summary?.total_develop || 0)) / costs.summary.roll_count) : '0.00'}`}
               sub="Per roll investment"
             />
             <StatCard 
               title="Total Purchase" 
-              value={`¥${Math.round(costs?.summary?.total_purchase || 0)}`}
+              value={`¥${formatStat(costs?.summary?.total_purchase || 0)}`}
               sub="Film stock investment"
             />
             <StatCard 
               title="Total Development" 
-              value={`¥${Math.round(costs?.summary?.total_develop || 0)}`}
+              value={`¥${formatStat(costs?.summary?.total_develop || 0)}`}
               sub="Lab processing"
             />
           </div>
@@ -447,7 +455,7 @@ export default function Statistics({ mode = 'stats' }) {
                     </Pie>
                     <Tooltip 
                       contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                      formatter={(value) => `¥${value}`}
+                      formatter={(value) => `¥${formatStat(value)}`}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -455,7 +463,7 @@ export default function Statistics({ mode = 'stats' }) {
                   {costBreakdown.map((entry, index) => (
                     <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: index === 0 ? '#10b981' : '#f59e0b' }}></div>
-                      <span style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>{entry.name}: ¥{entry.value}</span>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>{entry.name}: ¥{formatStat(entry.value)}</span>
                     </div>
                   ))}
                 </div>
@@ -494,6 +502,7 @@ export default function Statistics({ mode = 'stats' }) {
                     />
                     <YAxis 
                       tick={{ fontSize: 12, fill: '#64748b' }} 
+                      tickFormatter={(value) => formatStat(value)}
                       tickLine={{ inside: true, stroke: '#cbd5e1' }}
                       axisLine={{ stroke: '#e2e8f0' }}
                     />
@@ -506,7 +515,7 @@ export default function Statistics({ mode = 'stats' }) {
                     />
                     <Tooltip 
                       contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                      formatter={(value) => `¥${value}`}
+                      formatter={(value) => `¥${formatStat(value)}`}
                     />
                     <Legend wrapperStyle={{ fontSize: 13, fontWeight: 600 }} />
                     <Area type="monotone" dataKey="purchase" stroke="#10b981" strokeWidth={2} fill="url(#colorPurchase)" name="Purchase" />
@@ -547,6 +556,7 @@ export default function Statistics({ mode = 'stats' }) {
                   />
                   <YAxis 
                     tick={{ fontSize: 12, fill: '#64748b' }} 
+                    tickFormatter={(value) => formatStat(value)}
                     tickLine={{ inside: true, stroke: '#cbd5e1' }}
                     axisLine={{ stroke: '#e2e8f0' }}
                   />
@@ -559,7 +569,7 @@ export default function Statistics({ mode = 'stats' }) {
                   />
                   <Tooltip 
                     contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    formatter={(value) => `¥${Math.round(Number(value)||0)}`}
+                    formatter={(value) => `¥${formatStat(value)}`}
                   />
                   <Legend wrapperStyle={{ fontSize: 13, fontWeight: 600 }} />
                   {/* Stacked bars: Avg Purchase + Avg Development */}

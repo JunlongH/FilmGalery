@@ -38,6 +38,7 @@ export default function TagEditModal({ photo, allTags, onClose, onSave }) {
     if (input.trim() && !finalTags.includes(input.trim())) {
       finalTags.push(input.trim());
     }
+    console.log('[TagEditModal] Saving tags:', finalTags, 'for photo:', photo.id);
     onSave(photo.id, finalTags);
     onClose();
   };

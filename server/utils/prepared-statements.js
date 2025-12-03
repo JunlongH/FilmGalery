@@ -35,7 +35,7 @@ const STATEMENTS = {
   // Tags
   'tags.getAll': 'SELECT * FROM tags ORDER BY name',
   'tags.getByName': 'SELECT * FROM tags WHERE name = ?',
-  'tags.insert': 'INSERT INTO tags (name) VALUES (?)',
+  'tags.insert': 'INSERT OR IGNORE INTO tags (name) VALUES (?)',
   
   // Photo Tags (junction)
   'photo_tags.getByPhoto': 'SELECT tag_id FROM photo_tags WHERE photo_id = ?',

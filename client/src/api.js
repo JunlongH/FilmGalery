@@ -1,6 +1,9 @@
 // src/api.js
 // Prefer 127.0.0.1 over localhost to avoid potential IPv6 issues in packaged builds
-export const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:4000';
+// In Electron production, use the API_BASE exposed by preload, otherwise fallback to localhost for dev
+export const API_BASE = (typeof window !== 'undefined' && window.__electron?.API_BASE) 
+  ? window.__electron.API_BASE 
+  : (process.env.REACT_APP_API_BASE || 'http://127.0.0.1:4000');
 
 // Build an absolute URL for an uploaded file value stored in the DB.
 export function buildUploadUrl(pathOrUrl) {
@@ -377,14 +380,24 @@ export async function deletePreset(id) {
 }
 
 export async function updatePhoto(id, data) {
+  console.log('[API] updatePhoto called:', { id, data });
   const resp = await fetch(`${API_BASE}/api/photos/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   });
+  console.log('[API] updatePhoto response status:', resp.status);
   const ct = resp.headers.get('content-type') || '';
-  if (ct.includes('application/json')) return resp.json();
+  if (ct.includes('application/json')) {
+    const result = await resp.json();
+    console.log('[API] updatePhoto response:', result);
+    if (!resp.ok) {
+      console.error('[API] updatePhoto error response:', result);
+    }
+    return result;
+  }
   const text = await resp.text();
+  console.log('[API] updatePhoto response (text):', text);
   return { ok: resp.ok, status: resp.status, text };
 }
 

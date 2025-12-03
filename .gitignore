@@ -4,8 +4,15 @@ dist/
 dist_v*/
 uploads/
 temp_expo_orig/
+/.expo/
+/.expo-shared/
 *.log
 .DS_Store
 .env
 film.db
 server/film.db
+server/film.db-wal
+server/film.db-shm
+*.db-wal
+*.db-shm
+*.keystore

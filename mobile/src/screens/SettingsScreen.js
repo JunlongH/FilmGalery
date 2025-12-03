@@ -6,20 +6,34 @@ import { ApiContext } from '../context/ApiContext';
 
 export default function SettingsScreen({ navigation }) {
   const theme = useTheme();
-  const { baseUrl, setBaseUrl, darkMode, setDarkMode } = useContext(ApiContext);
+  const { baseUrl, setBaseUrl, backupUrl, setBackupUrl, darkMode, setDarkMode } = useContext(ApiContext);
   const [url, setUrl] = useState(baseUrl);
+  const [backup, setBackup] = useState(backupUrl || '');
   const [isDark, setIsDark] = useState(!!darkMode);
 
-  const save = async () => {
-    // Basic validation
-    let cleanUrl = url.trim();
-    if (cleanUrl.endsWith('/')) cleanUrl = cleanUrl.slice(0, -1);
-    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-      cleanUrl = `http://${cleanUrl}`;
+  const cleanUrlString = (input) => {
+    let clean = input.trim();
+    if (!clean) return '';
+    if (clean.endsWith('/')) clean = clean.slice(0, -1);
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+      clean = `http://${clean}`;
     }
+    return clean;
+  };
+
+  const save = async () => {
+    const cleanUrl = cleanUrlString(url);
+    const cleanBackup = cleanUrlString(backup);
     
     await AsyncStorage.setItem('api_base_url', cleanUrl);
+    if (cleanBackup) {
+      await AsyncStorage.setItem('api_backup_url', cleanBackup);
+    } else {
+      await AsyncStorage.removeItem('api_backup_url');
+    }
+
     setBaseUrl(cleanUrl);
+    setBackupUrl(cleanBackup);
     navigation.goBack();
   };
 
@@ -29,27 +43,32 @@ export default function SettingsScreen({ navigation }) {
     await AsyncStorage.setItem('theme_dark', val ? 'true' : 'false');
   };
 
-  const testConnection = async () => {
-    let cleanUrl = url.trim();
-    if (cleanUrl.endsWith('/')) cleanUrl = cleanUrl.slice(0, -1);
-    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-      cleanUrl = `http://${cleanUrl}`;
+  const testConnection = async (targetUrl) => {
+    const clean = cleanUrlString(targetUrl);
+    if (!clean) {
+      alert('Please enter a URL');
+      return;
     }
     try {
-      const res = await fetch(`${cleanUrl}/api/rolls`);
+      const res = await fetch(`${clean}/api/rolls`);
       if (res.ok) {
-        alert('Connection Successful!');
+        alert(`Connection Successful to ${clean}!`);
       } else {
-        alert(`Connected, but server returned ${res.status}`);
+        alert(`Connected to ${clean}, but server returned ${res.status}`);
       }
     } catch (e) {
-      alert(`Connection Failed: ${e.message}`);
+      alert(`Connection Failed to ${clean}: ${e.message}`);
     }
+  };
+
+  const handleSwap = () => {
+    setUrl(backup);
+    setBackup(url);
   };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Text style={styles.label}>Server URL</Text>
+      <Text style={styles.label}>Primary Server URL</Text>
       <Text style={styles.hint}>
         Enter the IP address of your PC running FilmGallery.
         Example: http://192.168.1.5:4000
@@ -62,13 +81,47 @@ export default function SettingsScreen({ navigation }) {
         autoCapitalize="none"
         keyboardType="url"
         activeOutlineColor="#5a4632"
-        style={{ backgroundColor: '#f5f0e6' }}
+        style={{ backgroundColor: '#f5f0e6', marginBottom: 10 }}
       />
-      <Button mode="outlined" onPress={testConnection} style={styles.button} textColor="#5a4632">
-        Test Connection
-      </Button>
+
+      <View style={{ alignItems: 'center', marginBottom: 10 }}>
+        <Button 
+          mode="text" 
+          compact 
+          onPress={handleSwap} 
+          icon="swap-vertical" 
+          textColor="#5a4632"
+        >
+          Swap Primary & Backup
+        </Button>
+      </View>
+      
+      <Text style={styles.label}>Backup Server URL (Optional)</Text>
+      <Text style={styles.hint}>
+        Alternative IP address if primary is unreachable.
+      </Text>
+      <TextInput
+        mode="outlined"
+        value={backup}
+        onChangeText={setBackup}
+        placeholder="http://192.168.1.y:4000"
+        autoCapitalize="none"
+        keyboardType="url"
+        activeOutlineColor="#5a4632"
+        style={{ backgroundColor: '#f5f0e6', marginBottom: 10 }}
+      />
+
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Button mode="outlined" onPress={() => testConnection(url)} style={[styles.button, { flex: 1, marginRight: 8 }]} textColor="#5a4632">
+          Test Primary
+        </Button>
+        <Button mode="outlined" onPress={() => testConnection(backup)} style={[styles.button, { flex: 1, marginLeft: 8 }]} textColor="#5a4632">
+          Test Backup
+        </Button>
+      </View>
+
       <Button mode="contained" onPress={save} style={styles.button} buttonColor="#5a4632">
-        Save
+        Save Settings
       </Button>
       <View style={{ marginTop: 24 }}>
         <Text style={styles.label}>Dark Mode</Text>

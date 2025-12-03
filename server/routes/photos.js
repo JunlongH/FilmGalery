@@ -284,7 +284,14 @@ router.put('/:id', async (req, res) => {
 
     let appliedTags;
     if (tags !== undefined) {
-      appliedTags = await savePhotoTags(id, Array.isArray(tags) ? tags : []);
+      console.log(`[PUT] About to save tags for photo ${id}:`, tags);
+      try {
+        appliedTags = await savePhotoTags(id, Array.isArray(tags) ? tags : []);
+        console.log(`[PUT] Tags saved successfully:`, appliedTags);
+      } catch (tagErr) {
+        console.error(`[PUT] savePhotoTags failed for photo ${id}:`, tagErr);
+        throw tagErr; // Re-throw to trigger outer catch
+      }
     }
 
     // Auto-add location to roll if missing
@@ -309,6 +316,7 @@ router.put('/:id', async (req, res) => {
     res.json({ ok: true, updated, tags: appliedTags });
   } catch (err) {
     console.error('[PUT] Update photo error', err.message);
+    console.error('[PUT] Stack trace:', err.stack);
     res.status(500).json({ error: err.message });
   }
 });

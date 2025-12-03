@@ -18,6 +18,10 @@ import ThemesScreen from './src/screens/ThemesScreen';
 import NegativeScreen from './src/screens/NegativeScreen';
 import TagDetailScreen from './src/screens/TagDetailScreen';
 import FilmRollsScreen from './src/screens/FilmRollsScreen';
+import InventoryScreen from './src/screens/InventoryScreen';
+import FilmItemDetailScreen from './src/screens/FilmItemDetailScreen';
+import ShotLogScreen from './src/screens/ShotLogScreen';
+import StatsScreen from './src/screens/StatsScreen';
 import { ApiContext } from './src/context/ApiContext';
 import { configureAxios } from './src/setupAxios';
 import appTheme, { appDarkTheme } from './src/theme';
@@ -36,8 +40,10 @@ function HomeTabs() {
           let iconName;
           if (route.name === 'Rolls') iconName = focused ? 'filmstrip' : 'filmstrip-box';
           else if (route.name === 'Favorites') iconName = focused ? 'heart' : 'heart-outline';
-          else if (route.name === 'Films') iconName = focused ? 'camera-iris' : 'camera-iris';
           else if (route.name === 'Themes') iconName = focused ? 'tag-multiple' : 'tag-multiple-outline';
+          else if (route.name === 'Films') iconName = focused ? 'camera-iris' : 'camera-iris';
+          else if (route.name === 'Inventory') iconName = focused ? 'clipboard-list' : 'clipboard-list-outline';
+          else if (route.name === 'Stats') iconName = focused ? 'chart-line' : 'chart-line';
 
           return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
         },
@@ -54,12 +60,15 @@ function HomeTabs() {
       <Tab.Screen name="Favorites" component={FavoritesScreen} />
       <Tab.Screen name="Themes" component={ThemesScreen} />
       <Tab.Screen name="Films" component={FilmsScreen} />
+      <Tab.Screen name="Inventory" component={InventoryScreen} />
+      <Tab.Screen name="Stats" component={StatsScreen} />
     </Tab.Navigator>
   );
 }
 
 export default function App() {
   const [baseUrl, setBaseUrl] = useState('http://192.168.1.x:4000'); // Default placeholder
+  const [backupUrl, setBackupUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
 
@@ -67,9 +76,11 @@ export default function App() {
     // Load saved API URL and theme
     Promise.all([
       AsyncStorage.getItem('api_base_url'),
+      AsyncStorage.getItem('api_backup_url'),
       AsyncStorage.getItem('theme_dark'),
-    ]).then(([url, themeDark]) => {
+    ]).then(([url, backup, themeDark]) => {
       if (url) setBaseUrl(url);
+      if (backup) setBackupUrl(backup);
       if (themeDark === 'true') setDarkMode(true);
       setLoading(false);
     });
@@ -78,16 +89,16 @@ export default function App() {
   // Reconfigure axios whenever baseUrl changes after initial load
   useEffect(() => {
     if (!loading && baseUrl) {
-      configureAxios(baseUrl);
+      configureAxios(baseUrl, backupUrl);
     }
-  }, [loading, baseUrl]);
+  }, [loading, baseUrl, backupUrl]);
 
   if (loading) return null;
 
   const themeToUse = darkMode ? appDarkTheme : appTheme;
 
   return (
-    <ApiContext.Provider value={{ baseUrl, setBaseUrl, darkMode, setDarkMode }}>
+    <ApiContext.Provider value={{ baseUrl, setBaseUrl, backupUrl, setBackupUrl, darkMode, setDarkMode }}>
       <PaperProvider theme={themeToUse}>
         <GestureHandlerRootView style={{ flex: 1 }}>
         <NavigationContainer theme={themeToUse}>
@@ -129,6 +140,16 @@ export default function App() {
               name="Settings" 
               component={SettingsScreen} 
               options={{ title: 'Settings' }}
+            />
+            <Stack.Screen 
+              name="FilmItemDetail" 
+              component={FilmItemDetailScreen} 
+              options={{ title: 'Film Item' }}
+            />
+            <Stack.Screen 
+              name="ShotLog" 
+              component={ShotLogScreen} 
+              options={{ title: 'Shot Log' }}
             />
           </Stack.Navigator>
           <StatusBar style={darkMode ? 'light' : 'dark'} />

@@ -116,7 +116,20 @@ async function listFilmItems(filters = {}) {
     where.push('deleted_at IS NULL');
   }
 
-  const sql = `SELECT * FROM film_items ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+  // Smart sorting: loaded first, then in_stock by expiry_date ASC, then others by created_at DESC
+  const orderBy = `
+    CASE 
+      WHEN status = 'loaded' THEN 1
+      WHEN status = 'in_stock' THEN 2
+      ELSE 3
+    END,
+    CASE 
+      WHEN status = 'in_stock' THEN expiry_date
+      ELSE NULL
+    END ASC,
+    created_at DESC
+  `;
+  const sql = `SELECT * FROM film_items ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
   params.push(Number(limit), Number(offset));
 
   const rows = await allAsync(sql, params);

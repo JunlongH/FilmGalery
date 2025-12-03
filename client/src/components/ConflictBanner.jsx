@@ -15,7 +15,7 @@ const ConflictBanner = () => {
 
   const checkConflicts = async () => {
     try {
-      const API_BASE = window.__electron?.API_BASE || 'http://localhost:4000';
+      const API_BASE = window.__electron?.API_BASE || 'http://127.0.0.1:4000';
       const res = await fetch(`${API_BASE}/api/conflicts`);
       const data = await res.json();
       if (data.hasConflicts && data.conflicts.length > 0) {
@@ -32,7 +32,7 @@ const ConflictBanner = () => {
   const handleResolve = async () => {
     setLoading(true);
     try {
-      const API_BASE = window.__electron?.API_BASE || 'http://localhost:4000';
+      const API_BASE = window.__electron?.API_BASE || 'http://127.0.0.1:4000';
       const res = await fetch(`${API_BASE}/api/conflicts/resolve`, {
         method: 'POST'
       });

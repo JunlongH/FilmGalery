@@ -32,7 +32,7 @@
   },
   "scripts": {
     "start": "cross-env PORT=3000 REACT_APP_API_BASE=http://localhost:4000 react-scripts start",
-    "build": "set \"PUBLIC_URL=./\" && react-scripts build"
+    "build": "react-scripts build"
   },
   "browserslist": [
     "defaults"

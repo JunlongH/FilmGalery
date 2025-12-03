@@ -23,7 +23,8 @@ function formatMoney(v) {
 export default function FilmInventory() {
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null, onCancel: null });
-  const [filters, setFilters] = useState({ status: 'in_stock' });
+  // 空字符串表示 "All"，即不对 status 做任何过滤
+  const [filters, setFilters] = useState({ status: '' });
 
   const [batchForm, setBatchForm] = useState({
     purchase_date: '',
@@ -57,8 +58,8 @@ export default function FilmInventory() {
   const films = Array.isArray(filmsData) ? filmsData : [];
 
   const { data: filmItemsData, isLoading: loadingItems } = useQuery({
-    queryKey: ['film-items', filters],
-    queryFn: () => getFilmItems({ status: filters.status }),
+    queryKey: ['film-items', { status: filters.status || null }],
+    queryFn: () => getFilmItems({ status: filters.status || undefined }),
   });
 
   const items = filmItemsData && Array.isArray(filmItemsData.items) ? filmItemsData.items : [];
@@ -80,7 +81,7 @@ export default function FilmInventory() {
   });
 
   const onChangeFilterStatus = (e) => {
-    setFilters(prev => ({ ...prev, status: e.target.value || undefined }));
+    setFilters(prev => ({ ...prev, status: e.target.value || '' }));
   };
 
   const onChangeBatchOrderField = (key, value) => {
@@ -177,7 +178,7 @@ export default function FilmInventory() {
       {/* Filters */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <label style={{ fontSize: 13 }}>Status:</label>
-        <select value={filters.status || ''} onChange={onChangeFilterStatus}>
+        <select value={filters.status} onChange={onChangeFilterStatus}>
           <option value="">All</option>
           {STATUS_OPTIONS.map(opt => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>

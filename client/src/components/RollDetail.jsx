@@ -498,13 +498,15 @@ export default function RollDetail() {
             onClose={() => setEditingTagsPhoto(null)} 
             onSave={async (photoId, newTags) => {
               try {
+                console.log('[RollDetail] Calling onUpdatePhoto with:', { photoId, tags: newTags });
                 await onUpdatePhoto(photoId, { tags: newTags });
+                console.log('[RollDetail] Tags saved successfully');
                 // Refresh tags query and notify sidebar
                 queryClient.invalidateQueries(['tags']);
                 // Also dispatch event to refresh sidebar
                 window.dispatchEvent(new Event('refresh-tags'));
               } catch (err) {
-                console.error('Failed to save tags', err);
+                console.error('[RollDetail] Failed to save tags:', err);
               }
               setEditingTagsPhoto(null);
             }}

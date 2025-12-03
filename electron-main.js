@@ -418,12 +418,6 @@ function createWindow() {
   mainWindow.on('maximize', () => saveWindowState(mainWindow));
   mainWindow.on('unmaximize', () => saveWindowState(mainWindow));
 
-  // Ensure server is stopped when app quits
-  app.on('before-quit', async () => {
-    isQuitting = true;
-    await stopServer();
-  });
-
   if (isDev) {
     // dev server
     const devUrl = 'http://localhost:3000';
@@ -828,6 +822,12 @@ app.on('before-quit', async (e) => {
   if (!isQuitting) {
     e.preventDefault();
     isQuitting = true;
+    
+    // Close GPU window if exists
+    if (gpuWindow && !gpuWindow.isDestroyed()) {
+      try { gpuWindow.close(); } catch (err) {}
+    }
+    
     await stopServer();
     app.quit();
   }

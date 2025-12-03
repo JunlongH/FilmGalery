@@ -31,7 +31,8 @@ export default function FilmLibrary() {
   const [activeTab, setActiveTab] = useState('inventory');
 
   // Inventory state
-  const [inventoryStatusFilter, setInventoryStatusFilter] = useState('in_stock');
+  // 默认展示所有库存记录（All），而不是仅 In Stock
+  const [inventoryStatusFilter, setInventoryStatusFilter] = useState('all');
   const [batchForm, setBatchForm] = useState({
     order_date: new Date().toISOString().slice(0, 10),
     channel: '',
@@ -473,7 +474,11 @@ export default function FilmLibrary() {
                 {filmItems.map(item => {
                   const film = films.find(f => f.id === item.film_id);
                   const thumbUrl = film && film.thumbPath ? getFilmThumbUrl(film.thumbPath) : null;
-                  const statusLabel = STATUS_LABELS[item.status] || item.status;
+                  // Status label: for loaded items, show loaded camera when available
+                  const statusLabel =
+                    item.status === 'loaded' && item.loaded_camera
+                      ? `Loaded on ${item.loaded_camera}`
+                      : (STATUS_LABELS[item.status] || item.status);
                   const isExpired = item.expiry_date && new Date(item.expiry_date) < new Date();
                   const isExpanded = expandedItemId === item.id;
                   return (

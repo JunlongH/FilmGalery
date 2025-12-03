@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer, shell } = require('electron');
 // 暴露安全的 API 到前端（如果需要）
 contextBridge.exposeInMainWorld('__electron', {
   platform: process.platform,
+  API_BASE: 'http://127.0.0.1:4000', // Production API base
   minimize: () => ipcRenderer.invoke('window-minimize'),
   maximize: () => ipcRenderer.invoke('window-maximize'),
   close: () => ipcRenderer.invoke('window-close'),

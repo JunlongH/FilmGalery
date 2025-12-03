@@ -59,13 +59,17 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }) {
       finalTags.push(input.trim());
     }
 
+    console.log('[TagEditModal] Saving tags:', finalTags, 'for photo:', photo.id);
+
     try {
-      await axios.put(`${baseUrl}/api/photos/${photo.id}`, { tags: finalTags });
+      const response = await axios.put(`${baseUrl}/api/photos/${photo.id}`, { tags: finalTags });
+      console.log('[TagEditModal] Save response:', response.data);
       onSave(finalTags); // Update parent
       onDismiss();
     } catch (err) {
-      console.error('Failed to save tags', err);
-      alert('Failed to save tags');
+      console.error('[TagEditModal] Failed to save tags:', err);
+      console.error('[TagEditModal] Error details:', err.response?.data || err.message);
+      alert(`Failed to save tags: ${err.response?.data?.error || err.message}`);
     }
   };
 
@@ -88,15 +92,26 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }) {
           ))}
         </View>
 
-        <TextInput
-          mode="outlined"
-          label="Add a tag..."
-          value={input}
-          onChangeText={setInput}
-          onSubmitEditing={() => addTag(input)}
-          style={styles.input}
-          activeOutlineColor="#5a4632"
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TextInput
+            mode="outlined"
+            label="Add a tag..."
+            value={input}
+            onChangeText={setInput}
+            onSubmitEditing={() => addTag(input)}
+            style={[styles.input, { flex: 1 }]}
+            activeOutlineColor="#5a4632"
+          />
+          <IconButton 
+            icon="plus" 
+            mode="contained" 
+            containerColor="#5a4632" 
+            iconColor="#fff"
+            size={24}
+            onPress={() => addTag(input)}
+            style={{ marginLeft: 8, marginTop: 0 }}
+          />
+        </View>
 
         <Text style={styles.sectionTitle}>Choose from existing</Text>
         <ScrollView style={styles.suggestions} keyboardShouldPersistTaps="handled">

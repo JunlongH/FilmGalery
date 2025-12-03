@@ -5,8 +5,9 @@ import { updateFilmItem } from '../api';
 export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
   const [logs, setLogs] = useState([]);
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
-  const [newCount, setNewCount] = useState('');
+  const [newCount, setNewCount] = useState('1');
   const [loading, setLoading] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
     if (item && item.shot_logs) {
@@ -38,7 +39,7 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
     }
     
     setLogs(updatedLogs);
-    setNewCount('');
+    setNewCount('1');
   };
 
   const handleRemove = (index) => {
@@ -76,20 +77,20 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
         
         <div className="fg-modal-body" style={{ padding: 24, overflowY: 'auto' }}>
           
-          {/* Add New Log Section */}
-          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', marginBottom: 24, background: '#f8fafc', padding: 20, borderRadius: 12, border: '1px solid #e2e8f0' }}>
+          {/* Quick Add Section */}
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', marginBottom: 24, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: 20, borderRadius: 12, boxShadow: '0 4px 12px rgba(102, 126, 234, 0.25)' }}>
             <div className="fg-field" style={{ flex: 1 }}>
-              <label className="fg-label" style={{ color: '#475569', marginBottom: 8, fontSize: 13, fontWeight: 600 }}>Date</label>
+              <label className="fg-label" style={{ color: 'rgba(255,255,255,0.95)', marginBottom: 8, fontSize: 13, fontWeight: 600 }}>Date</label>
               <input 
                 type="date" 
                 className="fg-input" 
                 value={newDate} 
                 onChange={e => setNewDate(e.target.value)} 
-                style={{ background: '#fff', height: 40 }}
+                style={{ background: '#fff', height: 40, border: 'none' }}
               />
             </div>
             <div className="fg-field" style={{ width: 150 }}>
-              <label className="fg-label" style={{ color: '#475569', marginBottom: 8, fontSize: 13, fontWeight: 600 }}>Shot Count</label>
+              <label className="fg-label" style={{ color: 'rgba(255,255,255,0.95)', marginBottom: 8, fontSize: 13, fontWeight: 600 }}>Shot Count</label>
               <input 
                 type="number" 
                 className="fg-input" 
@@ -97,80 +98,146 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
                 onChange={e => setNewCount(e.target.value)} 
                 placeholder="#"
                 min="1"
-                style={{ background: '#fff', height: 40 }}
+                style={{ background: '#fff', height: 40, border: 'none' }}
                 onKeyDown={e => e.key === 'Enter' && handleAdd()}
               />
             </div>
             <button 
               type="button" 
-              className="fg-btn fg-btn-primary" 
+              className="fg-btn" 
               onClick={handleAdd}
               disabled={!newCount}
-              style={{ height: 40, padding: '0 24px', fontSize: 14, fontWeight: 600 }}
+              style={{ height: 40, padding: '0 24px', fontSize: 14, fontWeight: 600, background: '#fff', color: '#667eea', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
             >
               Add Log
             </button>
           </div>
 
-          {/* Logs Table */}
-          <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-              <thead style={{ background: '#f1f5f9' }}>
-                <tr>
-                  <th style={{ padding: '12px 20px', textAlign: 'left', color: '#475569', fontWeight: 600, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date</th>
-                  <th style={{ padding: '12px 20px', textAlign: 'right', color: '#475569', fontWeight: 600, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shots</th>
-                  <th style={{ padding: '12px 20px', width: 60 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.length === 0 ? (
-                  <tr>
-                    <td colSpan="3" style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>
-                      No logs recorded yet. Add one above.
-                    </td>
-                  </tr>
-                ) : (
-                  logs.map((log, idx) => (
-                    <tr key={idx} style={{ borderTop: '1px solid #e2e8f0', background: '#fff' }}>
-                      <td style={{ padding: '12px 20px', color: '#334155' }}>{log.date}</td>
-                      <td style={{ padding: '12px 20px', textAlign: 'right', color: '#334155', fontWeight: 500 }}>{log.count}</td>
-                      <td style={{ padding: '12px 20px', textAlign: 'center' }}>
-                        <button 
-                          type="button"
-                          onClick={() => handleRemove(idx)}
-                          style={{ 
-                            border: 'none', 
-                            background: 'transparent', 
-                            color: '#ef4444', 
-                            cursor: 'pointer',
-                            padding: 6,
-                            borderRadius: 4,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'background 0.2s'
-                          }}
-                          onMouseOver={e => e.currentTarget.style.background = '#fee2e2'}
-                          onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-                          title="Remove log"
-                        >
-                          <span style={{ fontSize: 18, lineHeight: 1 }}>&times;</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {logs.length > 0 && (
-                <tfoot style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
-                  <tr>
-                    <td style={{ padding: '12px 20px', fontWeight: 700, color: '#1e293b' }}>Total Shots</td>
-                    <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: '#1e293b', fontSize: 16 }}>{totalShots}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
+          {/* Calendar View */}
+          <div style={{ marginBottom: 20 }}>
+            {/* Month Navigation */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '0 8px' }}>
+              <button
+                type="button"
+                onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+                style={{ border: '1px solid #e2e8f0', background: '#fff', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 14, color: '#475569', fontWeight: 500 }}
+              >
+                ← Prev
+              </button>
+              <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#1e293b' }}>
+                {currentMonth.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}
+              </h4>
+              <button
+                type="button"
+                onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+                style={{ border: '1px solid #e2e8f0', background: '#fff', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 14, color: '#475569', fontWeight: 500 }}
+              >
+                Next →
+              </button>
+            </div>
+
+            {/* Calendar Grid */}
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
+              {/* Weekday Headers */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                  <div key={day} style={{ padding: '12px 8px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {day}
+                  </div>
+                ))}
+              </div>
+              
+              {/* Calendar Days */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+                {(() => {
+                  const year = currentMonth.getFullYear();
+                  const month = currentMonth.getMonth();
+                  const firstDay = new Date(year, month, 1).getDay();
+                  const daysInMonth = new Date(year, month + 1, 0).getDate();
+                  const days = [];
+                  
+                  // Empty cells before first day
+                  for (let i = 0; i < firstDay; i++) {
+                    days.push(<div key={`empty-${i}`} style={{ aspectRatio: '1', borderTop: '1px solid #f1f5f9', borderLeft: i > 0 ? '1px solid #f1f5f9' : 'none', background: '#fafafa' }} />);
+                  }
+                  
+                  // Day cells
+                  for (let day = 1; day <= daysInMonth; day++) {
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const logEntry = logs.find(l => l.date === dateStr);
+                    const hasLog = !!logEntry;
+                    const isToday = dateStr === new Date().toISOString().split('T')[0];
+                    const colIndex = (firstDay + day - 1) % 7;
+                    
+                    days.push(
+                      <div 
+                        key={day}
+                        onClick={() => {
+                          setNewDate(dateStr);
+                          if (hasLog) {
+                            const idx = logs.findIndex(l => l.date === dateStr);
+                            if (window.confirm(`Remove log for ${dateStr} (${logEntry.count} shots)?`)) {
+                              handleRemove(idx);
+                            }
+                          }
+                        }}
+                        style={{
+                          aspectRatio: '1',
+                          borderTop: '1px solid #e2e8f0',
+                          borderLeft: colIndex > 0 ? '1px solid #e2e8f0' : 'none',
+                          padding: 8,
+                          cursor: 'pointer',
+                          position: 'relative',
+                          background: hasLog ? '#eff6ff' : isToday ? '#fef3c7' : '#fff',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between'
+                        }}
+                        onMouseEnter={e => {
+                          if (!hasLog) e.currentTarget.style.background = '#f8fafc';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = hasLog ? '#eff6ff' : isToday ? '#fef3c7' : '#fff';
+                        }}
+                      >
+                        <div style={{ fontSize: 13, fontWeight: isToday ? 700 : 500, color: hasLog ? '#2563eb' : isToday ? '#92400e' : '#475569' }}>
+                          {day}
+                        </div>
+                        {hasLog && (
+                          <div style={{ 
+                            fontSize: 11, 
+                            fontWeight: 700, 
+                            color: '#fff', 
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            borderRadius: 6,
+                            padding: '4px 6px',
+                            textAlign: 'center',
+                            boxShadow: '0 2px 4px rgba(102, 126, 234, 0.3)'
+                          }}>
+                            {logEntry.count} 📸
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  
+                  return days;
+                })()}
+              </div>
+            </div>
+          </div>
+
+          {/* Summary Stats */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginTop: 20 }}>
+            <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: 20, borderRadius: 12, color: '#fff', boxShadow: '0 4px 12px rgba(102, 126, 234, 0.25)' }}>
+              <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 4 }}>Total Shots</div>
+              <div style={{ fontSize: 32, fontWeight: 700 }}>{totalShots}</div>
+            </div>
+            <div style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', padding: 20, borderRadius: 12, color: '#fff', boxShadow: '0 4px 12px rgba(245, 87, 108, 0.25)' }}>
+              <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 4 }}>Days Logged</div>
+              <div style={{ fontSize: 32, fontWeight: 700 }}>{logs.length}</div>
+            </div>
           </div>
         </div>
 
