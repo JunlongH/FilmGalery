@@ -615,7 +615,7 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
       // We want this color (r,g,b) to become White (255,255,255) in the negative space
       // So that when inverted, it becomes Black (0,0,0)
       // Gain = Target / Source
-      // We use a safety clamp to avoid division by zero or extreme gains
+      // Note: This is different from WB picker. Base picker targets pure white (255) to neutralize the mask.
       const safeR = Math.max(1, r);
       const safeG = Math.max(1, g);
       const safeB = Math.max(1, b);
@@ -652,7 +652,9 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
       }
 
         // Derive per-channel gains directly (normalized), then apply as base gains.
+        // Uses luminance-preserving algorithm from wb.js
         const [kR, kG, kB] = gainsFromSample([rInv, gInv, bInv]);
+        console.log('[FilmLab] WB Picker:', { rInv, gInv, bInv }, '->', { kR, kG, kB });
         pushToHistory();
         setRed(kR);
         setGreen(kG);
