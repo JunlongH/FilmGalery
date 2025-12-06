@@ -512,6 +512,7 @@ export async function renderPositive(photoId, params, { format = 'jpeg' } = {}) 
 
 // Film Lab preview (server-rendered)
 export async function filmlabPreview({ photoId, params, maxWidth = 1400 }) {
+  console.log('[API] filmlabPreview request:', { photoId, params, maxWidth });
   const resp = await fetch(`${API_BASE}/api/filmlab/preview`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -520,11 +521,13 @@ export async function filmlabPreview({ photoId, params, maxWidth = 1400 }) {
   const ct = resp.headers.get('content-type') || '';
   if (ct.startsWith('image/')) {
     const blob = await resp.blob();
+    console.log('[API] filmlabPreview received image blob:', blob.size, 'bytes');
     return { ok: true, blob };
   }
   const text = await resp.text();
   let err;
   try { err = JSON.parse(text); } catch { err = { error: text }; }
+  console.error('[API] filmlabPreview error:', err);
   return { ok: false, error: err && (err.error || err.message) };
 }
 

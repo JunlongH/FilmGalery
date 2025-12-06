@@ -53,20 +53,32 @@ export function processImageWebGL(canvas, image, params = {}) {
   }
 
   // Rotate-then-crop pre-processing via 2D canvas for geometry parity with CPU/export
+  // Respect optional `params.scale` so WebGL output matches preview geometry scale
   let srcImage = image;
+  const scale = (typeof params.scale === 'number' && params.scale > 0) ? params.scale : 1;
+  // If scale != 1, create a temporary scaled source so rotation uses scaled dimensions
+  if (scale !== 1 && image && image.width) {
+    const s2 = document.createElement('canvas');
+    s2.width = Math.max(1, Math.round(image.width * scale));
+    s2.height = Math.max(1, Math.round(image.height * scale));
+    const g2 = s2.getContext('2d');
+    // draw scaled
+    g2.drawImage(image, 0, 0, image.width, image.height, 0, 0, s2.width, s2.height);
+    srcImage = s2;
+  }
   const rotateDeg = typeof params.rotate === 'number' ? params.rotate : 0;
   const rad = rotateDeg * Math.PI / 180;
   const s = Math.abs(Math.sin(rad));
   const c = Math.abs(Math.cos(rad));
-  const rotW = Math.round(image.width * c + image.height * s);
-  const rotH = Math.round(image.width * s + image.height * c);
+  const rotW = Math.round(srcImage.width * c + srcImage.height * s);
+  const rotH = Math.round(srcImage.width * s + srcImage.height * c);
   const r2d = document.createElement('canvas');
   r2d.width = rotW;
   r2d.height = rotH;
   const rg = r2d.getContext('2d');
   rg.translate(rotW / 2, rotH / 2);
   rg.rotate(rad);
-  rg.drawImage(srcImage, -image.width / 2, -image.height / 2);
+  rg.drawImage(srcImage, -srcImage.width / 2, -srcImage.height / 2);
   srcImage = r2d;
 
   // Clamp cropRect and crop in rotated space
@@ -369,9 +381,11 @@ export function processImageWebGL(canvas, image, params = {}) {
   gl.uniform1i(locs.u_inversionMode, mode);
 
   const gains = params.gains || [1.0, 1.0, 1.0];
+  console.log('[FilmLabWebGL] Setting u_gains:', gains);
   gl.uniform3fv(locs.u_gains, new Float32Array(gains));
 
   const exposure = typeof params.exposure === 'number' ? params.exposure / 50.0 : 0.0;
+  console.log('[FilmLabWebGL] Setting u_exposure:', exposure, 'from', params.exposure);
   gl.uniform1f(locs.u_exposure, exposure);
 
   const contrast = typeof params.contrast === 'number' ? params.contrast / 100.0 : 0.0;
@@ -466,6 +480,13 @@ export function processImageWebGL(canvas, image, params = {}) {
 
   // Draw
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+  // Debug: Sample center pixel to verify rendering output
+  const debugPixels = new Uint8Array(4);
+  const centerX = Math.floor(canvas.width / 2);
+  const centerY = Math.floor(canvas.height / 2);
+  gl.readPixels(centerX, centerY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, debugPixels);
+  console.log('[FilmLabWebGL] Center pixel after rendering:', debugPixels, `at (${centerX}, ${centerY})`);
 
   // Cleanup (unbind)
   gl.bindTexture(gl.TEXTURE_2D, null);

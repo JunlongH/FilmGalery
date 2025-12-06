@@ -133,6 +133,10 @@ CREATE TABLE photos (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(roll_id) REFERENCES rolls(id),
   FOREIGN KEY(location_id) REFERENCES locations(id)
+  > shot_logs JSON 结构：`[{ date: 'YYYY-MM-DD', count: 12, lens?: '50mm f/1.8' }]`
+  > - 每条对象是一条拍摄记录（可同一日期多条，新增时不覆盖旧记录）
+  > - `count`：该条记录的拍摄张数
+  > - `lens`：可选，镜头型号；镜头下拉从 rolls/photos/film_items.shot_logs 的历史值去重汇总，自定义输入保存后自动进入常用列表
 );
 ```
 

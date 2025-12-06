@@ -3,8 +3,8 @@ const router = express.Router();
 const db = require('../db');
 
 // GET /api/metadata/options
-// Returns distinct cameras, lenses, and photographers from both rolls and photos tables
-router.get('/options', (req, res) => {
+// Returns distinct cameras, lenses, and photographers from rolls/photos + lenses found in film_items.shot_logs
+router.get('/options', async (req, res) => {
   const queries = {
     cameras: `
       SELECT DISTINCT camera as value FROM rolls WHERE camera IS NOT NULL AND camera != "" AND camera NOT IN ('-','--','—')
@@ -32,26 +32,54 @@ router.get('/options', (req, res) => {
     `
   };
 
-  const results = {};
-  let completed = 0;
-  const keys = Object.keys(queries);
-
-  if (keys.length === 0) return res.json({});
-
-  keys.forEach(key => {
-    db.all(queries[key], (err, rows) => {
-      if (err) {
-        console.error(`Error fetching ${key}`, err);
-        results[key] = [];
-      } else {
-        results[key] = rows.map(r => r.value);
-      }
-      completed++;
-      if (completed === keys.length) {
-        res.json(results);
-      }
+  const runAll = (sql) => new Promise((resolve, reject) => {
+    db.all(sql, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
     });
   });
+
+  const parseShotLogLenses = (rows) => {
+    const lensSet = new Set();
+    for (const row of rows) {
+      if (!row || !row.shot_logs) continue;
+      try {
+        const parsed = typeof row.shot_logs === 'string' ? JSON.parse(row.shot_logs) : row.shot_logs;
+        if (!Array.isArray(parsed)) continue;
+        for (const entry of parsed) {
+          const lens = (entry && entry.lens ? String(entry.lens).trim() : '');
+          if (lens) lensSet.add(lens);
+        }
+      } catch (err) {
+        console.warn('[metadata] Failed to parse shot_logs lens', err.message);
+      }
+    }
+    return Array.from(lensSet);
+  };
+
+  try {
+    const [cameraRows, lensRows, photographerRows, yearRows, shotLogRows] = await Promise.all([
+      runAll(queries.cameras),
+      runAll(queries.lenses),
+      runAll(queries.photographers),
+      runAll(queries.years),
+      runAll(`SELECT shot_logs FROM film_items WHERE shot_logs IS NOT NULL AND shot_logs != ''`)
+    ]);
+
+    const lensSet = new Set(lensRows.map(r => r.value));
+    parseShotLogLenses(shotLogRows).forEach(l => lensSet.add(l));
+    const lenses = Array.from(lensSet).sort((a, b) => a.localeCompare(b));
+
+    res.json({
+      cameras: cameraRows.map(r => r.value),
+      lenses,
+      photographers: photographerRows.map(r => r.value),
+      years: yearRows.map(r => r.value)
+    });
+  } catch (err) {
+    console.error('[metadata] Error fetching options', err);
+    res.status(500).json({ error: 'Failed to load metadata options' });
+  }
 });
 
 module.exports = router;

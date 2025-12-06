@@ -7,6 +7,9 @@ const { getDbPath } = require('./config/db-config');
 
 const dbPath = getDbPath();
 
+// OneDrive write-through mode: ensure changes land in the main DB file immediately (no WAL lag)
+const writeThrough = process.env.DB_WRITE_THROUGH === '1' || process.env.DB_ONEDRIVE_WRITE_THROUGH === '1';
+
 // Auto-cleanup OneDrive conflict copies before opening DB
 const dataDir = path.dirname(dbPath);
 console.log('[DB] Checking for OneDrive conflict copies in', dataDir);
@@ -27,51 +30,70 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 // Ensure tables exist
 db.serialize(() => {
-  // [ONEDRIVE-OPTIMIZED] WAL mode configuration for cloud sync compatibility
-  // WAL (Write-Ahead Logging) advantages:
-  // 1. Readers don't block writers, writers don't block readers
-  // 2. OneDrive can sync .db file while app is running (WAL is separate)
-  // 3. Better crash recovery
-  // 4. Faster writes (no need to modify main DB immediately)
-  db.run('PRAGMA journal_mode = WAL', (err, result) => {
-    if (err) {
-      console.error('[DB] Failed to enable WAL mode:', err);
+    if (writeThrough) {
+      // Write-through mode: keep changes in main DB file immediately, avoid WAL/SHM reliance
+      db.run('PRAGMA journal_mode = TRUNCATE', (err) => {
+        if (err) console.error('[DB] Failed to set TRUNCATE journal mode:', err);
+        else console.log('[DB] ✅ Write-through mode: TRUNCATE journal');
+      });
+      db.run('PRAGMA synchronous = FULL', (err) => {
+        if (err) console.error('[DB] Synchronous FULL failed:', err);
+      });
+      db.run('PRAGMA locking_mode = NORMAL');
+      db.run('PRAGMA busy_timeout = 5000');
+      db.run('PRAGMA temp_store = MEMORY');
+      db.run('PRAGMA foreign_keys = ON');
+      db.run('PRAGMA page_size = 4096');
+      db.run('PRAGMA cache_size = -16000'); // smaller cache to reduce write lag on cloud drives
+      db.run('PRAGMA mmap_size = 134217728'); // 128MB
+      db.run('PRAGMA journal_size_limit = 1048576'); // cap journal to 1MB
     } else {
-      console.log('[DB] ✅ WAL mode enabled');
+      // WAL mode: optimized for concurrency and OneDrive-friendly sync (main DB readable)
+      // WAL (Write-Ahead Logging) advantages:
+      // 1. Readers don't block writers, writers don't block readers
+      // 2. OneDrive can sync .db file while app is running (WAL is separate)
+      // 3. Better crash recovery
+      // 4. Faster writes (no need to modify main DB immediately)
+      db.run('PRAGMA journal_mode = WAL', (err, result) => {
+        if (err) {
+          console.error('[DB] Failed to enable WAL mode:', err);
+        } else {
+          console.log('[DB] ✅ WAL mode enabled');
+        }
+      });
+    
+      // Synchronous mode: NORMAL is safe for WAL mode and much faster than FULL
+      // Data is written to WAL immediately, but checkpoints are less frequent
+      db.run('PRAGMA synchronous = NORMAL', (err) => {
+        if (err) console.error('[DB] Synchronous setting failed:', err);
+      });
+    
+      // Increased timeout for OneDrive sync delays (5 seconds)
+      db.run('PRAGMA busy_timeout = 5000');
+    
+      // Memory-mapped I/O for faster reads (256MB) - safe with WAL
+      db.run('PRAGMA mmap_size = 268435456');
+    
+      // NORMAL locking mode (not EXCLUSIVE) to allow OneDrive file access
+      // This is crucial for cloud sync - EXCLUSIVE would lock out OneDrive
+      db.run('PRAGMA locking_mode = NORMAL');
+    
+      // Larger cache (32MB for better query performance)
+      db.run('PRAGMA cache_size = -32000');
+    
+      db.run('PRAGMA temp_store = MEMORY');
+      db.run('PRAGMA foreign_keys = ON');
+    
+      // Optimize page size for SSD (4KB is optimal for modern drives)
+      db.run('PRAGMA page_size = 4096');
+    
+      // WAL autocheckpoint: merge WAL to main DB every 1000 pages (~4MB)
+      // This keeps WAL file small and allows OneDrive to sync regularly
+      db.run('PRAGMA wal_autocheckpoint = 1000', (err) => {
+        if (err) console.error('[DB] WAL autocheckpoint failed:', err);
+        else console.log('[DB] ✅ WAL autocheckpoint set to 1000 pages');
+      });
     }
-  });
-  
-  // Synchronous mode: NORMAL is safe for WAL mode and much faster than FULL
-  // Data is written to WAL immediately, but checkpoints are less frequent
-  db.run('PRAGMA synchronous = NORMAL', (err) => {
-    if (err) console.error('[DB] Synchronous setting failed:', err);
-  });
-  
-  // Increased timeout for OneDrive sync delays (5 seconds)
-  db.run('PRAGMA busy_timeout = 5000');
-  
-  // Memory-mapped I/O for faster reads (256MB) - safe with WAL
-  db.run('PRAGMA mmap_size = 268435456');
-  
-  // NORMAL locking mode (not EXCLUSIVE) to allow OneDrive file access
-  // This is crucial for cloud sync - EXCLUSIVE would lock out OneDrive
-  db.run('PRAGMA locking_mode = NORMAL');
-  
-  // Larger cache (32MB for better query performance)
-  db.run('PRAGMA cache_size = -32000');
-  
-  db.run('PRAGMA temp_store = MEMORY');
-  db.run('PRAGMA foreign_keys = ON');
-  
-  // Optimize page size for SSD (4KB is optimal for modern drives)
-  db.run('PRAGMA page_size = 4096');
-  
-  // WAL autocheckpoint: merge WAL to main DB every 1000 pages (~4MB)
-  // This keeps WAL file small and allows OneDrive to sync regularly
-  db.run('PRAGMA wal_autocheckpoint = 1000', (err) => {
-    if (err) console.error('[DB] WAL autocheckpoint failed:', err);
-    else console.log('[DB] ✅ WAL autocheckpoint set to 1000 pages');
-  });
 
   db.run(`CREATE TABLE IF NOT EXISTS films (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -131,13 +153,14 @@ db.serialize(() => {
   )`);
 });
 
-// [ONEDRIVE-SYNC] Periodic WAL checkpoint for OneDrive sync
+// [ONEDRIVE-SYNC] Periodic WAL checkpoint for OneDrive sync (only in WAL mode)
 // Run checkpoint every 5 minutes to merge WAL into main DB
 // This ensures OneDrive can sync the latest data regularly
 const WAL_CHECKPOINT_INTERVAL = 5 * 60 * 1000; // 5 minutes
 let checkpointInterval = null;
 
 function startWalCheckpoint() {
+  if (writeThrough) return; // not needed in write-through mode
   if (checkpointInterval) return; // Already started
   
   checkpointInterval = setInterval(() => {
@@ -161,7 +184,7 @@ function stopWalCheckpoint() {
   }
 }
 
-// Start checkpoint scheduler after tables are created
+// Start checkpoint scheduler after tables are created (only in WAL mode)
 setTimeout(() => {
   startWalCheckpoint();
 }, 5000); // Start after 5 seconds
@@ -169,13 +192,23 @@ setTimeout(() => {
 // Export additional functions for cleanup
 db.walCheckpoint = () => {
   return new Promise((resolve, reject) => {
+    if (writeThrough) {
+      // In write-through mode, WAL is unused; return a no-op result
+      return resolve({ changes: 0, mode: 'write-through' });
+    }
     db.run('PRAGMA wal_checkpoint(TRUNCATE)', function(err) {
       if (err) return reject(err);
-      resolve({ changes: this.changes });
+      resolve({ changes: this.changes, mode: 'wal' });
     });
   });
 };
 
 db.stopCheckpointScheduler = stopWalCheckpoint;
+
+// Expose meta info for health endpoints
+db.meta = {
+  writeThrough,
+  mode: writeThrough ? 'TRUNCATE' : 'WAL'
+};
 
 module.exports = db;

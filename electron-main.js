@@ -167,6 +167,8 @@ async function startServer() {
       USER_DATA: app.getPath('userData'),
       DATA_ROOT: (appConfig && appConfig.dataRoot) ? appConfig.dataRoot : undefined,
       UPLOADS_ROOT: (appConfig && appConfig.uploadsRoot) ? appConfig.uploadsRoot : undefined,
+      DB_WRITE_THROUGH: appConfig && appConfig.writeThrough ? '1' : undefined,
+      DB_ONEDRIVE_WRITE_THROUGH: appConfig && appConfig.writeThrough ? '1' : undefined,
       ELECTRON_RUN_AS_NODE: '1'
     };
     serverProcess = spawn(cmd, args, {
@@ -792,6 +794,14 @@ ipcMain.handle('config-set-data-root', async (e, dir) => {
   if (!dir || typeof dir !== 'string') return { ok:false, error:'invalid_dir' };
   saveConfig({ dataRoot: dir });
   // restart backend server with new env
+  await stopServer();
+  startServer();
+  return { ok:true, config: appConfig };
+});
+
+ipcMain.handle('config-set-write-through', async (e, flag) => {
+  const enabled = !!flag;
+  saveConfig({ writeThrough: enabled });
   await stopServer();
   startServer();
   return { ok:true, config: appConfig };

@@ -53,20 +53,19 @@ async function buildPipeline(inputPath, params = {}, options = {}) {
     img = img.extract({ left, top, width, height });
   }
 
-  // Defer color ops (invert, gains, exposure/contrast) to JS when requested
-  if (!toneAndCurvesInJs) {
-    // Inversion first (to match client ordering better)
-    if (inverted) {
-      if (inversionMode === 'log') img = img.negate().gamma(0.85); // legacy approximation
-      else img = img.negate();
-    }
-
-    // White balance via per-channel gains (clamped)
-    const { computeWBGains } = require('../utils/filmlab-wb');
-    const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
-    img = img.linear([rBal, gBal, bBal], [0, 0, 0]);
+  // Always apply Inversion + WB in Sharp (more efficient)
+  // Inversion first (to match client ordering)
+  if (inverted) {
+    if (inversionMode === 'log') img = img.negate().gamma(0.85); // legacy approximation
+    else img = img.negate();
   }
 
+  // White balance via per-channel gains (clamped)
+  const { computeWBGains } = require('../utils/filmlab-wb');
+  const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
+  img = img.linear([rBal, gBal, bBal], [0, 0, 0]);
+
+  // Defer Tone/Curves to JS when requested (they need complex LUT processing)
   if (!toneAndCurvesInJs) {
     // Exposure as brightness factor
     const expFactor = Math.pow(2, (Number(exposure) || 0) / 50);

@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('__electron', {
   setUploadsRoot: (dir) => ipcRenderer.invoke('config-set-uploads-root', dir),
   pickDataRoot: () => ipcRenderer.invoke('pick-data-root'),
   setDataRoot: (dir) => ipcRenderer.invoke('config-set-data-root', dir),
+  setWriteThrough: (flag) => ipcRenderer.invoke('config-set-write-through', flag),
   // FilmLab GPU processing (offscreen worker)
   filmlabGpuProcess: (payload) => ipcRenderer.invoke('filmlab-gpu:process', payload),
   filmLabSaveAs: async ({ blob, defaultName }) => {

@@ -127,43 +127,35 @@ router.post('/preview', async (req, res) => {
     const lutG = buildCurveLUT(curves.green || []);
     const lutB = buildCurveLUT(curves.blue || []);
 
-    // Precompute gains for WB with clamping
-    const { computeWBGains } = require('../utils/filmlab-wb');
-    const [rBal, gBal, bBal] = computeWBGains({
-      red: Number(params?.red ?? 1),
-      green: Number(params?.green ?? 1),
-      blue: Number(params?.blue ?? 1),
-      temp: Number(params?.temp ?? 0),
-      tint: Number(params?.tint ?? 0)
-    });
+    // Sample center pixel for debugging
+    const centerX = Math.floor(width / 2);
+    const centerY = Math.floor(height / 2);
 
-    // Process per pixel
+    // Process per pixel: Inversion + WB already applied by buildPipeline
+    // Only apply Tone + Curves here
     for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
       let r = data[i];
       let g = data[i + 1];
       let b = data[i + 2];
 
-      // Inversion first
-      if (params?.inverted) {
-        if (params?.inversionMode === 'log') {
-          r = 255 * (1 - Math.log(r + 1) / Math.log(256));
-          g = 255 * (1 - Math.log(g + 1) / Math.log(256));
-          b = 255 * (1 - Math.log(b + 1) / Math.log(256));
-        } else {
-          r = 255 - r; g = 255 - g; b = 255 - b;
-        }
+      // Sample center pixel before processing
+      if (Math.floor(i / channels / width) === centerY && (i / channels) % width === centerX) {
+        console.log('[Server Preview] Center pixel BEFORE tone/curves:', { r, g, b });
       }
 
-      // White balance gains
-      r = r * rBal; g = g * gBal; b = b * bBal;
-      r = Math.min(255, Math.max(0, r));
-      g = Math.min(255, Math.max(0, g));
-      b = Math.min(255, Math.max(0, b));
-
-      // Tone LUT
-      r = toneLUT[r];
-      g = toneLUT[g];
-      b = toneLUT[b];
+      // Tone LUT (需要整数索引)
+      const rIdx = Math.floor(r);
+      const gIdx = Math.floor(g);
+      const bIdx = Math.floor(b);
+      r = toneLUT[rIdx];
+      g = toneLUT[gIdx];
+      b = toneLUT[bIdx];
+      
+      // Sample center pixel after toneLUT
+      if (Math.floor(i / channels / width) === centerY && (i / channels) % width === centerX) {
+        console.log('[Server Preview] Center pixel AFTER toneLUT:', { r, g, b });
+      }
+      
       // Curves: RGB then channels
       r = lutRGB[r];
       g = lutRGB[g];
@@ -177,9 +169,13 @@ router.post('/preview', async (req, res) => {
       out[j + 2] = b;
     }
 
+    console.log('[Server Preview] Final output buffer size:', out.length, 'bytes');
+    console.log('[Server Preview] Output dimensions:', width, 'x', height);
+
     // Encode to JPEG and send
     res.setHeader('Content-Type', 'image/jpeg');
     const buf = await sharp(out, { raw: { width, height, channels: 3 } }).jpeg({ quality: 85 }).toBuffer();
+    console.log('[Server Preview] JPEG buffer size:', buf.length, 'bytes');
     res.end(buf);
   } catch (e) {
     console.error('[FILMLAB] preview error', e);
@@ -225,40 +221,22 @@ router.post('/render', async (req, res) => {
     const lutG = buildCurveLUT(curves.green || []);
     const lutB = buildCurveLUT(curves.blue || []);
 
-    // Precompute WB gains (clamped)
-    {
-      const { computeWBGains } = require('../utils/filmlab-wb');
-      const [r, g, b] = computeWBGains({
-        red: Number(params?.red ?? 1),
-        green: Number(params?.green ?? 1),
-        blue: Number(params?.blue ?? 1),
-        temp: Number(params?.temp ?? 0),
-        tint: Number(params?.tint ?? 0)
-      });
-      var rBal = r, gBal = g, bBal = b;
-    }
-
+    // Pixel processing loop: Inversion + WB already applied by buildPipeline
+    // Only apply Tone + Curves here
     for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
       let r = data[i];
       let g = data[i + 1];
       let b = data[i + 2];
 
-      if (params?.inverted) {
-        if (params?.inversionMode === 'log') {
-          r = 255 * (1 - Math.log(r + 1) / Math.log(256));
-          g = 255 * (1 - Math.log(g + 1) / Math.log(256));
-          b = 255 * (1 - Math.log(b + 1) / Math.log(256));
-        } else { r = 255 - r; g = 255 - g; b = 255 - b; }
-      }
-
-      // WB gains
-      r = Math.min(255, Math.max(0, r * rBal));
-      g = Math.min(255, Math.max(0, g * gBal));
-      b = Math.min(255, Math.max(0, b * bBal));
-
-      r = toneLUT[r]; g = toneLUT[g]; b = toneLUT[b];
+      // Apply tone mapping
+      r = toneLUT[Math.floor(r)];
+      g = toneLUT[Math.floor(g)];
+      b = toneLUT[Math.floor(b)];
+      
+      // Apply curves
       r = lutRGB[r]; g = lutRGB[g]; b = lutRGB[b];
       r = lutR[r]; g = lutG[g]; b = lutB[b];
+      
       out[j] = r; out[j + 1] = g; out[j + 2] = b;
     }
 
@@ -314,6 +292,7 @@ router.post('/export', async (req, res) => {
     const abs = path.join(uploadsDir, relSource);
     if (!fs.existsSync(abs)) return res.status(404).json({ error: 'source missing on disk' });
 
+    // Build pipeline with Inversion + WB applied in Sharp, Tone/Curves deferred to JS
     let img = await buildPipeline(abs, params || {}, { maxWidth: 4000, cropRect: (params && params.cropRect) || null, toneAndCurvesInJs: true });
 
     const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
@@ -336,39 +315,22 @@ router.post('/export', async (req, res) => {
     const lutG = buildCurveLUT(curves.green || []);
     const lutB = buildCurveLUT(curves.blue || []);
 
-    // Precompute WB gains (clamped)
-    {
-      const { computeWBGains } = require('../utils/filmlab-wb');
-      const [r2, g2, b2] = computeWBGains({
-        red: Number(params?.red ?? 1),
-        green: Number(params?.green ?? 1),
-        blue: Number(params?.blue ?? 1),
-        temp: Number(params?.temp ?? 0),
-        tint: Number(params?.tint ?? 0)
-      });
-      var rBal2 = r2, gBal2 = g2, bBal2 = b2;
-    }
-
+    // Pixel processing loop: Inversion + WB already applied by buildPipeline
+    // Only apply Tone + Curves here
     for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
       let r = data[i];
       let g = data[i + 1];
       let b = data[i + 2];
 
-      if (params?.inverted) {
-        if (params?.inversionMode === 'log') {
-          r = 255 * (1 - Math.log(r + 1) / Math.log(256));
-          g = 255 * (1 - Math.log(g + 1) / Math.log(256));
-          b = 255 * (1 - Math.log(b + 1) / Math.log(256));
-        } else { r = 255 - r; g = 255 - g; b = 255 - b; }
-      }
-
-      r = Math.min(255, Math.max(0, r * rBal2));
-      g = Math.min(255, Math.max(0, g * gBal2));
-      b = Math.min(255, Math.max(0, b * bBal2));
-
-      r = toneLUT[r]; g = toneLUT[g]; b = toneLUT[b];
+      // Apply tone mapping (exposure, contrast, highlights, shadows, whites, blacks)
+      r = toneLUT[Math.floor(r)];
+      g = toneLUT[Math.floor(g)];
+      b = toneLUT[Math.floor(b)];
+      
+      // Apply curves
       r = lutRGB[r]; g = lutRGB[g]; b = lutRGB[b];
       r = lutR[r]; g = lutG[g]; b = lutB[b];
+      
       out[j] = r; out[j + 1] = g; out[j + 2] = b;
     }
 

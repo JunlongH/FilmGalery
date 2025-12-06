@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { getDbPath } = require('../config/db-config');
 const PreparedStmt = require('../utils/prepared-statements');
+const db = require('../db');
 
 /**
  * GET /api/health/database
@@ -15,6 +16,7 @@ router.get('/database', (req, res) => {
   const walPath = dbPath + '-wal';
   const shmPath = dbPath + '-shm';
   const journalPath = dbPath + '-journal';
+  const isWriteThrough = db.meta && db.meta.writeThrough;
   
   const health = {
     timestamp: new Date().toISOString(),
@@ -24,7 +26,11 @@ router.get('/database', (req, res) => {
       size: fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0,
       modified: fs.existsSync(dbPath) ? fs.statSync(dbPath).mtime : null,
     },
-    wal: {
+    wal: isWriteThrough ? {
+      mode: 'TRUNCATE',
+      walFile: { exists: false, size: 0, modified: null },
+      shmFile: { exists: false, size: 0 }
+    } : {
       mode: 'WAL',
       walFile: {
         exists: fs.existsSync(walPath),
@@ -39,10 +45,14 @@ router.get('/database', (req, res) => {
     legacyJournal: {
       exists: fs.existsSync(journalPath),
       size: fs.existsSync(journalPath) ? fs.statSync(journalPath).size : 0,
-      warning: fs.existsSync(journalPath) ? 'Legacy journal file detected - should not exist in WAL mode' : null,
+      warning: (!isWriteThrough && fs.existsSync(journalPath)) ? 'Legacy journal file detected - should not exist in WAL mode' : null,
     },
     preparedStatements: PreparedStmt.getStats(),
-    oneDriveCompatibility: {
+    oneDriveCompatibility: isWriteThrough ? {
+      mode: 'TRUNCATE',
+      status: 'write-through',
+      notes: 'Write-through mode keeps changes in film.db immediately (no WAL/SHM)'
+    } : {
       mode: 'WAL',
       status: 'optimized',
       notes: 'WAL mode allows OneDrive to sync main DB file while app is running'
@@ -53,12 +63,12 @@ router.get('/database', (req, res) => {
   let status = 'healthy';
   const warnings = [];
   
-  if (fs.existsSync(journalPath)) {
+  if (!isWriteThrough && fs.existsSync(journalPath)) {
     status = 'warning';
     warnings.push('Legacy journal file exists - database may not be in WAL mode');
   }
   
-  if (fs.existsSync(walPath)) {
+  if (!isWriteThrough && fs.existsSync(walPath)) {
     const walStats = fs.statSync(walPath);
     const walAge = Date.now() - walStats.mtimeMs;
     if (walAge > 600000) { // 10 minutes

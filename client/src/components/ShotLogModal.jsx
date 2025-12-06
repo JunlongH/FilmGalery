@@ -1,20 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import ModalDialog from './ModalDialog';
-import { updateFilmItem } from '../api';
+import { updateFilmItem, getMetadataOptions } from '../api';
+
+const FALLBACK_LENSES = [
+  '50mm f/1.8',
+  '35mm f/1.4',
+  '28mm f/2.8',
+  '85mm f/1.8',
+  '24-70mm f/2.8',
+  '70-200mm f/2.8'
+];
 
 export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
   const [logs, setLogs] = useState([]);
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
   const [newCount, setNewCount] = useState('1');
+  const [newLens, setNewLens] = useState('');
+  const [selectedLens, setSelectedLens] = useState('');
+  const [lensOptions, setLensOptions] = useState(FALLBACK_LENSES);
   const [loading, setLoading] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  const dedupeAndSort = (list) => Array.from(new Set((list || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+
+  const addLensToOptions = (lens) => {
+    if (!lens) return;
+    setLensOptions((prev) => dedupeAndSort([...prev, lens]));
+  };
 
   useEffect(() => {
     if (item && item.shot_logs) {
       try {
         const parsed = JSON.parse(item.shot_logs);
         if (Array.isArray(parsed)) {
-          setLogs(parsed);
+          const normalized = parsed.map(entry => ({
+            date: entry.date,
+            count: Number(entry.count || entry.shots || 0) || 0,
+            lens: entry.lens || ''
+          })).filter(e => e.date && e.count > 0);
+          setLogs(normalized);
+          setLensOptions((prev) => dedupeAndSort([...prev, ...normalized.map(e => e.lens).filter(Boolean)]));
         }
       } catch (e) {
         console.error('Failed to parse shot_logs', e);
@@ -24,28 +49,42 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
     }
   }, [item]);
 
+  useEffect(() => {
+    let mounted = true;
+    getMetadataOptions()
+      .then((opts) => {
+        if (!mounted) return;
+        const base = Array.isArray(opts?.lenses) && opts.lenses.length ? opts.lenses : FALLBACK_LENSES;
+        setLensOptions(dedupeAndSort(base));
+      })
+      .catch(() => setLensOptions(dedupeAndSort(FALLBACK_LENSES)));
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    setLensOptions((prev) => dedupeAndSort([...prev, ...logs.map(l => l.lens).filter(Boolean)]));
+  }, [logs]);
+
   const handleAdd = () => {
     if (!newDate || !newCount || Number(newCount) <= 0) return;
-    const entry = { date: newDate, count: Number(newCount) };
-    
-    // Merge if date exists
-    const existingIndex = logs.findIndex(l => l.date === newDate);
-    let updatedLogs;
-    if (existingIndex >= 0) {
-      updatedLogs = [...logs];
-      updatedLogs[existingIndex].count += entry.count;
-    } else {
-      updatedLogs = [...logs, entry].sort((a, b) => a.date.localeCompare(b.date));
-    }
-    
+    const lensVal = newLens.trim() || selectedLens || '';
+    const entry = { date: newDate, count: Number(newCount), lens: lensVal };
+
+    const updatedLogs = [...logs, entry].sort((a, b) => a.date.localeCompare(b.date));
     setLogs(updatedLogs);
+    if (lensVal) addLensToOptions(lensVal);
     setNewCount('1');
+    setNewLens('');
   };
 
-  const handleRemove = (index) => {
+  const handleRemoveIndex = (index) => {
     const updated = [...logs];
     updated.splice(index, 1);
     setLogs(updated);
+  };
+
+  const handleRemoveDate = (date) => {
+    setLogs(prev => prev.filter(l => l.date !== date));
   };
 
   const handleSave = async () => {
@@ -64,6 +103,7 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
   };
 
   const totalShots = logs.reduce((acc, cur) => acc + cur.count, 0);
+  const uniqueDays = new Set(logs.map(l => l.date)).size;
 
   if (!isOpen) return null;
 
@@ -101,6 +141,28 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
                 style={{ background: '#fff', height: 40, border: 'none' }}
                 onKeyDown={e => e.key === 'Enter' && handleAdd()}
               />
+            </div>
+            <div className="fg-field" style={{ flex: 1 }}>
+              <label className="fg-label" style={{ color: 'rgba(255,255,255,0.95)', marginBottom: 8, fontSize: 13, fontWeight: 600 }}>Lens</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select
+                  className="fg-input"
+                  value={selectedLens}
+                  onChange={e => setSelectedLens(e.target.value)}
+                  style={{ background: '#fff', height: 40, border: 'none', flex: 1 }}
+                >
+                  <option value="">Common lenses...</option>
+                  {lensOptions.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+                <input
+                  type="text"
+                  className="fg-input"
+                  value={newLens}
+                  onChange={e => setNewLens(e.target.value)}
+                  placeholder="Custom lens"
+                  style={{ background: '#fff', height: 40, border: 'none', flex: 1 }}
+                />
+              </div>
             </div>
             <button 
               type="button" 
@@ -164,22 +226,19 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
                   // Day cells
                   for (let day = 1; day <= daysInMonth; day++) {
                     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                    const logEntry = logs.find(l => l.date === dateStr);
-                    const hasLog = !!logEntry;
+                    const dayLogs = logs.filter(l => l.date === dateStr);
+                    const hasLog = dayLogs.length > 0;
                     const isToday = dateStr === new Date().toISOString().split('T')[0];
                     const colIndex = (firstDay + day - 1) % 7;
+                    const dayCount = dayLogs.reduce((sum, l) => sum + l.count, 0);
+                    const lensLabel = dayLogs.map(l => l.lens).filter(Boolean).join(', ');
                     
                     days.push(
                       <div 
                         key={day}
                         onClick={() => {
+                          // Calendar click now just selects the date; deletion stays per-entry in the table below.
                           setNewDate(dateStr);
-                          if (hasLog) {
-                            const idx = logs.findIndex(l => l.date === dateStr);
-                            if (window.confirm(`Remove log for ${dateStr} (${logEntry.count} shots)?`)) {
-                              handleRemove(idx);
-                            }
-                          }
                         }}
                         style={{
                           aspectRatio: '1',
@@ -215,7 +274,7 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
                             textAlign: 'center',
                             boxShadow: '0 2px 4px rgba(102, 126, 234, 0.3)'
                           }}>
-                            {logEntry.count} 📸
+                            {dayCount} 📸
                           </div>
                         )}
                       </div>
@@ -230,13 +289,71 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
 
           {/* Summary Stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginTop: 20 }}>
-            <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: 20, borderRadius: 12, color: '#fff', boxShadow: '0 4px 12px rgba(102, 126, 234, 0.25)' }}>
+              <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: 20, borderRadius: 12, color: '#fff', boxShadow: '0 4px 12px rgba(102, 126, 234, 0.25)' }}>
               <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 4 }}>Total Shots</div>
               <div style={{ fontSize: 32, fontWeight: 700 }}>{totalShots}</div>
             </div>
             <div style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', padding: 20, borderRadius: 12, color: '#fff', boxShadow: '0 4px 12px rgba(245, 87, 108, 0.25)' }}>
               <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 4 }}>Days Logged</div>
-              <div style={{ fontSize: 32, fontWeight: 700 }}>{logs.length}</div>
+              <div style={{ fontSize: 32, fontWeight: 700 }}>{uniqueDays}</div>
+            </div>
+          </div>
+
+          {/* Editable List */}
+          <div style={{ marginTop: 24 }}>
+            <h4 style={{ margin: '0 0 12px', color: '#1e293b' }}>Entries</h4>
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.4fr 80px', background: '#f8fafc', padding: '10px 12px', fontWeight: 600, color: '#475569', fontSize: 13 }}>
+                <div>Date</div>
+                <div>Shots</div>
+                <div>Lens</div>
+                <div></div>
+              </div>
+              {logs.length === 0 && (
+                <div style={{ padding: 12, color: '#94a3b8', fontSize: 13 }}>No entries yet.</div>
+              )}
+              {logs.map((entry, idx) => (
+                <div key={`${entry.date}-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.4fr 80px', padding: '10px 12px', alignItems: 'center', borderTop: '1px solid #e2e8f0' }}>
+                  <div style={{ fontFamily: 'monospace', fontSize: 13 }}>{entry.date}</div>
+                  <input
+                    type="number"
+                    className="fg-input"
+                    value={entry.count}
+                    min="0"
+                    onChange={e => {
+                      const val = Number(e.target.value) || 0;
+                      setLogs(prev => {
+                        const next = [...prev];
+                        next[idx] = { ...next[idx], count: val };
+                        return next;
+                      });
+                    }}
+                    style={{ width: '100%', padding: '6px 8px' }}
+                  />
+                  <input
+                    type="text"
+                    className="fg-input"
+                    value={entry.lens || ''}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setLogs(prev => {
+                        const next = [...prev];
+                        next[idx] = { ...next[idx], lens: val };
+                        return next;
+                      });
+                    }}
+                    placeholder="Lens model"
+                    style={{ width: '100%', padding: '6px 8px' }}
+                  />
+                  <button
+                    className="fg-btn"
+                    style={{ background: '#fff', border: '1px solid #e2e8f0', color: '#ef4444', padding: '6px 10px' }}
+                    onClick={() => handleRemoveIndex(idx)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         </div>

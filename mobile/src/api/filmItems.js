@@ -45,3 +45,8 @@ export async function getFilms() {
   if (data && Array.isArray(data.films)) return data.films;
   return [];
 }
+
+export async function getMetadataOptions() {
+  const res = await axios.get('/api/metadata/options');
+  return res.data || {};
+}

@@ -8,7 +8,7 @@
 - 导致 `film.db-journal` 文件持续存在，无法合并
 - OneDrive 无法正常同步数据库文件
 
-## 解决方案：切换到 WAL 模式
+## 解决方案 A：WAL 模式（默认，兼容、性能好）
 
 ### 核心改进
 
@@ -121,6 +121,38 @@ PRAGMA locking_mode = NORMAL;
 #### 4. `server/routes/health.js` (新增)
 - ✅ 健康检查端点：`GET /api/health/database`
 - ✅ 手动检查点：`POST /api/health/checkpoint`
+
+## 解决方案 B：写透模式（多设备同步优先，立即落盘）
+
+如果希望“写入后立刻体现在 `film.db` 主文件”（不依赖 `-wal` / `-shm`）以便 OneDrive 立即同步到其他设备，可以启用写透模式：
+
+### 启用方式
+
+```powershell
+# 设置环境变量（server 进程）
+$env:DB_WRITE_THROUGH="1"
+# 或使用兼容名称
+$env:DB_ONEDRIVE_WRITE_THROUGH="1"
+```
+
+### 写透模式下的 PRAGMA
+
+```sql
+PRAGMA journal_mode = TRUNCATE;   -- 单文件日志，事务完成即回写主库
+PRAGMA synchronous = FULL;        -- 强同步，确保主文件持久化
+PRAGMA locking_mode = NORMAL;     -- 允许 OneDrive 读取
+PRAGMA busy_timeout = 5000;
+PRAGMA journal_size_limit = 1048576; -- 截断后日志上限 1MB
+```
+
+### 适用场景
+- 多设备/多登录后希望 OneDrive 立刻看到最新数据
+- 写入频次相对可控，优先数据可见性而非吞吐
+
+### 注意事项
+- 性能略低于 WAL；FULL 同步会增加写延迟
+- 仍建议避免同时在两台设备上“同时写”（OneDrive 是异步复制）
+- 关闭后不应留下 `-wal`/`-shm`，如有则说明未启用写透或异常关闭
 
 ## 使用指南
 

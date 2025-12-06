@@ -3,6 +3,30 @@ const { ipcRenderer } = require('electron');
 
 let gl, canvas, isWebGL2 = false;
 
+// ============================================================================
+// White Balance Calculation (must match server/utils/filmlab-wb.js)
+// ============================================================================
+function clampGain(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+function computeWBGains(params = {}, opts = {}) {
+  const red = Number.isFinite(params.red) ? params.red : 1;
+  const green = Number.isFinite(params.green) ? params.green : 1;
+  const blue = Number.isFinite(params.blue) ? params.blue : 1;
+  const temp = Number.isFinite(params.temp) ? params.temp : 0;
+  const tint = Number.isFinite(params.tint) ? params.tint : 0;
+  const minGain = opts.minGain ?? 0.05;
+  const maxGain = opts.maxGain ?? 50.0;
+  const t = temp / 200;
+  const n = tint / 200;
+  let r = red * (1 + t + n);
+  let g = green * (1 + t - n);
+  let b = blue * (1 - t);
+  r = clampGain(r, minGain, maxGain);
+  g = clampGain(g, minGain, maxGain);
+  b = clampGain(b, minGain, maxGain);
+  return [r, g, b];
+}
+
 function initGL() {
   canvas = document.getElementById('glc');
   const attribs = { preserveDrawingBuffer: true, premultipliedAlpha: false, alpha: false, antialias: false };
@@ -75,6 +99,10 @@ const FS_GL2 = `#version 300 es
   uniform vec3 u_gains;
   uniform float u_exposure;
   uniform float u_contrast;
+  uniform float u_highlights;
+  uniform float u_shadows;
+  uniform float u_whites;
+  uniform float u_blacks;
 
   void main(){
     vec3 c = texture(u_tex, v_uv).rgb;
@@ -95,10 +123,27 @@ const FS_GL2 = `#version 300 es
     float expFactor = pow(2.0, u_exposure / 50.0);
     c *= expFactor;
 
-    // Contrast
+    // Contrast around 0.5
     float ctr = u_contrast;
     float factor = (259.0 * (ctr + 255.0)) / (255.0 * (259.0 - ctr));
     c = (c - 0.5) * factor + 0.5;
+
+    // Blacks & Whites window
+    float blackPoint = -(u_blacks) * 0.002;
+    float whitePoint = 1.0 - (u_whites) * 0.002;
+    if (whitePoint != blackPoint) {
+      c = (c - vec3(blackPoint)) / (whitePoint - blackPoint);
+    }
+
+    // Shadows and Highlights adjustments
+    float sFactor = u_shadows * 0.005;
+    float hFactor = u_highlights * 0.005;
+    if (sFactor != 0.0) {
+      c += sFactor * pow(1.0 - c, vec3(2.0)) * c * 4.0;
+    }
+    if (hFactor != 0.0) {
+      c += hFactor * pow(c, vec3(2.0)) * (1.0 - c) * 4.0;
+    }
 
     c = clamp(c, 0.0, 1.0);
 
@@ -141,6 +186,10 @@ const FS_GL1 = `
   uniform vec3 u_gains;
   uniform float u_exposure;
   uniform float u_contrast;
+  uniform float u_highlights;
+  uniform float u_shadows;
+  uniform float u_whites;
+  uniform float u_blacks;
 
   void main(){
     vec3 c = texture2D(u_tex, v_uv).rgb;
@@ -161,6 +210,21 @@ const FS_GL1 = `
     float ctr = u_contrast;
     float factor = (259.0 * (ctr + 255.0)) / (255.0 * (259.0 - ctr));
     c = (c - 0.5) * factor + 0.5;
+
+    float blackPoint = -(u_blacks) * 0.002;
+    float whitePoint = 1.0 - (u_whites) * 0.002;
+    if (whitePoint != blackPoint) {
+      c = (c - vec3(blackPoint)) / (whitePoint - blackPoint);
+    }
+
+    float sFactor = u_shadows * 0.005;
+    float hFactor = u_highlights * 0.005;
+    if (sFactor != 0.0) {
+      c += sFactor * pow(1.0 - c, vec3(2.0)) * c * 4.0;
+    }
+    if (hFactor != 0.0) {
+      c += hFactor * pow(c, vec3(2.0)) * (1.0 - c) * 4.0;
+    }
 
     c = clamp(c, 0.0, 1.0);
 
@@ -348,16 +412,29 @@ function runJob(job) {
       gl.uniform1f(u_inverted, inverted);
       const u_logMode = gl.getUniformLocation(prog, 'u_logMode');
       gl.uniform1f(u_logMode, (params && params.inversionMode === 'log') ? 1.0 : 0.0);
-      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-      const rBal = clamp((params?.red ?? 1.0) + (params?.temp ?? 0)/200.0 + (params?.tint ?? 0)/200.0, 0.05, 50.0);
-      const gBal = clamp((params?.green ?? 1.0) + (params?.temp ?? 0)/200.0 - (params?.tint ?? 0)/200.0, 0.05, 50.0);
-      const bBal = clamp((params?.blue ?? 1.0) - (params?.temp ?? 0)/200.0, 0.05, 50.0);
+      
+      // Compute WB gains using the correct formula (matches server/client)
+      const [rBal, gBal, bBal] = computeWBGains({
+        red: params?.red ?? 1.0,
+        green: params?.green ?? 1.0,
+        blue: params?.blue ?? 1.0,
+        temp: params?.temp ?? 0,
+        tint: params?.tint ?? 0
+      });
       const u_gains = gl.getUniformLocation(prog, 'u_gains');
       gl.uniform3f(u_gains, rBal, gBal, bBal);
       const u_exposure = gl.getUniformLocation(prog, 'u_exposure');
       gl.uniform1f(u_exposure, (params?.exposure ?? 0));
       const u_contrast = gl.getUniformLocation(prog, 'u_contrast');
       gl.uniform1f(u_contrast, (params?.contrast ?? 0));
+      const u_highlights = gl.getUniformLocation(prog, 'u_highlights');
+      gl.uniform1f(u_highlights, (params?.highlights ?? 0));
+      const u_shadows = gl.getUniformLocation(prog, 'u_shadows');
+      gl.uniform1f(u_shadows, (params?.shadows ?? 0));
+      const u_whites = gl.getUniformLocation(prog, 'u_whites');
+      gl.uniform1f(u_whites, (params?.whites ?? 0));
+      const u_blacks = gl.getUniformLocation(prog, 'u_blacks');
+      gl.uniform1f(u_blacks, (params?.blacks ?? 0));
 
       // Draw
       gl.viewport(0, 0, canvas.width, canvas.height);

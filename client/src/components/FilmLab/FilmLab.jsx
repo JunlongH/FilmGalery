@@ -4,7 +4,16 @@ import { getCurveLUT, parseCubeLUT, sampleLUT, getMaxSafeRect, getPresetRatio, g
 import FilmLabControls from './FilmLabControls';
 import FilmLabCanvas from './FilmLabCanvas';
 import { isWebGLAvailable, processImageWebGL } from './FilmLabWebGL';
-import { computeWBGains, gainsFromSample } from './wb';
+import { computeWBGains, solveTempTintFromSample } from './wb';
+
+// ============================================================================
+// Configuration Constants
+// ============================================================================
+
+// Maximum image widths for different processing paths
+const PREVIEW_MAX_WIDTH_SERVER = 1400;  // Server-side preview rendering
+const PREVIEW_MAX_WIDTH_CLIENT = 1200;  // Client-side real-time rendering (WebGL/CPU)
+const EXPORT_MAX_WIDTH = 4000;          // All export operations (Save/HQ Export/Download)
 
 // Calculate the maximum inscribed rectangle (no black corners) after rotation
 
@@ -141,20 +150,27 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
   const lastWebglParamsRef = useRef(null);
 
   const webglParams = React.useMemo(() => {
-      const rBal = red + (temp / 200) + (tint / 200);
-      const gBal = green + (temp / 200) - (tint / 200);
-      const bBal = blue - (temp / 200);
-      const gains = [rBal, gBal, bBal];
-      return {
-          inverted, inversionMode, gains, exposure, contrast, highlights, shadows, whites, blacks,
-          curves, lut1, lut2
-      };
-  }, [inverted, inversionMode, exposure, contrast, highlights, shadows, whites, blacks, temp, tint, red, green, blue, curves, lut1, lut2]);
+    const gains = computeWBGains({ red, green, blue, temp, tint });
+    // compute preview-scale consistent with geometry (preview max width)
+    const scale = image && image.width ? Math.min(1, PREVIEW_MAX_WIDTH_CLIENT / image.width) : 1;
+    return {
+      inverted, inversionMode, gains, exposure, contrast, highlights, shadows, whites, blacks,
+      curves, lut1, lut2,
+      // Include geometry params to invalidate cache when geometry changes
+      rotation, orientation, isCropping,
+      // Serialize committedCrop for comparison
+      cropKey: `${committedCrop.x},${committedCrop.y},${committedCrop.w},${committedCrop.h}`,
+      // include scale so WebGL output matches geometry.rotatedW used by overlay
+      scale
+    };
+  }, [inverted, inversionMode, exposure, contrast, highlights, shadows, whites, blacks,
+      temp, tint, red, green, blue, curves, lut1, lut2,
+      rotation, orientation, isCropping, committedCrop, image]);
 
   // Pre-calculate geometry for canvas sizing and crop overlay sync
   const geometry = React.useMemo(() => {
     if (!image) return null;
-    const maxWidth = 1000;
+    const maxWidth = PREVIEW_MAX_WIDTH_CLIENT;
     const scale = Math.min(1, maxWidth / image.width);
     const totalRotation = rotation + orientation + rotationOffset;
     const rad = (totalRotation * Math.PI) / 180;
@@ -555,18 +571,27 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     if (hasPannedRef.current) return;
     if ((!isPicking && !isPickingBase && !isPickingWB) || !image || !canvasRef.current) return;
     
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvasRef.current.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvasRef.current.height / rect.height);
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    
+    // 点击位置相对于canvas的坐标（CSS坐标转canvas坐标）
+    const clickX = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const clickY = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-    const kernel = 7; // sample N x N neighborhood for robust WB
-    const canvas = document.createElement('canvas');
-    canvas.width = kernel;
-    canvas.height = kernel;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-    // Replicate processImage transforms
-    const maxWidth = 1200;
+    const kernel = 3; // sample 3x3 neighborhood
+    
+    // 创建临时canvas来采样原始图像
+    // 关键：必须与显示canvas的尺寸和transform完全一致
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+    
+    // 直接使用显示canvas的尺寸，确保坐标系一致
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    
+    // 计算transform参数
+    // 使用与显示路径相同的maxWidth，确保坐标系一致
+    const maxWidth = (remoteImg && !isCropping) ? PREVIEW_MAX_WIDTH_SERVER : PREVIEW_MAX_WIDTH_CLIENT;
     const scale = Math.min(1, maxWidth / image.width);
     const totalRotation = rotation + orientation;
     const rad = (totalRotation * Math.PI) / 180;
@@ -576,46 +601,57 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     const scaledH = image.height * scale;
     const rotatedW = scaledW * cos + scaledH * sin;
     const rotatedH = scaledW * sin + scaledH * cos;
-
-    // Shift coordinate system so that (x,y) becomes (0,0)
-    ctx.translate(-x, -y);
-
-    if (isCropping) {
-      ctx.translate(rotatedW / 2, rotatedH / 2);
-      ctx.rotate(rad);
-      ctx.drawImage(image, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
-    } else {
-      const cr = committedCrop || { x:0, y:0, w:1, h:1 };
-      const cropX = cr.x * rotatedW;
-      const cropY = cr.y * rotatedH;
-      
-      ctx.translate(-cropX, -cropY);
-      ctx.translate(rotatedW / 2, rotatedH / 2);
-      ctx.rotate(rad);
-      ctx.drawImage(image, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
+    
+    // 应用crop（与processImage一致）
+    let eff = { x: 0, y: 0, w: 1, h: 1 };
+    if (!isCropping && committedCrop) {
+      const crx = Math.max(0, Math.min(1, committedCrop.x || 0));
+      const cry = Math.max(0, Math.min(1, committedCrop.y || 0));
+      const crw = Math.max(0, Math.min(1 - crx, committedCrop.w || 1));
+      const crh = Math.max(0, Math.min(1 - cry, committedCrop.h || 1));
+      eff = { x: crx, y: cry, w: crw, h: crh };
     }
-
-    const imgData = ctx.getImageData(0, 0, kernel, kernel).data;
+    
+    const cropX = eff.x * rotatedW;
+    const cropY = eff.y * rotatedH;
+    
+    // 绘制旋转后的原始图像（与processImage CPU路径完全相同的transform）
+    tempCtx.save();
+    tempCtx.translate(-cropX, -cropY);
+    tempCtx.translate(rotatedW / 2, rotatedH / 2);
+    tempCtx.rotate(rad);
+    tempCtx.drawImage(image, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
+    tempCtx.restore();
+    
+    // 现在clickX/clickY直接对应tempCanvas坐标
+    const x = Math.max(0, Math.min(tempCanvas.width - kernel, Math.floor(clickX - kernel / 2)));
+    const y = Math.max(0, Math.min(tempCanvas.height - kernel, Math.floor(clickY - kernel / 2)));
+    
+    const imgData = tempCtx.getImageData(x, y, kernel, kernel).data;
     let r = 0, g = 0, b = 0, count = 0;
     for (let ky = 0; ky < kernel; ky++) {
       for (let kx = 0; kx < kernel; kx++) {
         const idx = (ky * kernel + kx) * 4;
         const a = imgData[idx + 3];
-        if (a === 0) continue;
+        if (a === 0) continue; // 跳过透明像素
         r += imgData[idx + 0];
         g += imgData[idx + 1];
         b += imgData[idx + 2];
         count++;
       }
     }
-    if (count > 0) { r /= count; g /= count; b /= count; } else { r = g = b = 0; }
+    
+    if (count === 0) {
+      console.warn('[FilmLab] WB Picker: no valid pixels sampled');
+      return;
+    }
+    
+    r /= count;
+    g /= count;
+    b /= count;
 
     if (isPickingBase) {
-      // Film Base Sampler Logic
-      // We want this color (r,g,b) to become White (255,255,255) in the negative space
-      // So that when inverted, it becomes Black (0,0,0)
-      // Gain = Target / Source
-      // Note: This is different from WB picker. Base picker targets pure white (255) to neutralize the mask.
+      // Film Base Picker: 采样原始颜色，设置base gains让它变成白色
       const safeR = Math.max(1, r);
       const safeG = Math.max(1, g);
       const safeB = Math.max(1, b);
@@ -624,7 +660,6 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
       setRed(255 / safeR);
       setGreen(255 / safeG);
       setBlue(255 / safeB);
-      // Reset Temp/Tint as we are doing manual WB
       setTemp(0);
       setTint(0);
       
@@ -633,11 +668,7 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     }
 
     if (isPickingWB) {
-      // White Balance Picker Logic (after inversion, before curves/LUT)
-      // Goal: make sampled color neutral grey by adjusting per-channel gains.
-      // More stable than deriving temp/tint; avoids overshoot.
-
-      // Apply inversion first (pre-curves pipeline)
+      // WB Picker: 应用inversion（如果启用），然后计算temp/tint
       let rInv = r, gInv = g, bInv = b;
       if (inverted) {
         if (inversionMode === 'log') {
@@ -650,106 +681,115 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
           bInv = 255 - bInv;
         }
       }
+        
+      if (!Number.isFinite(rInv)) rInv = 128;
+      if (!Number.isFinite(gInv)) gInv = 128;
+      if (!Number.isFinite(bInv)) bInv = 128;
 
-        // Derive per-channel gains relative to the sampled patch.
-        // Apply multiplicatively so film-base calibration (if any) stays intact.
-        // Uses luminance-preserving algorithm from wb.js
-        const [kR, kG, kB] = gainsFromSample([rInv, gInv, bInv]);
-        console.log('[FilmLab] WB Picker:', { rInv, gInv, bInv }, '->', { kR, kG, kB });
-        const clampGain = (val) => Math.max(0.05, Math.min(50, val));
+      const solved = solveTempTintFromSample([rInv, gInv, bInv], { red, green, blue });
+      
+      if (solved && Number.isFinite(solved.temp) && Number.isFinite(solved.tint)) {
+        const testGains = computeWBGains({ red, green, blue, temp: solved.temp, tint: solved.tint });
+        
         pushToHistory();
-        setRed(prev => clampGain(prev * kR));
-        setGreen(prev => clampGain(prev * kG));
-        setBlue(prev => clampGain(prev * kB));
+        setTemp(solved.temp);
+        setTint(solved.tint);
+      } else {
+        console.warn('[FilmLab] WB Picker failed to solve temp/tint');
         setTemp(0);
         setTint(0);
-        setIsPickingWB(false);
-        return;
+      }
+      setIsPickingWB(false);
+      return;
     }
 
-    // Apply Pre-Curve Pipeline
-    if (inverted) {
-      if (inversionMode === 'log') {
-        r = 255 * (1 - Math.log(r + 1) / Math.log(256));
-        g = 255 * (1 - Math.log(g + 1) / Math.log(256));
-        b = 255 * (1 - Math.log(b + 1) / Math.log(256));
-      } else {
-        r = 255 - r;
-        g = 255 - g;
-        b = 255 - b;
+    // Regular color picker
+    if (isPicking) {
+      // Apply Pre-Curve Pipeline to show processed color
+      if (inverted) {
+        if (inversionMode === 'log') {
+          r = 255 * (1 - Math.log(r + 1) / Math.log(256));
+          g = 255 * (1 - Math.log(g + 1) / Math.log(256));
+          b = 255 * (1 - Math.log(b + 1) / Math.log(256));
+        } else {
+          r = 255 - r;
+          g = 255 - g;
+          b = 255 - b;
+        }
       }
+
+      const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
+      r *= rBal;
+      g *= gBal;
+      b *= bBal;
+
+      const expFactor = Math.pow(2, exposure / 50);
+      r *= expFactor;
+      g *= expFactor;
+      b *= expFactor;
+
+      const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+      r = contrastFactor * (r - 128) + 128;
+      g = contrastFactor * (g - 128) + 128;
+      b = contrastFactor * (b - 128) + 128;
+
+      // Tone Mapping (Highlights, Shadows, Whites, Blacks)
+      // Normalize to 0-1 for easier calculation
+      let rN = r / 255;
+      let gN = g / 255;
+      let bN = b / 255;
+
+      const applyTone = (val) => {
+        // Blacks & Whites (Linear Stretch)
+        // Blacks: -100 to 100. If < 0, clip blacks. If > 0, lift blacks.
+        // Whites: -100 to 100. If < 0, dim whites. If > 0, clip whites.
+        // Simple approach: Map [blackPoint, whitePoint] to [0, 1]
+        const blackPoint = -blacks * 0.002; // +/- 0.2
+        const whitePoint = 1 - whites * 0.002; // +/- 0.2
+        
+        // Avoid division by zero
+        if (whitePoint !== blackPoint) {
+          val = (val - blackPoint) / (whitePoint - blackPoint);
+        }
+
+        // Shadows & Highlights (Curve Shaping)
+        // Shadows: Boost darks (0-0.5)
+        if (shadows !== 0) {
+          const sFactor = shadows * 0.005; // Strength
+          // Simple quadratic boost for shadows: val + s * (1-val)^2 * val
+          // Or Luma mask: (1-val)^2
+          val += sFactor * Math.pow(1 - val, 2) * val * 4; 
+        }
+
+        // Highlights: Recover brights (0.5-1)
+        if (highlights !== 0) {
+          const hFactor = highlights * 0.005;
+          // Simple quadratic cut for highlights: val - h * val^2 * (1-val)
+          // Or Luma mask: val^2
+          // Note: highlights slider usually recovers (negative value dims highlights)
+          // If highlights > 0, we want to push highlights up? No, usually "Highlights" slider recovers detail (negative) or boosts (positive).
+          val += hFactor * Math.pow(val, 2) * (1 - val) * 4;
+        }
+        
+        return val;
+      };
+
+      rN = applyTone(rN);
+      gN = applyTone(gN);
+      bN = applyTone(bN);
+
+      r = rN * 255;
+      g = gN * 255;
+      b = bN * 255;
+
+      r = Math.min(255, Math.max(0, r));
+      g = Math.min(255, Math.max(0, g));
+      b = Math.min(255, Math.max(0, b));
+
+      setPickedColor({ r, g, b });
+      setIsPicking(false); // Auto-exit picker mode after pick
+      return;
     }
-
-    const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
-    r *= rBal;
-    g *= gBal;
-    b *= bBal;
-
-    const expFactor = Math.pow(2, exposure / 50);
-    r *= expFactor;
-    g *= expFactor;
-    b *= expFactor;
-
-    const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
-    r = contrastFactor * (r - 128) + 128;
-    g = contrastFactor * (g - 128) + 128;
-    b = contrastFactor * (b - 128) + 128;
-
-    // Tone Mapping (Highlights, Shadows, Whites, Blacks)
-    // Normalize to 0-1 for easier calculation
-    let rN = r / 255;
-    let gN = g / 255;
-    let bN = b / 255;
-
-    const applyTone = (val) => {
-      // Blacks & Whites (Linear Stretch)
-      // Blacks: -100 to 100. If < 0, clip blacks. If > 0, lift blacks.
-      // Whites: -100 to 100. If < 0, dim whites. If > 0, clip whites.
-      // Simple approach: Map [blackPoint, whitePoint] to [0, 1]
-      const blackPoint = -blacks * 0.002; // +/- 0.2
-      const whitePoint = 1 - whites * 0.002; // +/- 0.2
-      
-      // Avoid division by zero
-      if (whitePoint !== blackPoint) {
-        val = (val - blackPoint) / (whitePoint - blackPoint);
-      }
-
-      // Shadows & Highlights (Curve Shaping)
-      // Shadows: Boost darks (0-0.5)
-      if (shadows !== 0) {
-        const sFactor = shadows * 0.005; // Strength
-        // Simple quadratic boost for shadows: val + s * (1-val)^2 * val
-        // Or Luma mask: (1-val)^2
-        val += sFactor * Math.pow(1 - val, 2) * val * 4; 
-      }
-
-      // Highlights: Recover brights (0.5-1)
-      if (highlights !== 0) {
-        const hFactor = highlights * 0.005;
-        // Simple quadratic cut for highlights: val - h * val^2 * (1-val)
-        // Or Luma mask: val^2
-        // Note: highlights slider usually recovers (negative value dims highlights)
-        // If highlights > 0, we want to push highlights up? No, usually "Highlights" slider recovers detail (negative) or boosts (positive).
-        val += hFactor * Math.pow(val, 2) * (1 - val) * 4;
-      }
-      
-      return val;
-    };
-
-    rN = applyTone(rN);
-    gN = applyTone(gN);
-    bN = applyTone(bN);
-
-    r = rN * 255;
-    g = gN * 255;
-    b = bN * 255;
-
-    r = Math.min(255, Math.max(0, r));
-    g = Math.min(255, Math.max(0, g));
-    b = Math.min(255, Math.max(0, b));
-
-    setPickedColor({ r, g, b });
-    setIsPicking(false); // Auto-exit picker mode after pick
   };
 
   // Generate Tone Mapping LUT (Exposure, Contrast, H/S/B/W)
@@ -792,11 +832,22 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     return lut;
   };
 
+  // ============================================================================
+  // Main Image Processing Function
+  // ============================================================================
+  // Three rendering paths:
+  // 1. Server Preview (remoteImg): Use pre-rendered image from server (fastest)
+  // 2. WebGL Path (useGPU): GPU-accelerated processing (fast, real-time)
+  // 3. CPU Path: Fallback pixel-by-pixel processing (slower, most compatible)
   const processImage = () => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     // Nothing to render if neither preview nor base image is ready
     if (!remoteImg && !image) return;
+    
+    // ========================================================================
+    // Path 1: Server Preview (fastest, skip all client processing)
+    // ========================================================================
     // If we have a server-rendered preview, just paint it and compute histogram
     // BUT: If we are cropping, we need the full raw image to draw the crop UI over, 
     // and the remoteImg might be cropped. So ignore remoteImg while cropping.
@@ -826,71 +877,11 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
       setHistograms({ rgb: histRGB, red: histR, green: histG, blue: histB });
       return;
     }
-    // If GPU requested and available, try WebGL fast path (basic pipeline).
-    // We still run the CPU path afterwards to keep histograms in sync.
-    let webglSuccess = false;
-    if (image && useGPU && isWebGLAvailable()) {
-      try {
-        const gains = computeWBGains({ red, green, blue, temp, tint });
-
-        // Build combined 3D LUT (if present) for GPU path (skip when intensities are zero)
-        let combinedLUT = null;
-        if ((lut1 && lut1.intensity > 0) || (lut2 && lut2.intensity > 0)) {
-          combinedLUT = buildCombinedLUT(lut1, lut2);
-        }
-        
-        // Create a separate WebGL canvas (cannot mix 2D and WebGL contexts)
-        const webglCanvas = document.createElement('canvas');
-        processImageWebGL(webglCanvas, image, {
-          inverted,
-          inversionMode,
-          gains,
-          exposure,
-          contrast,
-          highlights,
-          shadows,
-          whites,
-          blacks,
-          curves: {
-            rgb: getCurveLUT(curves.rgb),
-            red: getCurveLUT(curves.red),
-            green: getCurveLUT(curves.green),
-            blue: getCurveLUT(curves.blue)
-          },
-          lut3: combinedLUT
-        });
-        
-        // Copy WebGL result to main 2D canvas first for visual speed,
-        // but DO NOT return so CPU path can compute histograms.
-        canvas.width = webglCanvas.width;
-        canvas.height = webglCanvas.height;
-        ctx.drawImage(webglCanvas, 0, 0);
-        webglSuccess = true;
-      } catch (err) {
-        console.warn('WebGL processing failed, falling back to CPU pipeline', err);
-      }
-    }
     
-    // Resize canvas to match image (or limit size for performance)
-    // Downscale a bit and use histogram subsampling to improve realtime FPS.
-    if (!image) return; // guard CPU path when image not loaded
-    
-    // If WebGL succeeded, we don't need to redraw the image on CPU.
-    // But we DO need to compute histograms.
-    // And we need to handle the rotation/crop transform for the canvas if WebGL didn't do it?
-    // Wait, processImageWebGL returns the processed image (unrotated, uncropped).
-    // The code below handles rotation and crop drawing.
-    // If WebGL was used, 'canvas' now contains the processed image.
-    // But the code below overwrites 'canvas' with 'ctx.drawImage(image...)' and then processes pixels.
-    
-    // We need to separate:
-    // 1. Image Processing (Color/Tone) -> Result Image
-    // 2. Display Transform (Rotate/Crop) -> Canvas
-    
-    // Current flow is mixed.
-    // Let's refactor slightly for performance.
-    
-    if (!geometry) return;
+    // ========================================================================
+    // Path 2 & 3: Client-side rendering (WebGL or CPU)
+    // ========================================================================
+    if (!image || !geometry) return;
     const { rotatedW, rotatedH, rad, scaledW, scaledH } = geometry;
 
     // In crop mode, show full rotated image. Outside crop mode, preview committed crop.
@@ -903,41 +894,18 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
       eff = { x: crx, y: cry, w: crw, h: crh };
     }
 
-    const outW = Math.max(1, Math.round(rotatedW * eff.w));
-    const outH = Math.max(1, Math.round(rotatedH * eff.h));
-    canvas.width = outW;
-    canvas.height = outH;
-
-    const cropX = eff.x * rotatedW;
-    const cropY = eff.y * rotatedH;
-
-    ctx.save();
-    // Shift so that crop area maps to (0,0)
-    ctx.translate(-cropX, -cropY);
-    ctx.translate(rotatedW / 2, rotatedH / 2);
-    ctx.rotate(rad);
-    
-    // Draw the source image. 
-    // If WebGL was successful, we should draw the WebGL result instead of raw image?
-    // But processImageWebGL returns unrotated image.
-    // If we use WebGL result, we need to keep it somewhere.
-    // The 'webglCanvas' above is local.
-    // Re-running WebGL every frame is fast enough? Yes, usually.
-    
-    // Optimization:
-    // If WebGL success:
-    //   Draw WebGL canvas (processed) -> Main Canvas (transformed)
-    //   Skip CPU pixel processing loop (just read pixels for histogram)
-    // If CPU:
-    //   Draw Raw Image -> Main Canvas (transformed)
-    //   Run CPU pixel processing loop (modify pixels in place)
-    
+    // Try WebGL path if GPU is enabled and available
     let sourceForDraw = image;
-    if (webglSuccess) {
+    let useDirectDraw = false;
+    let webglSuccess = false;
+    
+    if (useGPU && isWebGLAvailable()) {
        try {
           // Optimization: Reuse cached WebGL canvas if parameters haven't changed
           if (processedCanvasRef.current && lastWebglParamsRef.current === webglParams) {
              sourceForDraw = processedCanvasRef.current;
+             useDirectDraw = true;
+             webglSuccess = true;
           } else {
               const webglCanvas = document.createElement('canvas');
               const { gains } = webglParams;
@@ -947,9 +915,17 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
                  combinedLUT = buildCombinedLUT(lut1, lut2);
               }
               
-              processImageWebGL(webglCanvas, image, {
-                 inverted, inversionMode, gains, exposure, contrast, highlights, shadows, whites, blacks,
-                 curves: {
+              // Pass rotation and crop parameters to WebGL for correct geometry
+              const totalRotation = rotation + orientation;
+              const cropRect = isCropping ? null : committedCrop;
+              
+                processImageWebGL(webglCanvas, image, {
+                  inverted, inversionMode, gains, exposure, contrast, highlights, shadows, whites, blacks,
+                  rotate: totalRotation,
+                  cropRect: cropRect,
+                  // pass preview scale to ensure WebGL output uses the same downscale as CPU/geometry
+                  scale: webglParams.scale,
+                  curves: {
                     rgb: getCurveLUT(curves.rgb),
                     red: getCurveLUT(curves.red),
                     green: getCurveLUT(curves.green),
@@ -961,15 +937,38 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
               processedCanvasRef.current = webglCanvas;
               lastWebglParamsRef.current = webglParams;
               sourceForDraw = webglCanvas;
+              useDirectDraw = true;
           }
        } catch(e) {
           webglSuccess = false;
+          useDirectDraw = false;
           console.error("WebGL failed", e);
        }
     }
 
-    ctx.drawImage(sourceForDraw, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
-    ctx.restore();
+    if (useDirectDraw) {
+        // WebGL path: canvas is already processed, rotated and cropped
+        canvas.width = sourceForDraw.width;
+        canvas.height = sourceForDraw.height;
+        ctx.drawImage(sourceForDraw, 0, 0);
+    } else {
+        // CPU path: apply transforms manually
+        const outW = Math.max(1, Math.round(rotatedW * eff.w));
+        const outH = Math.max(1, Math.round(rotatedH * eff.h));
+        canvas.width = outW;
+        canvas.height = outH;
+
+        const cropX = eff.x * rotatedW;
+        const cropY = eff.y * rotatedH;
+
+        ctx.save();
+        // Shift so that crop area maps to (0,0)
+        ctx.translate(-cropX, -cropY);
+        ctx.translate(rotatedW / 2, rotatedH / 2);
+        ctx.rotate(rad);
+        ctx.drawImage(sourceForDraw, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
+        ctx.restore();
+    }
     
     // Optimization: Skip reading back pixels if using WebGL and rotating (histograms skipped anyway)
     let imageData = null;
@@ -987,10 +986,8 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     const lutG = getCurveLUT(curves.green);
     const lutB = getCurveLUT(curves.blue);
     
-    // Temp/Tint adjustments
-    const rBal = red + (temp / 200) + (tint / 200);
-    const gBal = green + (temp / 200) - (tint / 200);
-    const bBal = blue - (temp / 200);
+    // White balance gains (use shared math for consistency)
+    const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
 
     // Histogram buckets
     const histRGB = new Array(256).fill(0);
@@ -1055,6 +1052,11 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
             r *= rBal;
             g *= gBal;
             b *= bBal;
+
+            // Safety check for NaN/Infinity
+            if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+              r = 0; g = 0; b = 0;
+            }
 
             // Clamp before LUT
             let rC = Math.min(255, Math.max(0, r));
@@ -1238,7 +1240,6 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     if (!image) return;
     pushToHistory();
     
-    // Create temp canvas to read raw pixels (downscaled for speed)
     const canvas = document.createElement('canvas');
     const size = 256;
     const scale = Math.min(1, size / image.width);
@@ -1254,7 +1255,6 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     let rSum = 0, gSum = 0, bSum = 0;
     let count = 0;
     
-    // Sample pixels
     for (let i = 0; i < data.length; i += 4) {
       let r = data[i];
       let g = data[i+1];
@@ -1278,29 +1278,20 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
       count++;
     }
     
+    if (count === 0) {
+      setTemp(0);
+      setTint(0);
+      return;
+    }
+
     const rAvg = rSum / count;
     const gAvg = gSum / count;
     const bAvg = bSum / count;
-    
-    // Target is average of averages (Grey)
-    const avg = (rAvg + gAvg + bAvg) / 3;
-    
-    // Calculate required gains to reach neutral grey
-    const kR = rAvg > 0 ? avg / rAvg : 1;
-    const kB = bAvg > 0 ? avg / bAvg : 1;
-
-    // Reverse engineer Temp/Tint from gains
-    // kB = 1 - T/200 => T = (1 - kB) * 200
-    const newTemp = (1 - kB) * 200;
-    
-    // kR = 1 + (T + t)/200 => t = (kR - 1)*200 - T
-    const newTint = (kR - 1) * 200 - newTemp;
-
-    setTemp(Math.max(-100, Math.min(100, newTemp)));
-    setTint(Math.max(-100, Math.min(100, newTint)));
-    setRed(1);
-    setGreen(1);
-    setBlue(1);
+    const solved = solveTempTintFromSample([rAvg, gAvg, bAvg], { red, green, blue });
+    if (solved) {
+      setTemp(solved.temp);
+      setTint(solved.tint);
+    }
   };
 
   // Curve Editor Constants
@@ -1381,9 +1372,7 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     const lutG = getCurveLUT(curves.green);
     const lutB = getCurveLUT(curves.blue);
     
-    const rBal = red + (temp / 200) + (tint / 200);
-    const gBal = green + (temp / 200) - (tint / 200);
-    const bBal = blue - (temp / 200);
+    const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
 
     for (let b = 0; b < size; b++) {
       for (let g = 0; g < size; g++) {
@@ -1471,6 +1460,9 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
   };
   */
 
+  // ============================================================================
+  // Save Function (Client-side processing for quick save)
+  // ============================================================================
   const handleSave = () => {
     if (!image) return;
     
@@ -1478,7 +1470,7 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     // High-res rotate first
-    const maxSaveWidth = 4000;
+    const maxSaveWidth = EXPORT_MAX_WIDTH;
     const scale = Math.min(1, maxSaveWidth / image.width);
     const totalRotation = rotation + orientation;
     const rad = (totalRotation * Math.PI) / 180;
@@ -1524,9 +1516,7 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     const lutG = getCurveLUT(curves.green);
     const lutB = getCurveLUT(curves.blue);
     
-    const rBal = red + (temp / 200) + (tint / 200);
-    const gBal = green + (temp / 200) - (tint / 200);
-    const bBal = blue - (temp / 200);
+    const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
 
     for (let i = 0; i < data.length; i += 4) {
       if (data[i+3] === 0) continue;
@@ -1622,20 +1612,17 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     if (!window.__electron || gpuBusy) return;
     setGpuBusy(true);
     try {
-      // Generate 1D LUT for Tone + Curves
-      const toneLUT = getToneLUT();
+      // Generate 1D LUT for Curves only (tone handled in shader via uniforms)
       const lutRGB = getCurveLUT(curves.rgb);
       const lutR = getCurveLUT(curves.red);
       const lutG = getCurveLUT(curves.green);
       const lutB = getCurveLUT(curves.blue);
       
       // Combine into a single 256x3 array [r,g,b, r,g,b...] for the GPU to sample
-      // The GPU will use this to map the linear(ish) color to the final tone/curve mapped color
+      // The GPU will use this to map the linear(ish) color through curves (tone via uniforms)
       const toneCurveLut = new Uint8Array(256 * 4); // RGBA
       for (let i = 0; i < 256; i++) {
         let r = i, g = i, b = i;
-        // Apply Tone
-        r = toneLUT[r]; g = toneLUT[g]; b = toneLUT[b];
         // Apply RGB Curve
         r = lutRGB[r]; g = lutRGB[g]; b = lutRGB[b];
         // Apply Channel Curves
@@ -1662,7 +1649,8 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
       }
 
       const params = { 
-        inverted, inversionMode, exposure, contrast, temp, tint, red, green, blue, rotation, orientation,
+        inverted, inversionMode, exposure, contrast, highlights, shadows, whites, blacks,
+        temp, tint, red, green, blue, rotation, orientation,
         cropRect: committedCrop,
         toneCurveLut: Array.from(toneCurveLut), // Pass as array
         lut3d: lut3d ? { size: lut3d.size, data: Array.from(lut3d.data) } : null
@@ -1745,11 +1733,7 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     // If GPU path requested and available AND no external LUT blending (unsupported in WebGL yet), use WebGL for color then CPU for geometry.
     if (useGPU && isWebGLAvailable() && !lut1 && !lut2) {
       try {
-        const gains = [
-          red + (temp / 200) + (tint / 200),
-          green + (temp / 200) - (tint / 200),
-          blue - (temp / 200)
-        ];
+        const gains = computeWBGains({ red, green, blue, temp, tint });
         const webglCanvas = document.createElement('canvas');
         // Include LUT if present (combined from lut1/lut2) even in Save As GPU path
         let combinedLUT = null;
@@ -1886,9 +1870,7 @@ export default function FilmLab({ imageUrl, onClose, onSave, rollId, photoId, on
     const lutG = getCurveLUT(curves.green);
     const lutB = getCurveLUT(curves.blue);
     
-    const rBal = red + (temp / 200) + (tint / 200);
-    const gBal = green + (temp / 200) - (tint / 200);
-    const bBal = blue - (temp / 200);
+    const [rBal, gBal, bBal] = computeWBGains({ red, green, blue, temp, tint });
 
     for (let i = 0; i < data.length; i += 4) {
       if (data[i+3] === 0) continue;

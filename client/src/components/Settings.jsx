@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 export default function Settings() {
   const [config, setConfig] = useState({});
   const [saving, setSaving] = useState(false);
+  const [savingWriteThrough, setSavingWriteThrough] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -52,6 +53,24 @@ export default function Settings() {
     }
   }
 
+  async function toggleWriteThrough(next) {
+    if (!window.__electron?.setWriteThrough) return alert('This option is only available in Electron.');
+    try {
+      setSavingWriteThrough(true);
+      const res = await window.__electron.setWriteThrough(next);
+      if (res && res.ok) {
+        setConfig(res.config || {});
+        alert('Write-through mode updated. Backend restarted.');
+      } else {
+        alert('Failed to update write-through mode.');
+      }
+    } catch (e) {
+      alert('Error: ' + (e?.message || e));
+    } finally {
+      setSavingWriteThrough(false);
+    }
+  }
+
   return (
     <div>
       <h2>Settings</h2>
@@ -65,6 +84,25 @@ export default function Settings() {
           <button disabled={saving} onClick={chooseDataRoot}>
             {saving ? 'Saving…' : 'Change...'}
           </button>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+        <h3>Database Write-through (OneDrive即时同步)</h3>
+        <p style={{ color: '#555' }}>
+          When enabled, commits go straight to film.db (journal_mode=TRUNCATE, synchronous=FULL). Helpful for multi-device OneDrive sync; may be slightly slower than WAL.
+        </p>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={!!config.writeThrough}
+            disabled={savingWriteThrough}
+            onChange={(e) => toggleWriteThrough(e.target.checked)}
+          />
+          <span>{savingWriteThrough ? 'Updating…' : 'Enable write-through mode'}</span>
+        </label>
+        <div style={{ marginTop: 8, color: '#777', fontSize: 13 }}>
+          Applies immediately and restarts backend. Disable to return to WAL mode (better throughput).
         </div>
       </div>
 

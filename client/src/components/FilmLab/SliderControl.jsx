@@ -1,6 +1,6 @@
 import React from 'react';
 
-const SliderControl = ({ label, value, onChange, min, max, step=1, onMouseDown, onMouseUp, suffix='' }) => {
+const SliderControl = ({ label, value, onChange, min, max, step=1, onMouseDown, onMouseUp, suffix='', displayFormatter }) => {
   const handleMinus = () => {
     onMouseDown && onMouseDown();
     onChange(Math.max(min, Number((value - step).toFixed(2))));
@@ -14,7 +14,7 @@ const SliderControl = ({ label, value, onChange, min, max, step=1, onMouseDown, 
     <div className="control-group" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
       <label className="iv-control-label" style={{ width: 90, flexShrink: 0 }}>{label}</label>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-        <span style={{ fontSize: 11, color: '#ccc', fontFamily: 'monospace', minWidth: 32, textAlign: 'right' }}>{value}{suffix}</span>
+        <span style={{ fontSize: 11, color: '#ccc', fontFamily: 'monospace', minWidth: 32, textAlign: 'right' }}>{displayFormatter ? displayFormatter(value) : value}{suffix}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
           <button className="iv-btn-icon" onClick={handleMinus}>−</button>
           <input 
