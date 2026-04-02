@@ -36,6 +36,11 @@
   z-index: 1;
 }
 
+/* Amap dark/night mode: CSS filter simulation (Amap raster tiles have no native dark style) */
+.amap-dark-tile {
+  filter: invert(1) hue-rotate(200deg) brightness(0.85) saturate(0.7);
+}
+
 /* ===================================
    LOADING & ERROR STATES
    =================================== */

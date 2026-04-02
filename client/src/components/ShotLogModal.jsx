@@ -48,6 +48,27 @@ function EntryEditModal({ entry, index, onSave, onClose, countries, citiesByCoun
         </div>
         
         <div className="fg-modal-body" style={{ padding: 24 }}>
+          {/* Row 0: Date, Time */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+            <div className="fg-field">
+              <label className="fg-label">Date</label>
+              <input
+                type="date"
+                className="fg-input"
+                value={editData.date || ''}
+                onChange={e => setEditData(prev => ({ ...prev, date: e.target.value }))}
+              />
+            </div>
+            <div className="fg-field">
+              <label className="fg-label">Time (Shot Time)</label>
+              <input
+                type="time"
+                className="fg-input"
+                value={editData.shot_time || ''}
+                onChange={e => setEditData(prev => ({ ...prev, shot_time: e.target.value }))}
+              />
+            </div>
+          </div>
           {/* Row 1: Shots, Aperture, Shutter, Focal Length */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
             <div className="fg-field">
@@ -258,6 +279,7 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
   const isDark = document.documentElement.classList.contains('dark');
   const [logs, setLogs] = useState([]);
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newTime, setNewTime] = useState('');
   const [newCount, setNewCount] = useState('1');
   const [newLens, setNewLens] = useState('');
   const [newAperture, setNewAperture] = useState('');
@@ -296,9 +318,12 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
   const [showImportOptions, setShowImportOptions] = useState(false);
   const [pendingImportData, setPendingImportData] = useState(null);
   const fileInputRef = useRef(null);
+  // Ref to track item object without triggering effect re-runs
+  const itemRef = useRef(item);
+  itemRef.current = item;
 
   // CSV Template header
-  const CSV_TEMPLATE = 'date,count,lens,focal_length,aperture,shutter_speed,country,city,detail_location,latitude,longitude\n2026-01-01,1,50mm f/1.8,50,2.8,1/125,China,Beijing,Sample Location,39.9042,116.4074';
+  const CSV_TEMPLATE = 'date,shot_time,count,lens,focal_length,aperture,shutter_speed,country,city,detail_location,latitude,longitude\n2026-01-01,14:30,1,50mm f/1.8,50,2.8,1/125,China,Beijing,Sample Location,39.9042,116.4074';
 
   // Parse CSV string to log entries
   const parseCSV = (csvText) => {
@@ -334,6 +359,10 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
         switch (col) {
           case 'date':
             entry.date = val;
+            break;
+          case 'shot_time':
+          case 'time':
+            entry.shot_time = val;
             break;
           case 'count':
           case 'shots':
@@ -385,6 +414,7 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
       if (entry.date && entry.count > 0) {
         entries.push({
           date: entry.date,
+          shot_time: entry.shot_time || '',
           count: entry.count,
           lens: entry.lens || '',
           focal_length: Number.isFinite(entry.focal_length) ? entry.focal_length : null,
@@ -502,12 +532,14 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
   };
 
   useEffect(() => {
-    if (item && item.shot_logs) {
+    const currentItem = itemRef.current;
+    if (currentItem && currentItem.shot_logs) {
       try {
-        const parsed = JSON.parse(item.shot_logs);
+        const parsed = JSON.parse(currentItem.shot_logs);
         if (Array.isArray(parsed)) {
           const normalized = parsed.map(entry => ({
             date: entry.date,
+            shot_time: entry.shot_time || '',
             count: Number(entry.count || entry.shots || 0) || 0,
             lens: entry.lens || '',
             focal_length: entry.focal_length !== undefined && entry.focal_length !== null ? Number(entry.focal_length) : null,
@@ -530,11 +562,12 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
     } else {
       setLogs([]);
     }
-    if (item && item.shot_logs) {
+    if (currentItem && currentItem.shot_logs) {
       const today = new Date().toISOString().split('T')[0];
       setSelectedDate(today);
     }
-  }, [item]);
+    // Use item?.id (stable primitive) to avoid re-firing on every object reference change
+  }, [item?.id]);
 
   // Detect fixed lens camera OR fetch compatible lenses for interchangeable lens cameras
   useEffect(() => {
@@ -682,6 +715,7 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
     const focalVal = newFocalLength !== '' ? Number(newFocalLength) : (fixedLensInfo?.focal_length ?? last.focal_length ?? null);
     const entry = {
       date: newDate,
+      shot_time: newTime.trim(),
       count: Number(newCount),
       lens: lensVal,
       focal_length: Number.isFinite(focalVal) ? focalVal : null,
@@ -701,6 +735,7 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
     if (lensVal) addLensToOptions(lensVal);
     setNewCount('1');
     setNewLens('');
+    setNewTime('');
     setNewAperture(apertureVal !== null && apertureVal !== undefined && apertureVal !== '' ? String(apertureVal) : '');
     setNewShutter(shutterVal || '');
     setNewFocalLength(focalVal !== null && focalVal !== undefined ? String(focalVal) : '');
@@ -940,7 +975,7 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
           
           {/* Quick Add Section */}
           <div style={{ marginBottom: 24, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: 20, borderRadius: 12, boxShadow: '0 4px 12px rgba(102, 126, 234, 0.25)' }}>
-            {/* Row 1: Date, Count, Aperture, Shutter */}
+            {/* Row 1: Date, Time, Count, Aperture, Shutter */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
               <div className="fg-field" style={{ flex: '0 0 140px' }}>
                 <label className="fg-label" style={{ color: 'rgba(255,255,255,0.95)', marginBottom: 6, fontSize: 12, fontWeight: 600 }}>Date</label>
@@ -949,6 +984,16 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
                   className="fg-input" 
                   value={newDate} 
                   onChange={e => setNewDate(e.target.value)} 
+                  style={{ background: '#fff', color: '#1f2937', height: 38, border: 'none', fontSize: 13 }}
+                />
+              </div>
+              <div className="fg-field" style={{ flex: '0 0 100px' }}>
+                <label className="fg-label" style={{ color: 'rgba(255,255,255,0.95)', marginBottom: 6, fontSize: 12, fontWeight: 600 }}>Time</label>
+                <input
+                  type="time"
+                  className="fg-input"
+                  value={newTime}
+                  onChange={e => setNewTime(e.target.value)}
                   style={{ background: '#fff', color: '#1f2937', height: 38, border: 'none', fontSize: 13 }}
                 />
               </div>
@@ -1223,6 +1268,7 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
                       }}>
                         {entry.count} shot{entry.count !== 1 ? 's' : ''}
                       </span>
+                      {entry.shot_time && <span style={{ color: '#64748b', fontSize: 13 }}>🕐 {entry.shot_time}</span>}
                       {entry.aperture && <span style={{ color: '#64748b', fontSize: 13 }}>f/{entry.aperture}</span>}
                       {entry.shutter_speed && <span style={{ color: '#64748b', fontSize: 13 }}>{entry.shutter_speed}</span>}
                       {entry.focal_length && <span style={{ color: '#64748b', fontSize: 13 }}>{entry.focal_length}mm</span>}

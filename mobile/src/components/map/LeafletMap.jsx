@@ -1,7 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useContext } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { getLeafletHtml } from './leafletHtml';
+import { ApiContext } from '../../context/ApiContext';
 
 const LeafletMap = ({ 
   photos = [], 
@@ -11,9 +12,13 @@ const LeafletMap = ({
 }) => {
   const webViewRef = useRef(null);
   const [isMapReady, setIsMapReady] = useState(false);
+  const { mapProvider, darkMode } = useContext(ApiContext);
 
-  // Generate HTML with initial region (derived from props or default)
-  const htmlContent = React.useMemo(() => getLeafletHtml(region || { latitude: 31.2304, longitude: 121.4737 }), []);
+  // Generate HTML with initial region and map provider
+  const htmlContent = React.useMemo(
+    () => getLeafletHtml(region || { latitude: 31.2304, longitude: 121.4737 }, mapProvider, !!darkMode),
+    [mapProvider, darkMode] // re-generate HTML when provider or theme changes
+  );
 
   // Update photos when they change (only if map is ready)
   useEffect(() => {

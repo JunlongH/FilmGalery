@@ -20,6 +20,7 @@ function parseShotLog(raw) {
     return data
       .map(entry => ({
         date: entry.date,
+        shot_time: entry.shot_time || '',
         count: Number(entry.count || entry.shots || 0) || 0,
         lens: entry.lens || '',
         focal_length: entry.focal_length !== undefined && entry.focal_length !== null ? Number(entry.focal_length) : null,
@@ -57,6 +58,10 @@ export default function ShotLogScreen({ route, navigation }) {
   const [error, setError] = useState('');
   const [entries, setEntries] = useState([]);
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newTime, setNewTime] = useState(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
   const [newShots, setNewShots] = useState('1');
   const [newLens, setNewLens] = useState('');
   const [newAperture, setNewAperture] = useState('');
@@ -344,6 +349,8 @@ export default function ShotLogScreen({ route, navigation }) {
       if (data.location.longitude != null) setNewLongitude(data.location.longitude);
     }
     setNewDate(new Date().toISOString().split('T')[0]);
+    const now = new Date();
+    setNewTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
   };
 
   useEffect(() => {
@@ -396,6 +403,7 @@ export default function ShotLogScreen({ route, navigation }) {
     setEntries(prev => {
       const next = [...prev, {
         date: newDate,
+        shot_time: newTime,
         count,
         lens: lensVal,
         focal_length: Number.isFinite(focalVal) ? focalVal : null,
@@ -412,6 +420,8 @@ export default function ShotLogScreen({ route, navigation }) {
     });
     if (lensVal) setLensOptions(prev => dedupeAndSort([...prev, lensVal]));
     setNewShots('1');
+    const now = new Date();
+    setNewTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
     setNewAperture(apertureVal !== null && apertureVal !== undefined && apertureVal !== '' ? String(apertureVal) : '');
     setNewShutter(shutterVal || '');
     setNewFocalLength(focalVal !== null && focalVal !== undefined ? String(focalVal) : '');
@@ -440,6 +450,7 @@ export default function ShotLogScreen({ route, navigation }) {
         .sort((a, b) => a.date.localeCompare(b.date))
         .map(e => ({
           date: e.date,
+          shot_time: e.shot_time || '',
           count: e.count,
           lens: e.lens || '',
           focal_length: Number.isFinite(e.focal_length) ? e.focal_length : null,
@@ -517,7 +528,12 @@ export default function ShotLogScreen({ route, navigation }) {
         renderItem={({ item }) => (
           <View style={[styles.row, { backgroundColor: theme.colors.surface }]}>
             <View style={{ flex: 1 }}>
-              <Text variant="titleMedium">{item.date}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text variant="titleMedium">{item.date}</Text>
+                {item.shot_time ? (
+                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>🕐 {item.shot_time}</Text>
+                ) : null}
+              </View>
               <Text variant="bodyMedium" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>
                 {item.count} shots
               </Text>
@@ -573,6 +589,16 @@ export default function ShotLogScreen({ route, navigation }) {
               onChange={(d) => setNewDate(toISODateString(d))}
             />
           </View>
+          <TextInput
+            label="Time"
+            mode="outlined"
+            value={newTime}
+            onChangeText={setNewTime}
+            placeholder="HH:MM"
+            keyboardType="numbers-and-punctuation"
+            style={[styles.input, { flex: 1 }]}
+            dense
+          />
           <TextInput
             label="Shots"
             mode="outlined"

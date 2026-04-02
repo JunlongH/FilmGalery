@@ -9,8 +9,88 @@
  * - No strict rate limiting
  */
 
+import { gcj02ToWgs84, wgs84ToGcj02 } from './coordTransform';
+
 const PHOTON_BASE = 'https://photon.komoot.io';
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
+const AMAP_BASE = 'https://restapi.amap.com/v3';
+
+/**
+ * Search for addresses using Amap REST API
+ */
+const searchWithAmap = async (query, amapKey, limit = 5) => {
+  const params = new URLSearchParams({
+    address: query.trim(),
+    key: amapKey,
+    output: 'JSON'
+  });
+
+  const response = await fetch(`${AMAP_BASE}/geocode/geo?${params.toString()}`, {
+    headers: { 'Accept': 'application/json' }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Amap geocoding failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (data.status !== '1') {
+    throw new Error(`Amap geocoding error: ${data.info}`);
+  }
+
+  return (data.geocodes || []).slice(0, limit).map(g => {
+    const [gcjLng, gcjLat] = (g.location || '0,0').split(',').map(Number);
+    // Amap returns GCJ-02 → convert to WGS-84 for database storage
+    const { lat, lng } = gcj02ToWgs84(gcjLat, gcjLng);
+    return {
+      displayName: g.formatted_address || '',
+      latitude: lat,
+      longitude: lng,
+      country: g.country || '中国',
+      city: g.city || g.district || '',
+      state: g.province || '',
+      road: '',
+      houseNumber: ''
+    };
+  });
+};
+
+/**
+ * Reverse geocode using Amap REST API
+ */
+const reverseWithAmap = async (latitude, longitude, amapKey) => {
+  // Input is WGS-84 from DB → convert to GCJ-02 for Amap API
+  const gcj = wgs84ToGcj02(latitude, longitude);
+  const params = new URLSearchParams({
+    location: `${gcj.lng},${gcj.lat}`,
+    key: amapKey,
+    output: 'JSON'
+  });
+
+  const response = await fetch(`${AMAP_BASE}/geocode/regeo?${params.toString()}`, {
+    headers: { 'Accept': 'application/json' }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Amap reverse geocoding failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (data.status !== '1') {
+    throw new Error(`Amap reverse geocoding error: ${data.info}`);
+  }
+
+  const regeo = data.regeocode;
+  if (!regeo) return null;
+
+  const comp = regeo.addressComponent || {};
+  return {
+    displayName: regeo.formatted_address || '',
+    country: comp.country || '中国',
+    city: comp.city || comp.district || '',
+    state: comp.province || ''
+  };
+};
 
 // Rate limiting for Nominatim fallback: 1 request per second
 let lastNominatimTime = 0;
@@ -114,19 +194,32 @@ const searchWithNominatim = async (query, limit = 5, countryCode = null) => {
  */
 export const searchAddress = async (query, options = {}) => {
   if (!query || query.trim().length < 2) return [];
-  
+
   const limit = options.limit || 5;
-  
+
+  // Check if Amap is configured
+  const mapProvider = localStorage.getItem('map_provider') || 'osm';
+  if (mapProvider === 'amap') {
+    const amapKey = localStorage.getItem('amap_web_key') || '';
+    if (amapKey) {
+      try {
+        const results = await searchWithAmap(query, amapKey, limit);
+        if (results.length > 0) return results;
+      } catch (err) {
+        console.warn('Amap geocoding failed, falling back to OSM:', err.message);
+      }
+    }
+  }
+
+  // OpenStreetMap path: Photon → Nominatim
   try {
-    // Try Photon first (faster, better quality)
     const results = await searchWithPhoton(query, limit);
     if (results.length > 0) return results;
   } catch (err) {
     console.warn('Photon geocoding failed, falling back to Nominatim:', err.message);
   }
-  
+
   try {
-    // Fallback to Nominatim
     return await searchWithNominatim(query, limit, options.country);
   } catch (err) {
     console.error('All geocoding services failed:', err);
@@ -229,17 +322,29 @@ const reverseWithNominatim = async (latitude, longitude) => {
  */
 export const reverseGeocode = async (latitude, longitude) => {
   if (!latitude || !longitude) return null;
-  
+
+  // Check if Amap is configured
+  const mapProvider = localStorage.getItem('map_provider') || 'osm';
+  if (mapProvider === 'amap') {
+    const amapKey = localStorage.getItem('amap_web_key') || '';
+    if (amapKey) {
+      try {
+        const result = await reverseWithAmap(latitude, longitude, amapKey);
+        if (result) return result;
+      } catch (err) {
+        console.warn('Amap reverse geocoding failed, falling back to OSM:', err.message);
+      }
+    }
+  }
+
   try {
-    // Try Photon first
     const result = await reverseWithPhoton(latitude, longitude);
     if (result) return result;
   } catch (err) {
     console.warn('Photon reverse geocoding failed, falling back to Nominatim:', err.message);
   }
-  
+
   try {
-    // Fallback to Nominatim
     return await reverseWithNominatim(latitude, longitude);
   } catch (err) {
     console.error('All reverse geocoding services failed:', err);

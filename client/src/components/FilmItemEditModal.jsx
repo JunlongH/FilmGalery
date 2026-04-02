@@ -7,7 +7,7 @@
  * - 根据状态动态显示/隐藏相关字段
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button, Input, Select, SelectItem } from '@heroui/react';
 import GlassModal, { GlassCard } from './ui/GlassModal';
 import EquipmentSelector from './EquipmentSelector';
@@ -129,41 +129,44 @@ export default function FilmItemEditModal({ item, isOpen, onClose, onUpdated }) 
   const [formData, setFormData] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const itemRef = useRef(item);
+  itemRef.current = item;
 
   useEffect(() => {
-    if (item) {
+    const currentItem = itemRef.current;
+    if (currentItem) {
       setFormData({
-        status: item.status || 'in_stock',
-        label: item.label || '',
-        loaded_camera: item.loaded_camera || '',
-        camera_equip_id: item.camera_equip_id || null,
-        purchase_price: item.purchase_price ?? '',
-        purchase_shipping_share: item.purchase_shipping_share ?? '',
-        purchase_date: item.purchase_date || '',
-        expiry_date: item.expiry_date || '',
-        batch_number: item.batch_number || '',
-        purchase_channel: item.purchase_channel || '',
-        purchase_vendor: item.purchase_vendor || '',
-        purchase_order_id: item.purchase_order_id || '',
-        purchase_note: item.purchase_note || '',
-        loaded_date: item.loaded_date || '',
-        finished_date: item.finished_date || '',
-        develop_lab: item.develop_lab || '',
-        develop_process: item.develop_process || '',
-        develop_price: item.develop_price ?? '',
-        develop_shipping: item.develop_shipping ?? '',
-        develop_channel: item.develop_channel || '',
-        develop_date: item.develop_date || '',
-        sent_to_lab_at: item.sent_to_lab_at || '',
-        scan_date: item.scan_date || '',
-        develop_note: item.develop_note || ''
+        status: currentItem.status || 'in_stock',
+        label: currentItem.label || '',
+        loaded_camera: currentItem.loaded_camera || '',
+        camera_equip_id: currentItem.camera_equip_id || null,
+        purchase_price: currentItem.purchase_price ?? '',
+        purchase_shipping_share: currentItem.purchase_shipping_share ?? '',
+        purchase_date: currentItem.purchase_date || '',
+        expiry_date: currentItem.expiry_date || '',
+        batch_number: currentItem.batch_number || '',
+        purchase_channel: currentItem.purchase_channel || '',
+        purchase_vendor: currentItem.purchase_vendor || '',
+        purchase_order_id: currentItem.purchase_order_id || '',
+        purchase_note: currentItem.purchase_note || '',
+        loaded_date: currentItem.loaded_date || '',
+        finished_date: currentItem.finished_date || '',
+        develop_lab: currentItem.develop_lab || '',
+        develop_process: currentItem.develop_process || '',
+        develop_price: currentItem.develop_price ?? '',
+        develop_shipping: currentItem.develop_shipping ?? '',
+        develop_channel: currentItem.develop_channel || '',
+        develop_date: currentItem.develop_date || '',
+        sent_to_lab_at: currentItem.sent_to_lab_at || '',
+        scan_date: currentItem.scan_date || '',
+        develop_note: currentItem.develop_note || ''
       });
       setError(null);
     } else {
       setFormData(emptyForm);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item]);
+    // Use item?.id (stable primitive) instead of item (unstable object reference)
+  }, [item?.id]);
 
   const handleChange = (key, value) => {
     setFormData(prev => ({ ...prev, [key]: value }));

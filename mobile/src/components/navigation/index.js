@@ -4,4 +4,4 @@
  * Export all navigation-related components.
  */
 
-export { SettingsButton, QuickMeterButton, HeaderRight } from './HeaderButtons';
+export { SettingsButton, QuickMeterButton, AIChatButton, HeaderRight } from './HeaderButtons';

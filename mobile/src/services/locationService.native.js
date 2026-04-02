@@ -9,6 +9,8 @@
 
 import { Platform, PermissionsAndroid, Alert, Linking } from 'react-native';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { wgs84ToGcj02 } from '../utils/coordTransform';
 
 // ============================================================================
 // Configuration
@@ -58,7 +60,40 @@ const reverseGeocode = async (latitude, longitude) => {
   try {
     log(`Reverse geocoding: (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
     
-    // Use BigDataCloud API - free, no API key, works in China
+    // Check if Amap is configured
+    const mapProvider = await AsyncStorage.getItem('map_provider');
+    if (mapProvider === 'amap') {
+      const amapKey = await AsyncStorage.getItem('amap_key');
+      if (amapKey) {
+        try {
+          // Input is WGS-84 from GPS → convert to GCJ-02 for Amap API
+          const gcj = wgs84ToGcj02(latitude, longitude);
+          const amapUrl = `https://restapi.amap.com/v3/geocode/regeo?location=${gcj.lng},${gcj.lat}&key=${encodeURIComponent(amapKey)}&output=JSON`;
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          const response = await fetch(amapUrl, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.status === '1' && data.regeocode) {
+              const comp = data.regeocode.addressComponent || {};
+              const geocode = {
+                country: comp.country || '中国',
+                city: comp.city || comp.district || '',
+                detail: data.regeocode.formatted_address || ''
+              };
+              log(`✓ Amap geocoded: ${geocode.city}, ${geocode.country}`);
+              return geocode;
+            }
+          }
+        } catch (amapErr) {
+          log(`Amap reverse geocode failed: ${amapErr.message}, falling back`, 'warn');
+        }
+      }
+    }
+    
+    // Fallback: BigDataCloud (works in China, no API key)
     const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`;
     
     const controller = new AbortController();

@@ -11,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from 'react-native-paper';
 import { Icon } from '../ui';
 import { QuickMeterSheet } from '../metering';
+import AIChatSheet from '../AIChatSheet';
 
 /**
  * Settings button for navigation header
@@ -59,11 +60,40 @@ export function QuickMeterButton() {
 }
 
 /**
+ * AI Chat button for navigation header
+ * Opens bottom sheet with AI assistant
+ */
+export function AIChatButton() {
+  const theme = useTheme();
+  const [showSheet, setShowSheet] = useState(false);
+
+  const openSheet = useCallback(() => setShowSheet(true), []);
+  const closeSheet = useCallback(() => setShowSheet(false), []);
+
+  return (
+    <>
+      <TouchableOpacity
+        onPress={openSheet}
+        style={styles.headerButton}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <View style={[styles.meterIcon, { backgroundColor: theme.colors.secondaryContainer }]}>
+          <Icon name="bot" size={18} color={theme.colors.secondary} />
+        </View>
+      </TouchableOpacity>
+
+      <AIChatSheet visible={showSheet} onClose={closeSheet} />
+    </>
+  );
+}
+
+/**
  * Header right component combining multiple buttons
  */
-export function HeaderRight({ showQuickMeter = false, showSettings = true }) {
+export function HeaderRight({ showQuickMeter = false, showSettings = true, showAI = false }) {
   return (
     <View style={styles.headerRight}>
+      {showAI && <AIChatButton />}
       {showQuickMeter && <QuickMeterButton />}
       {showSettings && <SettingsButton />}
     </View>

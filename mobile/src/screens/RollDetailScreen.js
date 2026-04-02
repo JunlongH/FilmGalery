@@ -48,9 +48,20 @@ export default function RollDetailScreen({ route, navigation }) {
       headerRight: () => (
         <TouchableOpacity 
           style={{ marginRight: 16, padding: 4 }}
-          onPress={() => {
+          onPress={async () => {
             setLoading(true);
-            axios.get(`${baseUrl}/api/rolls/${rollId}/photos`).then(res => setPhotos(res.data)).finally(() => setLoading(false));
+            const { clearImageCache } = await import('../components/CachedImage');
+            await clearImageCache();
+            try {
+              const [rollRes, photosRes] = await Promise.all([
+                axios.get(`${baseUrl}/api/rolls/${rollId}`),
+                axios.get(`${baseUrl}/api/rolls/${rollId}/photos`)
+              ]);
+              setRoll(rollRes.data);
+              setPhotos(photosRes.data);
+            } finally {
+              setLoading(false);
+            }
           }}
         >
           <Icon name="refresh-cw" size={20} color={theme.colors.primary} />

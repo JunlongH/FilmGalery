@@ -178,6 +178,18 @@ export {
   cancelImport
 } from './downloads';
 
+// AI Assistant
+export {
+  getAIConfig,
+  updateAIConfig,
+  testAIConnection,
+  getAIModels,
+  getConversations,
+  getConversation,
+  deleteConversation,
+  sendChatMessage,
+} from './ai';
+
 // RAW & Edge Detection
 export {
   getRawDecoderStatus,

@@ -1600,6 +1600,7 @@ router.get('/geo', async (req, res) => {
       SELECT 
         p.id,
         p.roll_id,
+        p.filename,
         p.latitude,
         p.longitude,
         p.thumb_rel_path,
@@ -1614,8 +1615,10 @@ router.get('/geo', async (req, res) => {
         p.city,
         p.country,
         p.camera,
-        p.lens
+        p.lens,
+        r.title AS roll_name
       FROM photos p
+      LEFT JOIN rolls r ON r.id = p.roll_id
       WHERE p.latitude IS NOT NULL 
         AND p.longitude IS NOT NULL
         AND p.latitude != 0

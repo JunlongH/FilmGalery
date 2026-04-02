@@ -9,7 +9,7 @@
     "assets/**/*",
     "package.json",
     "!**/film.db",
-    "!**/uploads/**",
+    "!server/uploads/**",
     "!**/.git/**",
     "!**/node_modules/**/test/**"
   ],

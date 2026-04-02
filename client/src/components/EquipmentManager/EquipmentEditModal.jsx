@@ -11,7 +11,7 @@
  * - 使用 SectionTitle 带分隔线的标题
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Input, 
   Select, 
@@ -256,12 +256,17 @@ export default function EquipmentEditModal({
 }) {
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
+  const prevIsOpenRef = useRef(false);
   
   useEffect(() => {
-    if (isOpen) {
+    // Only initialize form when modal transitions from closed to open
+    // This prevents re-initialization on every re-render caused by
+    // initialData being a new {} object reference each time
+    if (isOpen && !prevIsOpenRef.current) {
       setForm(initialData || {});
     }
-  }, [isOpen, initialData]);
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen]); // intentionally exclude initialData to avoid reference-trap resets
 
   const typeInfo = TYPE_LABELS[type] || TYPE_LABELS.cameras;
   const TypeIcon = typeInfo.icon;

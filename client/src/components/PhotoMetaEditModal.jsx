@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import '../styles/forms.css';
 import LocationInput from './LocationInput.jsx';
 import GeoSearchInput from './GeoSearchInput.jsx';
@@ -48,7 +48,8 @@ export default function PhotoMetaEditModal({ roll, photo, onSave, onClose }) {
       if (s && d < s) setDateTaken(roll.start_date);
       if (e && d > e) setDateTaken(roll.end_date);
     }
-  }, [dateTaken, roll]);
+    // Use roll?.id instead of roll to avoid re-firing on object reference changes
+  }, [dateTaken, roll?.id]);
 
   const onInc = (key, delta) => {
     const next = (location[key] || 0) + delta;

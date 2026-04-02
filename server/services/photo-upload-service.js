@@ -127,6 +127,7 @@ function resolveFileMetadata(metaMap, keys = []) {
     if (typeof m === 'object') {
       return {
         date: m.date || null,
+        shot_time: m.shot_time || null,
         lens: m.lens || null,
         country: m.country || null,
         city: m.city || null,
@@ -143,6 +144,7 @@ function resolveFileMetadata(metaMap, keys = []) {
   
   return {
     date: null,
+    shot_time: null,
     lens: null,
     country: null,
     city: null,
@@ -303,7 +305,9 @@ async function processFileForRoll({
 
   // Compute final metadata values
   const dateTaken = meta.date || null;
-  const takenAt = dateTaken ? `${dateTaken}T12:00:00` : null;
+  const takenAt = dateTaken
+    ? (meta.shot_time ? `${dateTaken}T${meta.shot_time}:00` : `${dateTaken}T12:00:00`)
+    : null;
 
   // Film camera/lens - only from user input or roll defaults, NOT from EXIF
   const lensForPhoto = meta.lens || rollDefaults.lens || null;

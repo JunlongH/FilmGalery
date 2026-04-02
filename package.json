@@ -1,6 +1,6 @@
 {
   "name": "film-gallery-desktop",
-  "version": "2.3.0",
+  "version": "3.0.0",
   "private": true,
   "description": "Film Gallery — Electron desktop wrapper for the Film Manager app",
   "main": "electron-main.js",
@@ -47,7 +47,7 @@
       "assets/**/*",
       "package.json",
       "!**/film.db",
-      "!**/uploads/**",
+      "!server/uploads/**",
       "!**/.git/**",
       "!**/node_modules/**/test/**"
     ],
@@ -59,7 +59,7 @@
         "filter": [
           "**/*",
           "!**/film.db",
-          "!**/uploads/**"
+          "!uploads/**"
         ]
       },
       {
@@ -113,8 +113,5 @@
       "allowToChangeInstallationDirectory": true
     }
   },
-  "dependencies": {
-    "nativewind": "^4.2.1",
-    "tailwindcss": "^3.4.19"
-  }
+  "dependencies": {}
 }

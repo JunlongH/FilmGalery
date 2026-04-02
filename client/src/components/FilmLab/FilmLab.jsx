@@ -6,6 +6,7 @@ import FilmLabControls from './FilmLabControls';
 import FilmLabCanvas from './FilmLabCanvas';
 import PhotoSwitcher from './PhotoSwitcher';
 import { isWebGLAvailable, processImageWebGL } from './FilmLabWebGL';
+import { useAIPanel } from '../AIPanel/AIPanelContext';
 
 // 使用统一渲染核心 (via CRACO alias)
 import {
@@ -178,6 +179,28 @@ export default function FilmLab({
       setInverted(false);
     }
   }, [sourceType]);
+
+  // AI 上下文：FilmLab 打开/关闭时 push/pop，编辑参数变化时更新
+  const { isOpen: isAIPanelOpen, panelWidth: aiPanelWidth, pushOverlayContext, popOverlayContext, updateOverlayContext } = useAIPanel();
+  useEffect(() => {
+    pushOverlayContext({
+      entityType: 'photo',
+      entityId: photoId ? String(photoId) : undefined,
+      rollId: rollId ? String(rollId) : undefined,
+      viewMode: 'filmlab',
+      filmlabParams: { exposure, contrast, highlights, shadows, whites, blacks, temp, tint, saturation, inverted },
+    });
+    return () => popOverlayContext();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    updateOverlayContext({
+      entityId: photoId ? String(photoId) : undefined,
+      rollId: rollId ? String(rollId) : undefined,
+      filmlabParams: { exposure, contrast, highlights, shadows, whites, blacks, temp, tint, saturation, inverted },
+    });
+  }, [photoId, rollId, exposure, contrast, highlights, shadows, whites, blacks, temp, tint, saturation, inverted, updateOverlayContext]);
 
   const webglParams = React.useMemo(() => {
     const gains = computeWBGains({ red, green, blue, temp, tint });
@@ -2410,7 +2433,7 @@ export default function FilmLab({
 
 
   return (
-    <div className="iv-overlay" style={{ background: 'rgba(10,10,10,0.98)', display: 'flex', flexDirection: 'row', color: '#eee' }}>
+    <div className="iv-overlay" style={{ background: 'rgba(10,10,10,0.98)', display: 'flex', flexDirection: 'row', color: '#eee', right: isAIPanelOpen ? aiPanelWidth : 0 }}>
       <style>{`
         .iv-sidebar {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

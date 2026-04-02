@@ -140,6 +140,7 @@ export default function ShotLogMapper({ onClose, onSave, files = [], shotLogs = 
         const log = shotLogs[logIdx];
         mapping[filename] = {
           date: log.date || '',
+          shot_time: log.shot_time || '',
           lens: log.lens || '',
           aperture: log.aperture,
           shutter_speed: log.shutter_speed || '',

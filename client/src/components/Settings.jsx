@@ -3,6 +3,8 @@ import { getApiBase } from '../api';
 import SettingsTabs from './Settings/SettingsTabs';
 import GeneralSettings from './Settings/GeneralSettings';
 import ServerSettings from './Settings/ServerSettings';
+import MapSettings from './Settings/MapSettings';
+import AISettings from './Settings/AISettings';
 
 export default function Settings() {
   const [config, setConfig] = useState({});
@@ -153,6 +155,14 @@ export default function Settings() {
              <div className="p-12 text-center text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/30 rounded-xl border border-zinc-200 dark:border-zinc-700 border-dashed">
                <p>Storage analysis coming soon...</p>
              </div>
+           )}
+
+           {activeTab === 'map' && (
+             <MapSettings />
+           )}
+
+           {activeTab === 'ai' && (
+             <AISettings />
            )}
         </div>
       </div>

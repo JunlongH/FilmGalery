@@ -1,4 +1,16 @@
-export const getLeafletHtml = (initialRegion) => `
+export const getLeafletHtml = (initialRegion, mapProvider = 'osm', isDark = false) => {
+  const isAmapDark = mapProvider === 'amap' && isDark;
+  const tileLayerConfig = mapProvider === 'amap'
+    ? {
+        url: `'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'`,
+        options: `{ maxZoom: 19, subdomains: ['1','2','3','4']${isAmapDark ? ", className: 'amap-dark-tile'" : ''} }`
+      }
+    : {
+        url: `'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'`,
+        options: `{ maxZoom: 20, subdomains: 'abcd' }`
+      };
+
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -8,58 +20,91 @@ export const getLeafletHtml = (initialRegion) => `
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
     <style>
         body { margin: 0; padding: 0; }
-        #map { width: 100vw; height: 100vh; background-color: #f0f0f0; }
+        #map { width: 100vw; height: 100vh; background-color: #f8f9fa; }
+        /* Amap dark mode: CSS filter simulation */
+        .amap-dark-tile {
+            filter: invert(1) hue-rotate(200deg) brightness(0.85) saturate(0.7);
+        }
         
         /* Custom Marker Styles */
         .custom-marker {
-            border-radius: 8px;
+            border-radius: 12px;
             overflow: hidden;
             border: 2px solid white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-            background: #eee;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            background: #fff;
+            transition: transform 0.2s ease;
+        }
+        .custom-marker:active {
+            transform: scale(1.1);
         }
         .custom-marker img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center;
+            display: block;
         }
 
         /* Cluster Styles */
         .cluster-mosaic {
-            width: 60px;
-            height: 60px;
-            background: rgba(255,255,255,0.9);
-            border-radius: 12px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            width: 68px;
+            height: 68px;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.25);
             overflow: hidden;
-            display: flex;
-            flex-wrap: wrap;
-            border: 3px solid white;
+            border: 2px solid white;
             position: relative;
-        }
-        .mosaic-item {
-            width: 50%;
-            height: 50%;
             box-sizing: border-box;
-            border: 0.5px solid white;
+            display: flex;
         }
-        .mosaic-item img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+
+        /* Layout 1: Single image in cluster (rare but possible) */
+        .layout-1 .mosaic-item { width: 100%; height: 100%; }
+
+        /* Layout 2: Split Vertical */
+        .layout-2 { flex-direction: row; }
+        .layout-2 .mosaic-item { width: 50%; height: 100%; border-right: 1px solid white; box-sizing: border-box; }
+        .layout-2 .mosaic-item:last-child { border-right: none; }
+        .layout-2 .mosaic-item img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+
+        /* Layout 3: One large left, two small right */
+        .layout-3 { flex-direction: row; }
+        .layout-3 .mosaic-main { width: 50%; height: 100%; border-right: 1px solid white; box-sizing: border-box; }
+        .layout-3 .mosaic-col { width: 50%; height: 100%; display: flex; flex-direction: column; }
+        .layout-3 .mosaic-sub { width: 100%; height: 50%; border-bottom: 1px solid white; box-sizing: border-box; }
+        .layout-3 .mosaic-sub:last-child { border-bottom: none; }
+        .layout-3 img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+
+        /* Layout 4: 2x2 Grid */
+        .layout-4 { flex-wrap: wrap; }
+        .layout-4 .mosaic-item { 
+            width: 50%; 
+            height: 50%; 
+            box-sizing: border-box;
+            border-right: 1px solid white;
+            border-bottom: 1px solid white;
         }
+        .layout-4 .mosaic-item:nth-child(2n) { border-right: none; }
+        .layout-4 .mosaic-item:nth-child(3), .layout-4 .mosaic-item:nth-child(4) { border-bottom: none; }
+        .layout-4 .mosaic-item img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+
         .cluster-count {
             position: absolute;
-            bottom: -5px;
-            right: -5px;
-            background: #ff3b30;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.55));
             color: white;
-            border-radius: 10px;
-            padding: 2px 6px;
-            font-size: 10px;
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            border-radius: 0 0 14px 14px;
+            padding: 12px 6px 4px 6px;
+            font-size: 11px;
+            font-weight: 600;
             z-index: 10;
+            text-align: center;
+            letter-spacing: 0.3px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
         }
     </style>
 </head>
@@ -82,10 +127,7 @@ export const getLeafletHtml = (initialRegion) => `
         }).setView([startLat, startLng], startZoom);
 
         // Add Tile Layer (CartoDB Voyager - Clean & Nice)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            maxZoom: 20,
-            subdomains: 'abcd'
-        }).addTo(map);
+        L.tileLayer(${tileLayerConfig.url}, ${tileLayerConfig.options}).addTo(map);
 
         // Marker Cluster Group
         let markers = L.markerClusterGroup({
@@ -108,25 +150,42 @@ export const getLeafletHtml = (initialRegion) => `
                     }
                 }
 
-                // If not enough images, repeat the last one or placeholder
-                // (Usually we just render what we have)
+                // Determine layout
+                const numImages = Math.min(images.length, 4);
+                const layoutClass = 'layout-' + numImages;
                 
-                let html = '<div class="cluster-mosaic">';
-                images.forEach(url => {
-                    html += '<div class="mosaic-item"><img src="' + url + '" onerror="this.style.display=\\'none\\'"/></div>';
-                });
+                let html = '<div class="cluster-mosaic ' + layoutClass + '">';
                 
-                // If we have fewer than 4 icons, user css flex handles it reasonably, 
-                // but let's just ensure we have divs to fill space if needed or just let it be.
+                if (numImages === 1) {
+                     html += '<div class="mosaic-item"><img src="' + images[0] + '" onerror="this.style.display=\\'none\\'"/></div>';
+                } else if (numImages === 2) {
+                     html += '<div class="mosaic-item"><img src="' + images[0] + '" onerror="this.style.display=\\'none\\'"/></div>';
+                     html += '<div class="mosaic-item"><img src="' + images[1] + '" onerror="this.style.display=\\'none\\'"/></div>';
+                } else if (numImages === 3) {
+                     html += '<div class="mosaic-main"><img src="' + images[0] + '" onerror="this.style.display=\\'none\\'"/></div>';
+                     html += '<div class="mosaic-col">';
+                     html += '<div class="mosaic-sub"><img src="' + images[1] + '" onerror="this.style.display=\\'none\\'"/></div>';
+                     html += '<div class="mosaic-sub"><img src="' + images[2] + '" onerror="this.style.display=\\'none\\'"/></div>';
+                     html += '</div>';
+                } else {
+                     // 4 grid
+                     images.slice(0, 4).forEach(url => {
+                        html += '<div class="mosaic-item"><img src="' + url + '" onerror="this.style.display=\\'none\\'"/></div>';
+                     });
+                }
                 
-                html += '<div class="cluster-count">' + count + '</div>';
+                // Show count overlay at the bottom
+                if (count > 1) {
+                    html += '<div class="cluster-count">' + count + ' photos</div>';
+                }
+                
                 html += '</div>';
 
                 return L.divIcon({
                     html: html,
                     className: '', // Clear default class
-                    iconSize: [60, 60],
-                    iconAnchor: [30, 30]
+                    iconSize: [68, 68],
+                    iconAnchor: [34, 34]
                 });
             }
         });
@@ -168,16 +227,16 @@ export const getLeafletHtml = (initialRegion) => `
                 if (isNaN(lat) || isNaN(lng)) return null;
 
                 const iconHtml = \`
-                    <div class="custom-marker" style="width: 50px; height: 50px;">
-                        <img src="\${photo.thumbnailUrl}" style="width:100%;height:100%;object-fit:cover;" />
+                    <div class="custom-marker" style="width: 56px; height: 56px;">
+                        <img src="\${photo.thumbnailUrl}" style="width:100%;height:100%;object-fit:cover;object-position:center center;display:block;" />
                     </div>
                 \`;
 
                 const icon = L.divIcon({
                     html: iconHtml,
                     className: '',
-                    iconSize: [50, 50],
-                    iconAnchor: [25, 25]
+                    iconSize: [56, 56],
+                    iconAnchor: [28, 28]
                 });
 
                 const marker = L.marker([lat, lng], { 
@@ -205,3 +264,4 @@ export const getLeafletHtml = (initialRegion) => `
 </body>
 </html>
 `;
+};

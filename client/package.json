@@ -1,6 +1,6 @@
 {
   "name": "film-manager-client",
-  "version": "2.3.0",
+  "version": "3.0.0",
   "private": true,
   "homepage": "./",
   "devDependencies": {
@@ -27,10 +27,12 @@
     "react-lazy-load-image-component": "^1.6.3",
     "react-leaflet": "^4.2.1",
     "react-leaflet-cluster": "^4.0.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.9.6",
     "react-scripts": "5.0.1",
     "react-window": "^1.8.10",
     "recharts": "^3.5.1",
+    "remark-gfm": "^4.0.1",
     "three": "^0.182.0"
   },
   "eslintConfig": {

@@ -24,8 +24,67 @@ import FloatingRefreshButton from './components/FloatingRefreshButton';
 import { HeroUIProvider } from './providers';
 // Modern Sidebar
 import { Sidebar, SidebarProvider } from './components/Sidebar';
+// AI Panel
+import { AIPanelProvider, useAIPanel } from './components/AIPanel/AIPanelContext';
+import AIPanel from './components/AIPanel/AIPanel';
 
 // queryClient 已从 lib/queryClient.js 导入
+
+function LayoutInner({ tags, handleHardRefresh }) {
+  const { togglePanel } = useAIPanel();
+
+  // Ctrl+Shift+A 打开/关闭 AI 面板
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        togglePanel();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [togglePanel]);
+
+  return (
+    <HeroUIProvider>
+      <SidebarProvider>
+        <ConflictBanner />
+        <div className="app-shell bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 transition-colors duration-300">
+          <TitleBar />
+          <div className="app-body">
+            {/* Modern Sidebar */}
+            <Sidebar tags={tags} />
+
+            {/* Main Content */}
+            <main className="main flex-1 min-w-0 min-h-0 overflow-auto bg-transparent">
+              <Routes>
+                <Route path="/" element={<Overview />} />
+                <Route path="/calendar" element={<CalendarView />} />
+                <Route path="/map" element={<MapPage />} />
+                <Route path="/stats" element={<Statistics />} />
+                <Route path="/spending" element={<Statistics mode="spending" />} />
+                <Route path="/rolls" element={<RollLibrary />} />
+                <Route path="/rolls/new" element={<NewRollForm />} />
+                <Route path="/rolls/:id" element={<RollDetail />} />
+                <Route path="/films" element={<FilmLibrary />} />
+                <Route path="/favorites" element={<Favorites />} />
+                <Route path="/themes" element={<TagGallery />} />
+                <Route path="/themes/:tagId" element={<TagGallery />} />
+                <Route path="/equipment" element={<EquipmentManager />} />
+                <Route path="/luts" element={<LutLibrary />} />
+                <Route path="/settings" element={<Settings />} />
+              </Routes>
+            </main>
+
+            {/* AI Panel — right side */}
+            <AIPanel />
+          </div>
+        </div>
+        <FloatingRefreshButton onRefresh={handleHardRefresh} />
+      </SidebarProvider>
+    </HeroUIProvider>
+  );
+}
 
 function Layout() {
   const [tags, setTags] = useState([]);
@@ -77,40 +136,9 @@ function Layout() {
   }, [queryClient, refreshTags]);
 
   return (
-    <HeroUIProvider>
-      <SidebarProvider>
-        <ConflictBanner />
-        <div className="app-shell bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 transition-colors duration-300">
-          <TitleBar />
-          <div className="app-body">
-            {/* Modern Sidebar */}
-            <Sidebar tags={tags} />
-            
-            {/* Main Content */}
-            <main className="main flex-1 min-w-0 min-h-0 overflow-auto bg-transparent">
-              <Routes>
-                <Route path="/" element={<Overview />} />
-                <Route path="/calendar" element={<CalendarView />} />
-                <Route path="/map" element={<MapPage />} />
-                <Route path="/stats" element={<Statistics />} />
-                <Route path="/spending" element={<Statistics mode="spending" />} />
-                <Route path="/rolls" element={<RollLibrary />} />
-                <Route path="/rolls/new" element={<NewRollForm />} />
-                <Route path="/rolls/:id" element={<RollDetail />} />
-                <Route path="/films" element={<FilmLibrary />} />
-                <Route path="/favorites" element={<Favorites />} />
-                <Route path="/themes" element={<TagGallery />} />
-                <Route path="/themes/:tagId" element={<TagGallery />} />
-                <Route path="/equipment" element={<EquipmentManager />} />
-                <Route path="/luts" element={<LutLibrary />} />
-                <Route path="/settings" element={<Settings />} />
-              </Routes>
-            </main>
-          </div>
-        </div>
-        <FloatingRefreshButton onRefresh={handleHardRefresh} />
-      </SidebarProvider>
-    </HeroUIProvider>
+    <AIPanelProvider>
+      <LayoutInner tags={tags} handleHardRefresh={handleHardRefresh} />
+    </AIPanelProvider>
   );
 }
 

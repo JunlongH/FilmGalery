@@ -50,7 +50,11 @@ export default function EquipmentRollsScreen({ route, navigation }) {
       headerRight: () => (
         <TouchableOpacity 
           style={{ marginRight: 16, padding: 4 }}
-          onPress={fetchRolls}
+          onPress={async () => {
+            const { clearImageCache } = await import('../components/CachedImage');
+            await clearImageCache();
+            fetchRolls();
+          }}
         >
           <Icon name="refresh-cw" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
@@ -123,7 +127,11 @@ export default function EquipmentRollsScreen({ route, navigation }) {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: theme.colors.background }]}>
         <Text variant="bodyLarge" style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={{ padding: 8 }} onPress={fetchRolls}>
+        <TouchableOpacity style={{ padding: 8 }} onPress={async () => {
+          const { clearImageCache } = await import('../components/CachedImage');
+          await clearImageCache();
+          fetchRolls();
+        }}>
           <Icon name="refresh-cw" size={32} color={theme.colors.primary} />
         </TouchableOpacity>
       </View>

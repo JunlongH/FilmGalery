@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import LocationInput from './LocationInput.jsx';
 import GeoSearchInput from './GeoSearchInput.jsx';
 import { getMetadataOptions, getApiBase, getTags } from '../api';
@@ -25,6 +25,13 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
   
   // Dirty fields tracking
   const [dirtyFields, setDirtyFields] = useState(new Set());
+
+  // Use refs to avoid object-reference-trap: base and roll objects change reference
+  // on every React Query background refetch, which would wipe unsaved edits
+  const baseRef = useRef(base);
+  baseRef.current = base;
+  const rollRef = useRef(roll);
+  rollRef.current = roll;
 
   // Form States
   const [dateTaken, setDateTaken] = useState(base?.date_taken || '');
@@ -82,41 +89,43 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
 
   // Update states when photo changes (for navigation between photos)
   useEffect(() => {
-    if (!base) return;
+    const currentBase = baseRef.current;
+    const currentRoll = rollRef.current;
+    if (!currentBase) return;
     // Reset dirty fields when switching base photo
     setDirtyFields(new Set());
 
-    setDateTaken(base.date_taken || '');
-    setTimeTaken(base.time_taken || '');
-    setCamera(base.camera || roll?.camera || '');
-    setLens(base.lens || roll?.lens || '');
-    setCameraEquipId(base.camera_equip_id || roll?.camera_equip_id || null);
-    setLensEquipId(base.lens_equip_id || roll?.lens_equip_id || null);
-    setPhotographer(base.photographer || roll?.photographer || '');
-    setAperture(base.aperture != null ? base.aperture : '');
-    setShutterSpeed(base.shutter_speed || '');
-    setIso(base.iso != null ? base.iso : '');
-    setFocalLength(base.focal_length != null ? base.focal_length : '');
-    setDetailLocation(base.detail_location || '');
+    setDateTaken(currentBase.date_taken || '');
+    setTimeTaken(currentBase.time_taken || '');
+    setCamera(currentBase.camera || currentRoll?.camera || '');
+    setLens(currentBase.lens || currentRoll?.lens || '');
+    setCameraEquipId(currentBase.camera_equip_id || currentRoll?.camera_equip_id || null);
+    setLensEquipId(currentBase.lens_equip_id || currentRoll?.lens_equip_id || null);
+    setPhotographer(currentBase.photographer || currentRoll?.photographer || '');
+    setAperture(currentBase.aperture != null ? currentBase.aperture : '');
+    setShutterSpeed(currentBase.shutter_speed || '');
+    setIso(currentBase.iso != null ? currentBase.iso : '');
+    setFocalLength(currentBase.focal_length != null ? currentBase.focal_length : '');
+    setDetailLocation(currentBase.detail_location || '');
     setLocation({
-      location_id: base.location_id || null,
-      country_name: base.country_name || null,
-      city_name: base.city_name || null,
-      latitude: base.latitude,
-      longitude: base.longitude,
+      location_id: currentBase.location_id || null,
+      country_name: currentBase.country_name || null,
+      city_name: currentBase.city_name || null,
+      latitude: currentBase.latitude,
+      longitude: currentBase.longitude,
     });
-    setScannerEquipId(base.scanner_equip_id || roll?.scanner_equip_id || null);
-    setScanResolution(base.scan_resolution || roll?.scan_resolution || '');
-    setScanSoftware(base.scan_software || roll?.scan_software || '');
-    setScanLab(base.scan_lab || roll?.scan_lab || '');
-    setScanDate(base.scan_date || roll?.scan_date || '');
-    setScanCost(base.scan_cost || roll?.scan_cost || '');
-    setScanNotes(base.scan_notes || roll?.scan_notes || '');
+    setScannerEquipId(currentBase.scanner_equip_id || currentRoll?.scanner_equip_id || null);
+    setScanResolution(currentBase.scan_resolution || currentRoll?.scan_resolution || '');
+    setScanSoftware(currentBase.scan_software || currentRoll?.scan_software || '');
+    setScanLab(currentBase.scan_lab || currentRoll?.scan_lab || '');
+    setScanDate(currentBase.scan_date || currentRoll?.scan_date || '');
+    setScanCost(currentBase.scan_cost || currentRoll?.scan_cost || '');
+    setScanNotes(currentBase.scan_notes || currentRoll?.scan_notes || '');
     // Caption & Tags
-    setCaption(base.caption || '');
-    setCurrentTags(base.tags ? base.tags.map(t => t.name || t) : []);
+    setCaption(currentBase.caption || '');
+    setCurrentTags(currentBase.tags ? currentBase.tags.map(t => t.name || t) : []);
     setTagInput('');
-  }, [base, roll]);
+  }, [base?.id, roll?.id]);
 
   // Dirty marking helper
   const markDirty = (fields) => {

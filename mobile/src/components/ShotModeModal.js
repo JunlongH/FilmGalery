@@ -364,40 +364,20 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
   // Helper to update location state from coordinates
   const updateLocationFromCoords = async (coords) => {
     try {
-      // Reverse geocode: English for DB, local for detail
-      const [reverseEN, reverseLocal] = await Promise.all([
-        Location.reverseGeocodeAsync({
-          latitude: coords.latitude,
-          longitude: coords.longitude
-        }, { locale: 'en-US' }).catch(() => []),
-        Location.reverseGeocodeAsync({
-          latitude: coords.latitude,
-          longitude: coords.longitude
-        }).catch(() => [])
-      ]);
-
-      if (reverseEN && reverseEN.length > 0) {
-        const addrEN = reverseEN[0];
-        const addrLocal = (reverseLocal && reverseLocal.length > 0) ? reverseLocal[0] : addrEN;
-        setLocation({
-          country: addrEN.country || '',
-          city: addrEN.city || addrEN.subregion || '',
-          detail: `${addrLocal.street || ''} ${addrLocal.name || ''}`.trim(),
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          altitude: coords.altitude
-        });
-      } else {
-        // Even if reverse geocode fails, store coordinates
-        setLocation({
-          country: '',
-          city: '',
-          detail: '',
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          altitude: coords.altitude
-        });
-      }
+      // Use centralized reverse geocoding (supports Amap when configured)
+      const geocode = await locationService.reverseGeocode(
+        coords.latitude,
+        coords.longitude
+      );
+      
+      setLocation({
+        country: geocode.country || '',
+        city: geocode.city || '',
+        detail: geocode.detail || '',
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        altitude: coords.altitude
+      });
     } catch (e) {
       // If reverse geocoding fails, still save coordinates
       setLocation({

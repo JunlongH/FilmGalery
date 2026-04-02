@@ -27,12 +27,14 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  Bot,
 } from 'lucide-react';
 
 import { SidebarItem, SidebarSubItem } from './SidebarItem';
 import { SidebarSection } from './SidebarSection';
 import { useSidebar } from './SidebarContext';
 import { useTheme } from '../../providers';
+import { useAIPanel } from '../AIPanel/AIPanelContext';
 
 // 侧边栏宽度配置
 const SIDEBAR_WIDTH = 240;
@@ -61,6 +63,7 @@ const SHORTCUTS = {
 export function Sidebar({ tags = [] }) {
   const { isCollapsed, toggleCollapsed } = useSidebar();
   const { theme, toggleTheme } = useTheme();
+  const { isOpen: aiPanelOpen, togglePanel: toggleAIPanel } = useAIPanel();
   const navigate = useNavigate();
 
   // 全局快捷键监听
@@ -200,6 +203,20 @@ export function Sidebar({ tags = [] }) {
         flex items-center gap-2
         ${isCollapsed ? 'flex-col' : ''}
       `}>
+        {/* AI 面板切换 */}
+        <Button
+          isIconOnly
+          variant={aiPanelOpen ? 'solid' : 'light'}
+          color={aiPanelOpen ? 'primary' : 'default'}
+          size="sm"
+          radius="lg"
+          onPress={toggleAIPanel}
+          className={aiPanelOpen ? '' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}
+          aria-label="AI 助手"
+        >
+          <Bot className="w-4 h-4" />
+        </Button>
+
         {/* 主题切换 */}
         <Button
           isIconOnly

@@ -32,6 +32,7 @@ import { Icon, Badge } from '../components/ui';
 import { ApiContext } from '../context/ApiContext';
 import { getPhotoUrl } from '../utils/urls';
 import LeafletMap from '../components/map/LeafletMap';
+import { wgs84ToGcj02 } from '../utils/coordTransform';
 
 const { width, height } = Dimensions.get('window');
 
@@ -46,7 +47,7 @@ const INITIAL_REGION = {
 export default function MapScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
-  const { baseUrl } = useContext(ApiContext);
+  const { baseUrl, mapProvider } = useContext(ApiContext);
   const mapRef = useRef(null);
   
   const [loading, setLoading] = useState(true);
@@ -87,10 +88,16 @@ export default function MapScreen() {
         // Convert coordinates to numbers and fix thumbnail URLs
         const processedPhotos = photoData.map(p => {
           const thumbnailUrl = getPhotoUrl(baseUrl, p, 'thumb');
+          const lat = parseFloat(p.latitude);
+          const lng = parseFloat(p.longitude);
+          // When using Amap, convert WGS-84 (DB) → GCJ-02 (display)
+          const displayCoords = mapProvider === 'amap'
+            ? wgs84ToGcj02(lat, lng)
+            : { lat, lng };
           return {
             ...p,
-            latitude: parseFloat(p.latitude),
-            longitude: parseFloat(p.longitude),
+            latitude: displayCoords.lat,
+            longitude: displayCoords.lng,
             thumbnailUrl: thumbnailUrl,
             // Generate location name from available fields
             location_name: p.detail_location || p.city || p.country || null,
@@ -379,9 +386,9 @@ export default function MapScreen() {
       elevation: 8,
     },
     selectedImage: {
-      width: 80,
-      height: 80,
-      borderRadius: 8,
+      width: 72,
+      height: 72,
+      borderRadius: 10,
     },
     selectedInfo: {
       flex: 1,
@@ -389,14 +396,23 @@ export default function MapScreen() {
       justifyContent: 'center',
     },
     selectedTitle: {
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '600',
       color: theme.colors.onSurface,
+      lineHeight: 20,
     },
-    selectedSubtitle: {
-      fontSize: 14,
+    selectedRollName: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: theme.colors.primary,
+      marginTop: 2,
+      lineHeight: 18,
+    },
+    selectedMeta: {
+      fontSize: 12,
       color: theme.colors.onSurfaceVariant,
-      marginTop: 4,
+      marginTop: 3,
+      lineHeight: 16,
     },
     closeButton: {
       position: 'absolute',
@@ -629,11 +645,34 @@ export default function MapScreen() {
               />
             )}
             <View style={styles.selectedInfo}>
+              {/* Line 1: Location */}
               <Text style={styles.selectedTitle} numberOfLines={1}>
-                {selectedPhoto.filename || 'Photo'}
+                {selectedPhoto.detail_location || selectedPhoto.city || selectedPhoto.country || selectedPhoto.filename || 'Photo'}
               </Text>
-              <Text style={styles.selectedSubtitle} numberOfLines={1}>
-                {selectedPhoto.roll_name || 'Unknown Roll'}
+              {/* Line 2: Roll name */}
+              {selectedPhoto.roll_name ? (
+                <Text style={styles.selectedRollName} numberOfLines={1}>
+                  {selectedPhoto.roll_name}
+                </Text>
+              ) : null}
+              {/* Line 3: Meta info with · separator */}
+              <Text style={styles.selectedMeta} numberOfLines={1}>
+                {[
+                  selectedPhoto.date_taken || selectedPhoto.taken_at
+                    ? (() => {
+                        const raw = selectedPhoto.date_taken || selectedPhoto.taken_at;
+                        try { 
+                          const d = new Date(raw);
+                          if (!isNaN(d.getTime())) {
+                            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                          }
+                        } catch(e) {}
+                        return String(raw).slice(0, 10);
+                      })()
+                    : null,
+                  selectedPhoto.camera || null,
+                  selectedPhoto.lens || null,
+                ].filter(Boolean).join('  ·  ')}
               </Text>
             </View>
           </TouchableOpacity>

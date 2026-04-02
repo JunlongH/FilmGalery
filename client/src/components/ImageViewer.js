@@ -3,6 +3,7 @@ import { buildUploadUrl, updatePositiveFromNegative, getSingleDownloadUrl } from
 import FilmLab from './FilmLab/FilmLab';
 import ModalDialog from './ModalDialog';
 import PhotoDetailsSidebar from './PhotoDetailsSidebar.jsx';
+import { useAIPanel } from './AIPanel/AIPanelContext';
 
 export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUpdate, viewMode = 'positive', roll, batchRenderCallback }) {
   const [i, setI] = useState(index);
@@ -14,6 +15,7 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
   const lastPos = useRef({ x: 0, y: 0 });
   const containerRef = useRef();
   const [showDetails, setShowDetails] = useState(false);
+  const { isOpen: isAIPanelOpen, panelWidth: aiPanelWidth, pushOverlayContext, popOverlayContext, updateOverlayContext } = useAIPanel();
   
   // FilmLab源图像类型选择
   const [showSourceSelector, setShowSourceSelector] = useState(false);
@@ -49,6 +51,32 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [images, onClose]);
+
+  // AI 上下文：ImageViewer 打开/关闭时 push/pop
+  useEffect(() => {
+    if (!img) return;
+    pushOverlayContext({
+      entityType: 'photo',
+      entityId: String(img.id),
+      rollId: img.roll_id ? String(img.roll_id) : undefined,
+      viewMode: showInverter ? 'filmlab' : 'viewer',
+      photoFilename: img.filename || undefined,
+    });
+    return () => popOverlayContext();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 仅挂载/卸载
+
+  // AI 上下文：切换照片时更新
+  useEffect(() => {
+    if (!img) return;
+    updateOverlayContext({
+      entityType: 'photo',
+      entityId: String(img.id),
+      rollId: img.roll_id ? String(img.roll_id) : undefined,
+      viewMode: showInverter ? 'filmlab' : 'viewer',
+      photoFilename: img.filename || undefined,
+    });
+  }, [i, img, showInverter, updateOverlayContext]);
 
   useEffect(() => {
     // reset offset when image index changes
@@ -377,6 +405,7 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
   return (
     <div
       className="iv-overlay"
+      style={{ right: isAIPanelOpen ? aiPanelWidth : 0 }}
       onMouseUp={endDrag}
       onMouseLeave={endDrag}
       onTouchEnd={endDrag}

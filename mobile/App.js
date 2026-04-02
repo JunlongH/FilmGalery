@@ -36,6 +36,7 @@ import StatsScreen from './src/screens/StatsScreen';
 import EquipmentScreen from './src/screens/EquipmentScreen';
 import EquipmentRollsScreen from './src/screens/EquipmentRollsScreen';
 import LocationDiagnosticScreen from './src/screens/LocationDiagnosticScreen';
+import AISettingsScreen from './src/screens/AISettingsScreen';
 import { ApiContext } from './src/context/ApiContext';
 import { configureAxios } from './src/setupAxios';
 import appTheme, { appDarkTheme } from './src/theme';
@@ -110,7 +111,7 @@ function HomeTabs() {
         options={{ 
           title: 'Timeline',
           headerTitle: 'Film Gallery',
-          headerRight: () => <HeaderRight showQuickMeter={true} showSettings={true} />,
+          headerRight: () => <HeaderRight showQuickMeter={true} showSettings={true} showAI={true} />,
         }} 
       />
       <Tab.Screen 
@@ -140,17 +141,23 @@ export default function App() {
   const [backupUrl, setBackupUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
+  const [mapProvider, setMapProvider] = useState('osm');
+  const [amapKey, setAmapKey] = useState('');
 
   useEffect(() => {
-    // Load saved API URL and theme
+    // Load saved API URL, theme, and map settings
     Promise.all([
       AsyncStorage.getItem('api_base_url'),
       AsyncStorage.getItem('api_backup_url'),
       AsyncStorage.getItem('theme_dark'),
-    ]).then(([url, backup, themeDark]) => {
+      AsyncStorage.getItem('map_provider'),
+      AsyncStorage.getItem('amap_key'),
+    ]).then(([url, backup, themeDark, savedProvider, savedAmapKey]) => {
       if (url) setBaseUrl(url);
       if (backup) setBackupUrl(backup);
       if (themeDark === 'true') setDarkMode(true);
+      if (savedProvider) setMapProvider(savedProvider);
+      if (savedAmapKey) setAmapKey(savedAmapKey);
       setLoading(false);
     });
   }, []);
@@ -167,7 +174,7 @@ export default function App() {
   const themeToUse = darkMode ? appDarkTheme : appTheme;
 
   return (
-    <ApiContext.Provider value={{ baseUrl, setBaseUrl, backupUrl, setBackupUrl, darkMode, setDarkMode }}>
+    <ApiContext.Provider value={{ baseUrl, setBaseUrl, backupUrl, setBackupUrl, darkMode, setDarkMode, mapProvider, setMapProvider, amapKey, setAmapKey }}>
       <PaperProvider theme={themeToUse}>
         <GestureHandlerRootView style={{ flex: 1 }}>
         <NavigationContainer theme={themeToUse}>
@@ -255,6 +262,11 @@ export default function App() {
               name="Stats" 
               component={StatsScreen} 
               options={{ title: 'Statistics' }}
+            />
+            <Stack.Screen 
+              name="AISettings" 
+              component={AISettingsScreen} 
+              options={{ title: 'AI 助手设置' }}
             />
           </Stack.Navigator>
           <StatusBar style={darkMode ? 'light' : 'dark'} />

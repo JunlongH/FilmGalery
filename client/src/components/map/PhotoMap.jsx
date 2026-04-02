@@ -17,6 +17,7 @@ import PhotoGlobe from './PhotoGlobe';
 import useGeoPhotos from '../../hooks/useGeoPhotos';
 import { getApiBase } from '../../api';
 import { useTheme } from '../../providers';
+import { wgs84ToGcj02, gcj02ToWgs84 } from '../../utils/coordTransform';
 
 // Import Leaflet CSS
 import 'leaflet/dist/leaflet.css';
@@ -64,6 +65,30 @@ const TILE_LAYERS = {
     attribution: 'Tiles &copy; Esri',
     name: 'Satellite',
     options: { maxZoom: 19, crossOrigin: 'anonymous' }
+  },
+};
+
+/**
+ * Amap (高德) tile layer configurations
+ */
+const AMAP_TILE_LAYERS = {
+  light: {
+    url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+    attribution: '&copy; <a href="https://amap.com">高德地图</a>',
+    name: '高德普通',
+    options: { maxZoom: 19, subdomains: ['1', '2', '3', '4'] }
+  },
+  dark: {
+    url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+    attribution: '&copy; <a href="https://amap.com">高德地图</a>',
+    name: '高德夜间',
+    options: { maxZoom: 19, subdomains: ['1', '2', '3', '4'], className: 'amap-dark-tile' }
+  },
+  satellite: {
+    url: 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+    attribution: '&copy; <a href="https://amap.com">高德地图</a>',
+    name: '高德卫星',
+    options: { maxZoom: 19, subdomains: ['1', '2', '3', '4'] }
   },
 };
 
@@ -248,10 +273,10 @@ function MapEventHandler({ onBoundsChange }) {
 /**
  * Tile layer switcher component
  */
-function TileLayerSwitcher({ currentLayer, onChange }) {
+function TileLayerSwitcher({ currentLayer, onChange, tileLayers }) {
   return (
     <div className="map-layer-switcher">
-      {Object.entries(TILE_LAYERS).map(([key, layer]) => (
+      {Object.entries(tileLayers).map(([key, layer]) => (
         <button
           key={key}
           className={`map-layer-btn ${currentLayer === key ? 'active' : ''}`}
@@ -300,11 +325,28 @@ function FitBoundsToPhotos({ photos }) {
 export default function PhotoMap({ filters, onPhotoClick, selectedPhoto }) {
   // Get current theme
   const { theme } = useTheme();
+
+  // Map provider from settings
+  const [mapProvider, setMapProvider] = useState(
+    () => localStorage.getItem('map_provider') || 'osm'
+  );
+
+  // Listen for map settings changes (from MapSettings component)
+  useEffect(() => {
+    const handleSettingsChange = () => {
+      setMapProvider(localStorage.getItem('map_provider') || 'osm');
+    };
+    window.addEventListener('map-settings-changed', handleSettingsChange);
+    return () => window.removeEventListener('map-settings-changed', handleSettingsChange);
+  }, []);
   
   // View mode: 'globe' for 3D Earth, 'flat' for Leaflet map
   // Default to 'flat' for faster initial load and more practical use
   const [viewMode, setViewMode] = useState('flat');
-  
+
+  // Active tile layers based on map provider
+  const activeTileLayers = mapProvider === 'amap' ? AMAP_TILE_LAYERS : TILE_LAYERS;
+
   // Tile layer state - initialized based on theme (dark theme -> dark map)
   const [tileLayer, setTileLayer] = useState(() => theme === 'dark' ? 'dark' : 'light');
   
@@ -312,6 +354,11 @@ export default function PhotoMap({ filters, onPhotoClick, selectedPhoto }) {
   useEffect(() => {
     setTileLayer(theme === 'dark' ? 'dark' : 'light');
   }, [theme]);
+
+  // Reset tile layer when provider changes
+  useEffect(() => {
+    setTileLayer(theme === 'dark' ? 'dark' : 'light');
+  }, [mapProvider]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // Map bounds for lazy loading (future use)
   const [bounds, setBounds] = useState(null);
@@ -351,22 +398,35 @@ export default function PhotoMap({ filters, onPhotoClick, selectedPhoto }) {
   });
 
   // Filter photos that have valid coordinates
+  // When using Amap (GCJ-02), transform WGS-84 coords from DB to GCJ-02
   const geoPhotos = useMemo(() => {
     if (!photos) return [];
-    return photos.filter(p => 
+    const valid = photos.filter(p => 
       p.latitude !== null && 
       p.longitude !== null && 
       !isNaN(p.latitude) && 
       !isNaN(p.longitude)
     );
-  }, [photos]);
+    if (mapProvider !== 'amap') return valid;
+    return valid.map(p => {
+      const { lat, lng } = wgs84ToGcj02(p.latitude, p.longitude);
+      return { ...p, latitude: lat, longitude: lng };
+    });
+  }, [photos, mapProvider]);
 
   /**
    * Handle bounds change for lazy loading
+   * When using Amap (GCJ-02 tiles), convert bounds back to WGS-84 for server query
    */
   const handleBoundsChange = useCallback((newBounds) => {
-    setBounds(newBounds);
-  }, []);
+    if (mapProvider === 'amap') {
+      const sw = gcj02ToWgs84(newBounds.sw_lat, newBounds.sw_lng);
+      const ne = gcj02ToWgs84(newBounds.ne_lat, newBounds.ne_lng);
+      setBounds({ sw_lat: sw.lat, sw_lng: sw.lng, ne_lat: ne.lat, ne_lng: ne.lng });
+    } else {
+      setBounds(newBounds);
+    }
+  }, [mapProvider]);
 
   /**
    * Handle marker click
@@ -398,8 +458,8 @@ export default function PhotoMap({ filters, onPhotoClick, selectedPhoto }) {
     setViewMode('flat');
   }, []);
 
-  // Current tile layer config
-  const currentTileLayer = TILE_LAYERS[tileLayer];
+  // Current tile layer config (based on active provider)
+  const currentTileLayer = activeTileLayers[tileLayer] || activeTileLayers.light;
 
   return (
     <div className="photo-map-wrapper" ref={containerRef}>
@@ -494,7 +554,8 @@ export default function PhotoMap({ filters, onPhotoClick, selectedPhoto }) {
           {/* Tile layer switcher */}
           <TileLayerSwitcher 
             currentLayer={tileLayer} 
-            onChange={setTileLayer} 
+            onChange={setTileLayer}
+            tileLayers={activeTileLayers}
           />
 
           {/* Main Map */}
@@ -506,6 +567,7 @@ export default function PhotoMap({ filters, onPhotoClick, selectedPhoto }) {
             zoomControl={true}
           >
             <TileLayer
+              key={`${mapProvider}-${tileLayer}`}
               url={currentTileLayer.url}
               attribution={currentTileLayer.attribution}
               {...(currentTileLayer.options || {})}

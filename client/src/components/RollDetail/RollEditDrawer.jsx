@@ -7,7 +7,7 @@
  * - Equipment selector integration
  * - Location selector integration
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Modal,
   ModalContent,
@@ -121,34 +121,40 @@ export default function RollEditDrawer({
   const [selectedCamera, setSelectedCamera] = useState(null);
 
   // Initialize form data when roll changes
+  // Use ref to avoid object-reference-trap: roll object changes reference on every
+  // React Query background refetch, which would wipe unsaved edits
+  const rollRef = useRef(roll);
+  rollRef.current = roll;
+
   useEffect(() => {
-    if (roll && isOpen) {
+    const currentRoll = rollRef.current;
+    if (currentRoll && isOpen) {
       setEditData({
-        title: roll.title || '',
-        start_date: roll.start_date || '',
-        end_date: roll.end_date || '',
-        camera_equip_id: roll.camera_equip_id || null,
-        lens_equip_id: roll.lens_equip_id || null,
-        photographer: roll.photographer || '',
-        film_type: roll.film_type || '',
-        filmId: roll.filmId || roll.film_id || '',
-        notes: roll.notes || '',
-        develop_lab: roll.develop_lab || '',
-        develop_process: roll.develop_process || '',
-        develop_date: roll.develop_date || '',
-        purchase_cost: roll.purchase_cost || '',
-        develop_cost: roll.develop_cost || '',
-        purchase_channel: roll.purchase_channel || '',
-        develop_note: roll.develop_note || '',
-        scanner_equip_id: roll.scanner_equip_id || null,
-        scan_resolution: roll.scan_resolution || '',
-        scan_software: roll.scan_software || '',
-        scan_lab: roll.scan_lab || '',
-        scan_date: roll.scan_date || '',
-        scan_cost: roll.scan_cost || '',
-        scan_notes: roll.scan_notes || ''
+        title: currentRoll.title || '',
+        start_date: currentRoll.start_date || '',
+        end_date: currentRoll.end_date || '',
+        camera_equip_id: currentRoll.camera_equip_id || null,
+        lens_equip_id: currentRoll.lens_equip_id || null,
+        photographer: currentRoll.photographer || '',
+        film_type: currentRoll.film_type || '',
+        filmId: currentRoll.filmId || currentRoll.film_id || '',
+        notes: currentRoll.notes || '',
+        develop_lab: currentRoll.develop_lab || '',
+        develop_process: currentRoll.develop_process || '',
+        develop_date: currentRoll.develop_date || '',
+        purchase_cost: currentRoll.purchase_cost || '',
+        develop_cost: currentRoll.develop_cost || '',
+        purchase_channel: currentRoll.purchase_channel || '',
+        develop_note: currentRoll.develop_note || '',
+        scanner_equip_id: currentRoll.scanner_equip_id || null,
+        scan_resolution: currentRoll.scan_resolution || '',
+        scan_software: currentRoll.scan_software || '',
+        scan_lab: currentRoll.scan_lab || '',
+        scan_date: currentRoll.scan_date || '',
+        scan_cost: currentRoll.scan_cost || '',
+        scan_notes: currentRoll.scan_notes || ''
       });
-      setSelectedLocations(Array.isArray(roll.locations) ? roll.locations.slice() : []);
+      setSelectedLocations(Array.isArray(currentRoll.locations) ? currentRoll.locations.slice() : []);
       setSelectedCamera(null);
       
       // Fetch films and options
@@ -159,7 +165,7 @@ export default function RollEditDrawer({
         })
         .catch(console.error);
     }
-  }, [roll, isOpen]);
+  }, [roll?.id, isOpen]);
 
   const updateField = useCallback((field, value) => {
     setEditData(prev => ({ ...prev, [field]: value }));

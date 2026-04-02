@@ -7,4 +7,8 @@ export const ApiContext = React.createContext({
   setBackupUrl: () => {},
   darkMode: false,
   setDarkMode: () => {},
+  mapProvider: 'osm',      // 'osm' | 'amap'
+  setMapProvider: () => {},
+  amapKey: '',             // 高德 Web 服务 API Key
+  setAmapKey: () => {},
 });

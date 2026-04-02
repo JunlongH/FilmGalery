@@ -1,0 +1,559 @@
+/**
+ * AI Tools — Function Calling 工具注册表
+ * 
+ * 每个工具包含：schema（告诉 AI 参数结构）+ handler（执行逻辑）+ type（read/write）+ securityLevel
+ * 
+ * securityLevel:
+ *   0 — 自动执行（read 工具 + 低风险 write）
+ *   1 — 需用户确认（单条 write）
+ *   2 — 需确认 + 预览（批量 write / 删除）
+ * 
+ * 工具结果防 Prompt Injection：通过 sanitizeToolResult() 用 XML 标签包裹
+ */
+const { allAsync, getAsync, runAsync } = require('../utils/db-helpers');
+
+// ─────────────── 辅助：防 Prompt Injection 包裹 ───────────────
+function sanitizeToolResult(jsonStr) {
+  return `<database_result>\n${jsonStr}\n</database_result>`;
+}
+
+// ─────────────── 工具定义 ───────────────
+const TOOLS = {
+
+  search_photos: {
+    type: 'read',
+    schema: {
+      type: 'function',
+      function: {
+        name: 'search_photos',
+        description: '搜索用户的胶片照片。支持关键词、设备、地点、时间、评分筛选。',
+        parameters: {
+          type: 'object',
+          properties: {
+            query:         { type: 'string',  description: '全文搜索（匹配 caption / roll title）' },
+            roll_id:       { type: 'integer', description: '按胶卷 ID 筛选' },
+            camera:        { type: 'string',  description: '相机名称（模糊匹配）' },
+            lens:          { type: 'string',  description: '镜头名称（模糊匹配）' },
+            year:          { type: 'integer', description: '拍摄年份' },
+            month:         { type: 'integer', minimum: 1, maximum: 12, description: '拍摄月份（1-12），需与 year 配合使用' },
+            date_from:     { type: 'string',  description: '拍摄日期起始（含），格式 YYYY-MM-DD' },
+            date_to:       { type: 'string',  description: '拍摄日期结束（含），格式 YYYY-MM-DD' },
+            favorite_only: { type: 'boolean', description: '仅返回有评分的照片' },
+            min_rating:    { type: 'integer', minimum: 1, maximum: 5, description: '最低评分' },
+            limit:         { type: 'integer', default: 20, maximum: 50 },
+          },
+        },
+      },
+    },
+    handler: async (args) => {
+      const { query, roll_id, camera, lens, year, month, date_from, date_to, favorite_only, min_rating, limit = 20 } = args;
+      let sql = `
+        SELECT p.id, p.frame_number, p.caption, p.rating,
+               p.aperture, p.shutter_speed, p.iso, p.focal_length,
+               p.date_taken, p.camera, p.lens, p.location_name,
+               r.title AS roll_title, f.name AS film_name
+        FROM photos p
+        LEFT JOIN rolls r ON p.roll_id = r.id
+        LEFT JOIN films f ON r.filmId = f.id
+        WHERE 1=1
+      `;
+      const params = [];
+      if (roll_id)       { sql += ' AND p.roll_id = ?';                        params.push(roll_id); }
+      if (query)         { sql += ' AND (p.caption LIKE ? OR r.title LIKE ?)'; params.push(`%${query}%`, `%${query}%`); }
+      if (camera)        { sql += ' AND p.camera LIKE ?';                      params.push(`%${camera}%`); }
+      if (lens)          { sql += ' AND p.lens LIKE ?';                        params.push(`%${lens}%`); }
+      if (year && month) {
+        sql += " AND strftime('%Y', p.date_taken) = ? AND strftime('%m', p.date_taken) = ?";
+        params.push(String(year), String(month).padStart(2, '0'));
+      } else if (year) {
+        sql += " AND strftime('%Y', p.date_taken) = ?";
+        params.push(String(year));
+      }
+      if (date_from)     { sql += ' AND p.date_taken >= ?';                    params.push(date_from); }
+      if (date_to)       { sql += ' AND p.date_taken <= ?';                    params.push(date_to + ' 23:59:59'); }
+      if (favorite_only) { sql += ' AND p.rating > 0'; }
+      if (min_rating)    { sql += ' AND p.rating >= ?';                        params.push(min_rating); }
+      sql += ' ORDER BY p.date_taken DESC, p.id DESC LIMIT ?';
+      params.push(Math.min(Number(limit) || 20, 50));
+
+      const photos = await allAsync(sql, params);
+      return sanitizeToolResult(JSON.stringify({ count: photos.length, photos }));
+    },
+  },
+
+  get_photo_detail: {
+    type: 'read',
+    schema: {
+      type: 'function',
+      function: {
+        name: 'get_photo_detail',
+        description: '获取单张照片的完整元数据，包括 EXIF、标签、备注等。',
+        parameters: {
+          type: 'object',
+          properties: {
+            photo_id: { type: 'integer', description: '照片 ID' },
+          },
+          required: ['photo_id'],
+        },
+      },
+    },
+    handler: async ({ photo_id }) => {
+      const photo = await getAsync(
+        `SELECT p.*, r.title AS roll_title, f.name AS film_name
+         FROM photos p
+         LEFT JOIN rolls r ON p.roll_id = r.id
+         LEFT JOIN films f ON r.filmId = f.id
+         WHERE p.id = ?`,
+        [photo_id]
+      );
+      if (!photo) return sanitizeToolResult(JSON.stringify({ error: 'photo not found' }));
+      // 附加标签
+      const tags = await allAsync(
+        `SELECT t.name FROM tags t JOIN photo_tags pt ON pt.tag_id = t.id WHERE pt.photo_id = ?`,
+        [photo_id]
+      );
+      photo.tags = tags.map(t => t.name);
+      return sanitizeToolResult(JSON.stringify(photo));
+    },
+  },
+
+  get_roll_photos: {
+    type: 'read',
+    schema: {
+      type: 'function',
+      function: {
+        name: 'get_roll_photos',
+        description: '获取一卷胶卷中所有照片的元数据摘要（批量，避免逐张查询）。',
+        parameters: {
+          type: 'object',
+          properties: {
+            roll_id: { type: 'integer', description: '胶卷 ID' },
+          },
+          required: ['roll_id'],
+        },
+      },
+    },
+    handler: async ({ roll_id }) => {
+      const photos = await allAsync(
+        `SELECT id, frame_number, caption, rating, aperture, shutter_speed, iso,
+                focal_length, date_taken, camera, lens, location_name
+         FROM photos WHERE roll_id = ? ORDER BY frame_number ASC, id ASC`,
+        [roll_id]
+      );
+      return sanitizeToolResult(JSON.stringify({ roll_id, count: photos.length, photos }));
+    },
+  },
+
+  list_rolls: {
+    type: 'read',
+    schema: {
+      type: 'function',
+      function: {
+        name: 'list_rolls',
+        description: '列出胶卷列表，支持按年份、胶片、相机筛选。',
+        parameters: {
+          type: 'object',
+          properties: {
+            year:    { type: 'integer', description: '按年份筛选' },
+            month:   { type: 'integer', minimum: 1, maximum: 12, description: '按月份筛选（1-12），需与 year 配合' },
+            film_id: { type: 'integer', description: '按胶片 ID 筛选' },
+            camera:  { type: 'string',  description: '相机名称（模糊匹配）' },
+            limit:   { type: 'integer', default: 20, maximum: 50 },
+          },
+        },
+      },
+    },
+    handler: async (args) => {
+      const { year, month, film_id, camera, limit = 20 } = args;
+      let sql = `
+        SELECT r.id, r.title, r.date_loaded, r.date_finished, r.notes,
+               f.name AS film_name, r.camera,
+               COUNT(p.id) AS photo_count
+        FROM rolls r
+        LEFT JOIN films f ON r.filmId = f.id
+        LEFT JOIN photos p ON p.roll_id = r.id
+        WHERE 1=1
+      `;
+      const params = [];
+      if (year && month) {
+        sql += " AND strftime('%Y', r.date_loaded) = ? AND strftime('%m', r.date_loaded) = ?";
+        params.push(String(year), String(month).padStart(2, '0'));
+      } else if (year) {
+        sql += " AND strftime('%Y', r.date_loaded) = ?";
+        params.push(String(year));
+      }
+      if (film_id) { sql += ' AND r.filmId = ?';                      params.push(film_id); }
+      if (camera)  { sql += ' AND r.camera LIKE ?';                   params.push(`%${camera}%`); }
+      sql += ' GROUP BY r.id ORDER BY r.date_loaded DESC, r.id DESC LIMIT ?';
+      params.push(Math.min(Number(limit) || 20, 50));
+
+      const rolls = await allAsync(sql, params);
+      return sanitizeToolResult(JSON.stringify({ count: rolls.length, rolls }));
+    },
+  },
+
+  get_roll_detail: {
+    type: 'read',
+    schema: {
+      type: 'function',
+      function: {
+        name: 'get_roll_detail',
+        description: '获取单卷胶卷的详情，包括基本信息和照片数量。',
+        parameters: {
+          type: 'object',
+          properties: {
+            roll_id: { type: 'integer', description: '胶卷 ID' },
+          },
+          required: ['roll_id'],
+        },
+      },
+    },
+    handler: async ({ roll_id }) => {
+      const roll = await getAsync(
+        `SELECT r.*, f.name AS film_name, COUNT(p.id) AS photo_count
+         FROM rolls r
+         LEFT JOIN films f ON r.filmId = f.id
+         LEFT JOIN photos p ON p.roll_id = r.id
+         WHERE r.id = ?
+         GROUP BY r.id`,
+        [roll_id]
+      );
+      if (!roll) return sanitizeToolResult(JSON.stringify({ error: 'roll not found' }));
+      return sanitizeToolResult(JSON.stringify(roll));
+    },
+  },
+
+  get_stats: {
+    type: 'read',
+    schema: {
+      type: 'function',
+      function: {
+        name: 'get_stats',
+        description: '获取用户的摄影统计：胶卷总数、照片总数、设备使用频率、库存等。',
+        parameters: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['summary', 'gear', 'spending'], description: '统计类型' },
+          },
+          required: ['type'],
+        },
+      },
+    },
+    handler: async ({ type }) => {
+      if (type === 'summary') {
+        const row = await getAsync(`
+          SELECT
+            (SELECT COUNT(*) FROM rolls)   AS total_rolls,
+            (SELECT COUNT(*) FROM photos)  AS total_photos,
+            (SELECT COUNT(*) FROM films)   AS total_films,
+            (SELECT COUNT(*) FROM equip_cameras) AS cameras_count,
+            (SELECT COUNT(*) FROM equip_lenses)  AS lenses_count,
+            (SELECT COUNT(*) FROM film_items WHERE status = 'in_stock' AND deleted_at IS NULL) AS in_stock,
+            (SELECT COUNT(*) FROM film_items WHERE status = 'loaded' AND deleted_at IS NULL) AS loaded,
+            (SELECT COUNT(*) FROM film_items WHERE status = 'shot' AND deleted_at IS NULL) AS shot,
+            (SELECT COUNT(*) FROM film_items WHERE status = 'sent_to_lab' AND deleted_at IS NULL) AS sent_to_lab,
+            (SELECT COUNT(*) FROM film_items WHERE status = 'developed' AND deleted_at IS NULL) AS developed,
+            (SELECT COUNT(*) FROM film_items WHERE status = 'archived' AND deleted_at IS NULL) AS archived
+        `);
+        return sanitizeToolResult(JSON.stringify(row));
+      }
+      if (type === 'gear') {
+        const cameras = await allAsync(
+          `SELECT camera, COUNT(*) AS roll_count FROM rolls WHERE camera IS NOT NULL GROUP BY camera ORDER BY roll_count DESC LIMIT 10`
+        );
+        const lenses = await allAsync(
+          `SELECT lens, COUNT(*) AS photo_count FROM photos WHERE lens IS NOT NULL GROUP BY lens ORDER BY photo_count DESC LIMIT 10`
+        );
+        return sanitizeToolResult(JSON.stringify({ cameras, lenses }));
+      }
+      if (type === 'spending') {
+        const row = await getAsync(`
+          SELECT
+            SUM(purchase_price) AS total_purchase,
+            SUM(develop_price)  AS total_develop,
+            COUNT(*)            AS total_items
+          FROM film_items
+        `);
+        return sanitizeToolResult(JSON.stringify(row));
+      }
+      return sanitizeToolResult(JSON.stringify({ error: 'unknown type' }));
+    },
+  },
+
+  search_equipment: {
+    type: 'read',
+    schema: {
+      type: 'function',
+      function: {
+        name: 'search_equipment',
+        description: '搜索用户的相机、镜头设备信息。',
+        parameters: {
+          type: 'object',
+          properties: {
+            equipment_type: { type: 'string', enum: ['camera', 'lens', 'all'], description: '设备类型' },
+            query: { type: 'string', description: '搜索关键词' },
+          },
+          required: ['equipment_type'],
+        },
+      },
+    },
+    handler: async ({ equipment_type, query }) => {
+      const result = {};
+      const likeClause = query ? ' WHERE (name LIKE ? OR brand LIKE ?)' : '';
+      const params = query ? [`%${query}%`, `%${query}%`] : [];
+
+      if (equipment_type === 'camera' || equipment_type === 'all') {
+        result.cameras = await allAsync(`SELECT * FROM equip_cameras${likeClause} ORDER BY name`, params);
+      }
+      if (equipment_type === 'lens' || equipment_type === 'all') {
+        result.lenses = await allAsync(`SELECT * FROM equip_lenses${likeClause} ORDER BY name`, params);
+      }
+      return sanitizeToolResult(JSON.stringify(result));
+    },
+  },
+
+  get_film_info: {
+    type: 'read',
+    schema: {
+      type: 'function',
+      function: {
+        name: 'get_film_info',
+        description: '查询胶片信息和库存。',
+        parameters: {
+          type: 'object',
+          properties: {
+            film_id:  { type: 'integer', description: '胶片 ID（精确查询）' },
+            query:    { type: 'string',  description: '名称关键词搜索' },
+            in_stock: { type: 'boolean', description: '仅返回有库存的胶片' },
+          },
+        },
+      },
+    },
+    handler: async ({ film_id, query, in_stock }) => {
+      let sql = `
+        SELECT f.*, COUNT(fi.id) AS stock_count
+        FROM films f
+        LEFT JOIN film_items fi ON fi.film_id = f.id AND fi.status = 'in_stock'
+        WHERE 1=1
+      `;
+      const params = [];
+      if (film_id) { sql += ' AND f.id = ?';      params.push(film_id); }
+      if (query)   { sql += ' AND f.name LIKE ?';  params.push(`%${query}%`); }
+      sql += ' GROUP BY f.id';
+      if (in_stock) sql += ' HAVING stock_count > 0';
+      sql += ' ORDER BY f.name LIMIT 30';
+
+      const films = await allAsync(sql, params);
+      return sanitizeToolResult(JSON.stringify({ count: films.length, films }));
+    },
+  },
+
+  list_tags: {
+    type: 'read',
+    schema: {
+      type: 'function',
+      function: {
+        name: 'list_tags',
+        description: '列出所有标签及其使用次数。添加标签前应先查询避免重复。',
+        parameters: { type: 'object', properties: {} },
+      },
+    },
+    handler: async () => {
+      const tags = await allAsync(
+        `SELECT t.id, t.name, COUNT(pt.photo_id) AS usage_count
+         FROM tags t LEFT JOIN photo_tags pt ON pt.tag_id = t.id
+         GROUP BY t.id ORDER BY usage_count DESC, t.name`
+      );
+      return sanitizeToolResult(JSON.stringify({ count: tags.length, tags }));
+    },
+  },
+
+  list_film_items: {
+    type: 'read',
+    schema: {
+      type: 'function',
+      function: {
+        name: 'list_film_items',
+        description: '列出胶片库存条目（film_items），支持按状态、胶片类型筛选。可查看正在拍摄(loaded)、已拍完(shot)、送冲(sent_to_lab)、已冲洗(developed)、库存(in_stock)、归档(archived)的胶片。',
+        parameters: {
+          type: 'object',
+          properties: {
+            status:  { type: 'string', enum: ['in_stock', 'loaded', 'shot', 'sent_to_lab', 'developed', 'archived'], description: '按状态筛选' },
+            film_id: { type: 'integer', description: '按胶片种类 ID 筛选' },
+            query:   { type: 'string', description: '按胶片名称或标签关键词搜索' },
+            limit:   { type: 'integer', default: 30, maximum: 100 },
+          },
+        },
+      },
+    },
+    handler: async (args) => {
+      const { status, film_id, query, limit = 30 } = args;
+      let sql = `
+        SELECT fi.id, fi.status, fi.label, fi.loaded_camera, fi.loaded_date,
+               fi.finished_date, fi.develop_lab, fi.develop_date,
+               fi.purchase_price, fi.develop_price, fi.expiry_date,
+               fi.roll_id, fi.created_at,
+               f.name AS film_name, f.brand AS film_brand, f.iso AS film_iso, f.format AS film_format
+        FROM film_items fi
+        LEFT JOIN films f ON fi.film_id = f.id
+        WHERE fi.deleted_at IS NULL
+      `;
+      const params = [];
+      if (status)  { sql += ' AND fi.status = ?';    params.push(status); }
+      if (film_id) { sql += ' AND fi.film_id = ?';   params.push(film_id); }
+      if (query)   { sql += ' AND (f.name LIKE ? OR fi.label LIKE ?)'; params.push(`%${query}%`, `%${query}%`); }
+      sql += ' ORDER BY fi.updated_at DESC, fi.id DESC LIMIT ?';
+      params.push(Math.min(Number(limit) || 30, 100));
+
+      const items = await allAsync(sql, params);
+      return sanitizeToolResult(JSON.stringify({ count: items.length, items }));
+    },
+  },
+
+  get_shot_log: {
+    type: 'read',
+    schema: {
+      type: 'function',
+      function: {
+        name: 'get_shot_log',
+        description: '获取某胶片卷 (film_item) 的拍摄日志 (shot log)。需要提供 film_item_id 或 roll_id（会自动查找关联的胶片卷）。',
+        parameters: {
+          type: 'object',
+          properties: {
+            film_item_id: { type: 'integer', description: '胶片卷元素 ID（film_items 表）' },
+            roll_id:       { type: 'integer', description: '胶卷 ID（rolls 表），自动查找关联的 film_item' },
+          },
+        },
+      },
+    },
+    handler: async ({ film_item_id, roll_id }) => {
+      let item = null;
+      if (film_item_id) {
+        item = await getAsync('SELECT id, shot_logs FROM film_items WHERE id = ? AND deleted_at IS NULL', [film_item_id]);
+      } else if (roll_id) {
+        item = await getAsync('SELECT id, shot_logs FROM film_items WHERE roll_id = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', [roll_id]);
+      }
+      if (!item) return sanitizeToolResult(JSON.stringify({ error: 'film_item not found' }));
+
+      let entries = [];
+      if (item.shot_logs) {
+        try {
+          const parsed = typeof item.shot_logs === 'string' ? JSON.parse(item.shot_logs) : item.shot_logs;
+          if (Array.isArray(parsed)) entries = parsed;
+        } catch {
+          return sanitizeToolResult(JSON.stringify({ error: 'shot_logs parse error' }));
+        }
+      }
+      return sanitizeToolResult(JSON.stringify({ film_item_id: item.id, entry_count: entries.length, entries }));
+    },
+  },
+
+  update_shot_log: {
+    type: 'write',
+    securityLevel: 1,
+    schema: {
+      type: 'function',
+      function: {
+        name: 'update_shot_log',
+        description: '增加、修改或删除胶片卷的拍摄日志条目。action=add 追加新条目；action=edit 按索引修改；action=delete 按索引删除；action=replace_all 替换全部（谨慎使用）。',
+        parameters: {
+          type: 'object',
+          properties: {
+            film_item_id: { type: 'integer', description: '胶片卷元素 ID（film_items 表）' },
+            roll_id:       { type: 'integer', description: '胶卷 ID，自动查找关联的 film_item' },
+            action:        { type: 'string', enum: ['add', 'edit', 'delete', 'replace_all'], description: '操作类型' },
+            entry: {
+              type: 'object',
+              description: 'action=add/edit 时提供。字段：date(YYYY-MM-DD), shot_time(HH:MM), count(整数), lens, focal_length, aperture, shutter_speed, country, city, detail_location, latitude, longitude, caption',
+            },
+            index: { type: 'integer', description: 'action=edit/delete 时，0-based 条目索引' },
+            entries: { type: 'array', description: 'action=replace_all 时，完整的新条目数组' },
+          },
+          required: ['action'],
+        },
+      },
+    },
+    handler: async ({ film_item_id, roll_id, action, entry, index, entries }) => {
+      // Resolve film_item
+      let item = null;
+      if (film_item_id) {
+        item = await getAsync('SELECT id, shot_logs FROM film_items WHERE id = ? AND deleted_at IS NULL', [film_item_id]);
+      } else if (roll_id) {
+        item = await getAsync('SELECT id, shot_logs FROM film_items WHERE roll_id = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', [roll_id]);
+      }
+      if (!item) return sanitizeToolResult(JSON.stringify({ error: 'film_item not found' }));
+
+      let current = [];
+      if (item.shot_logs) {
+        try {
+          const parsed = typeof item.shot_logs === 'string' ? JSON.parse(item.shot_logs) : item.shot_logs;
+          if (Array.isArray(parsed)) current = parsed;
+        } catch { /* start fresh */ }
+      }
+
+      const sanitizeEntry = (e) => ({
+        date: e.date || '',
+        shot_time: e.shot_time || '',
+        count: Number(e.count || 0) || 0,
+        lens: e.lens || '',
+        focal_length: e.focal_length != null ? Number(e.focal_length) : null,
+        aperture: e.aperture != null ? Number(e.aperture) : null,
+        shutter_speed: e.shutter_speed || '',
+        country: e.country || '',
+        city: e.city || '',
+        detail_location: e.detail_location || '',
+        latitude: e.latitude != null ? Number(e.latitude) : null,
+        longitude: e.longitude != null ? Number(e.longitude) : null,
+        caption: e.caption || '',
+      });
+
+      let updated;
+      if (action === 'add') {
+        if (!entry) return sanitizeToolResult(JSON.stringify({ error: 'entry is required for add' }));
+        updated = [...current, sanitizeEntry(entry)].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      } else if (action === 'edit') {
+        if (index == null || !entry) return sanitizeToolResult(JSON.stringify({ error: 'index and entry are required for edit' }));
+        if (index < 0 || index >= current.length) return sanitizeToolResult(JSON.stringify({ error: 'index out of range' }));
+        updated = current.map((e, i) => i === index ? sanitizeEntry({ ...e, ...entry }) : e);
+      } else if (action === 'delete') {
+        if (index == null) return sanitizeToolResult(JSON.stringify({ error: 'index is required for delete' }));
+        if (index < 0 || index >= current.length) return sanitizeToolResult(JSON.stringify({ error: 'index out of range' }));
+        updated = current.filter((_, i) => i !== index);
+      } else if (action === 'replace_all') {
+        if (!Array.isArray(entries)) return sanitizeToolResult(JSON.stringify({ error: 'entries array is required for replace_all' }));
+        updated = entries.map(sanitizeEntry).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      } else {
+        return sanitizeToolResult(JSON.stringify({ error: 'unknown action' }));
+      }
+
+      await runAsync('UPDATE film_items SET shot_logs = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(updated), item.id]);
+      return sanitizeToolResult(JSON.stringify({ ok: true, film_item_id: item.id, entry_count: updated.length }));
+    },
+  },
+};
+
+// ─────────────── 导出 ───────────────
+function getToolSchemas() {
+  return Object.values(TOOLS).map(t => t.schema);
+}
+
+function getToolHandler(name) {
+  return TOOLS[name]?.handler;
+}
+
+function getToolType(name) {
+  return TOOLS[name]?.type || 'read';
+}
+
+/**
+ * 获取工具安全等级
+ * @returns {number} 0=自动执行, 1=需确认, 2=需确认+预览
+ */
+function getToolSecurityLevel(name) {
+  const tool = TOOLS[name];
+  if (!tool) return 0;
+  if (tool.securityLevel !== undefined) return tool.securityLevel;
+  return tool.type === 'read' ? 0 : 1; // write 工具默认 level 1
+}
+
+module.exports = { getToolSchemas, getToolHandler, getToolType, getToolSecurityLevel, TOOLS };

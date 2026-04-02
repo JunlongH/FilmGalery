@@ -17,7 +17,7 @@ import {
 
 export default function SettingsScreen({ navigation }) {
   const theme = useTheme();
-  const { baseUrl, setBaseUrl, backupUrl, setBackupUrl, darkMode, setDarkMode } = useContext(ApiContext);
+  const { baseUrl, setBaseUrl, backupUrl, setBackupUrl, darkMode, setDarkMode, mapProvider, setMapProvider, amapKey, setAmapKey } = useContext(ApiContext);
   const [url, setUrl] = useState(baseUrl);
   const [backup, setBackup] = useState(backupUrl || '');
   const [isDark, setIsDark] = useState(!!darkMode);
@@ -26,6 +26,8 @@ export default function SettingsScreen({ navigation }) {
   const [discoveredServices, setDiscoveredServices] = useState([]);
   const [discoveryMode, setDiscoveryMode] = useState('auto');
   const [discoveryStatus, setDiscoveryStatus] = useState('');
+  const [localMapProvider, setLocalMapProvider] = useState(mapProvider || 'osm');
+  const [localAmapKey, setLocalAmapKey] = useState(amapKey || '');
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -118,6 +120,16 @@ export default function SettingsScreen({ navigation }) {
     setBaseUrl(cleanUrl);
     setBackupUrl(cleanBackup);
     navigation.goBack();
+  };
+
+  const saveMapSettings = async () => {
+    await AsyncStorage.setItem('map_provider', localMapProvider);
+    if (localMapProvider === 'amap') {
+      await AsyncStorage.setItem('amap_key', localAmapKey.trim());
+      setAmapKey(localAmapKey.trim());
+    }
+    setMapProvider(localMapProvider);
+    Alert.alert('已保存', '地图设置已保存，重新进入地图页即可生效');
   };
 
   const toggleDark = async (val) => {
@@ -317,7 +329,71 @@ export default function SettingsScreen({ navigation }) {
           Open Location Diagnostic
         </Button>
       </View>
+
+      {/* Map Settings */}
+      <View style={{ marginTop: 24 }}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>地图设置</Text>
+        <Text style={[styles.label, { color: theme.colors.primary }]}>地图服务商</Text>
+        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
+          选择地图底图和地理编码服务
+        </Text>
+        <SegmentedButtons
+          value={localMapProvider}
+          onValueChange={setLocalMapProvider}
+          buttons={[
+            { value: 'osm', label: '开源地图', icon: 'map-outline' },
+            { value: 'amap', label: '高德地图', icon: 'map' },
+          ]}
+          style={{ marginBottom: 12 }}
+        />
+        {localMapProvider === 'osm' && (
+          <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
+            使用 CartoDB 底图，无需 API Key，全球覆盖
+          </Text>
+        )}
+        {localMapProvider === 'amap' && (
+          <View>
+            <Text style={[styles.label, { color: theme.colors.primary }]}>高德 Web 服务 API Key</Text>
+            <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
+              在高德开放平台创建「Web 服务」应用获取 Key，用于地图底图和地址搜索
+            </Text>
+            <TextInput
+              mode="outlined"
+              value={localAmapKey}
+              onChangeText={setLocalAmapKey}
+              placeholder="请输入高德 Web 服务 Key（32位）"
+              autoCapitalize="none"
+              autoCorrect={false}
+              activeOutlineColor={theme.colors.primary}
+              style={{ backgroundColor: theme.colors.surface, marginBottom: 8, fontFamily: 'monospace' }}
+            />
+          </View>
+        )}
+        <Button
+          mode="contained"
+          onPress={saveMapSettings}
+          buttonColor="#3E6B64"
+          style={{ marginTop: 4 }}
+        >
+          保存地图设置
+        </Button>
+      </View>
       
+      {/* AI 助手 */}
+      <View style={{ marginTop: 24 }}>
+        <Text style={[styles.label, { color: theme.colors.primary }]}>AI 助手</Text>
+        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>配置 AI 助手 API Key 和模型，支持 OpenAI / DeepSeek / 本地 Ollama</Text>
+        <Button
+          mode="outlined"
+          onPress={() => navigation.navigate('AISettings')}
+          icon="robot"
+          textColor={theme.colors.primary}
+          style={{ marginTop: 8 }}
+        >
+          AI 助手设置
+        </Button>
+      </View>
+
       {/* Bottom padding for scroll */}
       <View style={{ height: 40 }} />
     </ScrollView>

@@ -150,10 +150,11 @@ export default function NewRollForm({ onCreated }) {
       const latitude = log.latitude;
       const longitude = log.longitude;
       const caption = log.caption || '';
+      const shot_time = log.shot_time || '';
       for (let i = 0; i < count; i++) {
         if (fileIndex >= sortedFiles.length) break;
         const name = sortedFiles[fileIndex].name;
-        metaMap[name] = { date, lens: lensFromLog, focal_length, country, city, detail_location, aperture, shutter_speed, latitude, longitude, caption, logIndex: shotLogs.indexOf(log) };
+        metaMap[name] = { date, shot_time, lens: lensFromLog, focal_length, country, city, detail_location, aperture, shutter_speed, latitude, longitude, caption, logIndex: shotLogs.indexOf(log) };
         if (date) dateMap[name] = date;
         fileIndex++;
       }

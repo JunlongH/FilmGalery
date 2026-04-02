@@ -182,6 +182,7 @@ const mountRoutes = () => {
   app.use('/api/edge-detection', require('./routes/edge-detection')); // Edge detection for auto-crop
   app.use('/api/raw', require('./routes/raw')); // RAW file decoding
   app.use('/api/filesystem', require('./routes/filesystem')); // Filesystem browsing for hybrid mode
+  app.use('/api/ai', require('./routes/ai-chat')); // AI assistant
   app.get('/api/_profiler', (req, res) => res.json(getProfilerStats()));
   app.get('/api/_prepared-statements', (req, res) => res.json(PreparedStmt.getStats()));
   
@@ -280,6 +281,118 @@ CREATE TABLE IF NOT EXISTS presets (
   params_json TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS ai_config (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  api_base_url TEXT DEFAULT 'https://api.openai.com/v1',
+  api_key TEXT,
+  text_model TEXT DEFAULT 'gpt-4o-mini',
+  vision_model TEXT DEFAULT 'gpt-4o',
+  temperature REAL DEFAULT 0.7,
+  max_tokens INTEGER DEFAULT 2048,
+  monthly_budget_usd REAL DEFAULT 10.0,
+  monthly_tokens_used INTEGER DEFAULT 0,
+  allow_image_analysis INTEGER DEFAULT 1,
+  image_max_resolution TEXT DEFAULT 'medium',
+  confirm_before_write INTEGER DEFAULT 1,
+  max_tool_calls_per_request INTEGER DEFAULT 15,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT OR IGNORE INTO ai_config (id) VALUES (1);
+
+CREATE TABLE IF NOT EXISTS ai_conversations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT,
+  platform TEXT DEFAULT 'desktop',
+  context_snapshot TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ai_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id INTEGER NOT NULL,
+  role TEXT NOT NULL,
+  content TEXT,
+  model TEXT,
+  input_tokens INTEGER DEFAULT 0,
+  output_tokens INTEGER DEFAULT 0,
+  image_refs TEXT,
+  tool_calls TEXT,
+  tool_call_id TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ai_audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id INTEGER,
+  action_type TEXT NOT NULL,
+  tool_name TEXT,
+  tool_args TEXT,
+  result_summary TEXT,
+  old_values TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ai_prompt_shortcuts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  label TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  icon TEXT DEFAULT 'zap',
+  sort_order INTEGER DEFAULT 0,
+  scope TEXT DEFAULT 'general',
+  is_built_in INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT OR IGNORE INTO ai_prompt_shortcuts (id, label, prompt, icon, sort_order, scope, is_built_in) VALUES
+  (1, '分析这张照片', '请分析这张照片的构图、曝光、色彩和整体表现，给出改进建议。', 'camera', 1, 'photo', 1),
+  (2, '评价曝光', '请评价这张照片的曝光是否准确，高光和阴影细节如何？', 'sun', 2, 'photo', 1),
+  (3, '构图建议', '请分析这张照片的构图，包括三分法、引导线、前景/背景层次，并给出改进建议。', 'grid-3x3', 3, 'photo', 1),
+  (4, '胶片特性', '这张照片使用的胶片有什么特点？色彩表现如何？', 'film', 4, 'photo', 1),
+  (5, '统计摘要', '请给我一个整体的摄影统计摘要，包括胶卷数量、最常用的相机和镜头。', 'bar-chart-2', 1, 'general', 1),
+  (6, '最近拍摄', '我最近拍了什么？列出最近的胶卷和照片。', 'clock', 2, 'general', 1),
+  (7, 'FilmLab 建议', '根据当前的编辑参数，你觉得这张照片的后期处理如何？有什么建议？', 'sliders-horizontal', 1, 'filmlab', 1);
+
+CREATE TABLE IF NOT EXISTS ai_prompt_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  icon TEXT DEFAULT 'bot',
+  description TEXT DEFAULT '',
+  system_prompt TEXT NOT NULL,
+  hidden_command TEXT DEFAULT '',
+  starter_prompt TEXT DEFAULT '',
+  is_default INTEGER DEFAULT 0,
+  is_built_in INTEGER DEFAULT 0,
+  sort_order INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT OR IGNORE INTO ai_prompt_templates (id, name, icon, description, system_prompt, hidden_command, starter_prompt, is_default, is_built_in, sort_order) VALUES
+  (1, '通用助手', 'bot', '友好的通用 AI 助手', '你是一个友好、专业、可靠的 AI 助手。回答要简洁、准确、可执行。信息不确定时必须明确说明。', 'skill=general.assistant; style=concise; truth=first; format=markdown_when_useful', '请先用 1 句话复述我的目标，再给出结构化回答。', 1, 1, 1),
+  (2, '照片分析师', 'camera', '专业的摄影作品分析与改进建议', '你是一位专业的摄影评论家和技术分析师。擅长胶片摄影的构图分析、曝光评价、色彩解读。分析时先客观描述（EXIF/技术数据），再给出主观评价和改进建议。', 'skill=photo.analysis; style=structured; output=objective_then_subjective', '请先列出技术参数，再给出分析。', 0, 1, 2),
+  (3, '数据管家', 'database', '高效的摄影数据管理与分析', '你是 FilmGallery 的数据管家。擅长查询、整理和分析摄影数据。帮助用户高效管理胶卷、照片标签、设备记录和胶片库存。执行操作前总是先搜索确认数据，避免错误修改。', 'skill=data.management; style=action_oriented; safety=query_before_modify', '告诉我你想管理什么数据，我会先查询现状再操作。', 0, 1, 3),
+  (4, 'FilmLab 调色顾问', 'sliders-horizontal', '胶片冲扫调色的专业建议', '你是一位胶片冲扫和调色专家。了解各种胶片的色彩特性、反转负冲的影响、以及数字化调色的最佳实践。基于 FilmLab 的编辑参数（曝光/对比度/色温/饱和度等）提供调色建议。', 'skill=filmlab.grading; style=technical_with_examples; domain=color_science', '请描述你希望的画面风格，或者让我分析当前参数。', 0, 1, 4);
+
+CREATE TABLE IF NOT EXISTS ai_models (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  provider TEXT DEFAULT 'openai',
+  capabilities TEXT DEFAULT 'text',
+  api_base_url TEXT,
+  api_key TEXT,
+  enabled INTEGER DEFAULT 1,
+  is_default_text INTEGER DEFAULT 0,
+  is_default_vision INTEGER DEFAULT 0,
+  sort_order INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 `;
 
