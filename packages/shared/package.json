@@ -23,8 +23,5 @@
       "default": "./geocode.js"
     }
   },
-  "dependencies": {
-    "@filmgallery/types": "file:../@filmgallery/types"
-  },
   "private": true
 }
