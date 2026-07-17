@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Modal, Portal, Text, TextInput, Chip, Button } from 'react-native-paper';
-import axios from 'axios';
+import { api } from '../api/client';
 import { ApiContext } from '../context/ApiContext';
 import { Icon } from './ui';
 
@@ -25,8 +25,8 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }) {
   const fetchTags = async () => {
     if (!baseUrl) return;
     try {
-      const res = await axios.get(`${baseUrl}/api/tags`);
-      setAllTags(res.data);
+      const res = await api.http.get('/api/tags');
+      setAllTags(res);
     } catch (err) {
       console.error('Failed to fetch tags', err);
     }
@@ -63,8 +63,8 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }) {
     console.log('[TagEditModal] Saving tags:', finalTags, 'for photo:', photo.id);
 
     try {
-      const response = await axios.put(`${baseUrl}/api/photos/${photo.id}`, { tags: finalTags });
-      console.log('[TagEditModal] Save response:', response.data);
+      const response = await api.http.put(`/api/photos/${photo.id}`, { tags: finalTags });
+      console.log('[TagEditModal] Save response:', response);
       onSave(finalTags); // Update parent
       onDismiss();
     } catch (err) {

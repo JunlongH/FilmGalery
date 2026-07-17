@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useState, useCallback, useRef } from 'rea
 import { View, FlatList, StyleSheet, Dimensions, TouchableOpacity, Animated } from 'react-native';
 import { ActivityIndicator, useTheme, Text } from 'react-native-paper';
 import { ApiContext } from '../context/ApiContext';
-import axios from 'axios';
+import { api } from '../api/client';
 import TagCard from '../components/TagCard';
 import SkeletonBox from '../components/SkeletonBox';
 import { useFocusEffect } from '@react-navigation/native';
@@ -26,9 +26,9 @@ export default function ThemesScreen({ navigation }) {
     if (!baseUrl) return;
     setLoading(true);
     try {
-      const res = await axios.get(`${baseUrl}/api/tags`);
+      const res = await api.http.get('/api/tags');
       // Filter out tags with 0 photos
-      setTags(res.data.filter(t => t.photos_count > 0));
+      setTags(res.filter(t => t.photos_count > 0));
     } catch (err) {
       console.error(err);
     } finally {

@@ -1,102 +1,38 @@
 /**
  * Equipment API for mobile app
  */
-import axios from 'axios';
+import { api } from './client';
 
 // ===== Cameras =====
-export const getCameras = async () => {
-  const res = await axios.get('/api/equipment/cameras');
-  return res.data;
-};
-
-export const getCamera = async (id) => {
-  const res = await axios.get(`/api/equipment/cameras/${id}`);
-  return res.data;
-};
-
-export const createCamera = async (data) => {
-  const res = await axios.post('/api/equipment/cameras', data);
-  return res.data;
-};
-
-export const updateCamera = async (id, data) => {
-  const res = await axios.put(`/api/equipment/cameras/${id}`, data);
-  return res.data;
-};
-
-export const deleteCamera = async (id) => {
-  const res = await axios.delete(`/api/equipment/cameras/${id}`);
-  return res.data;
-};
+export const getCameras = () => api.http.get('/api/equipment/cameras');
+export const getCamera = (id) => api.http.get(`/api/equipment/cameras/${id}`);
+export const createCamera = (data) => api.http.post('/api/equipment/cameras', data);
+export const updateCamera = (id, data) => api.http.put(`/api/equipment/cameras/${id}`, data);
+export const deleteCamera = (id) => api.http.delete(`/api/equipment/cameras/${id}`);
 
 // ===== Lenses =====
-export const getLenses = async () => {
-  const res = await axios.get('/api/equipment/lenses');
-  return res.data;
-};
-
-export const getLens = async (id) => {
-  const res = await axios.get(`/api/equipment/lenses/${id}`);
-  return res.data;
-};
-
-export const getCompatibleLenses = async (cameraId) => {
-  const res = await axios.get(`/api/equipment/compatible-lenses/${cameraId}`);
-  return res.data;
-};
-
-export const createLens = async (data) => {
-  const res = await axios.post('/api/equipment/lenses', data);
-  return res.data;
-};
-
-export const updateLens = async (id, data) => {
-  const res = await axios.put(`/api/equipment/lenses/${id}`, data);
-  return res.data;
-};
-
-export const deleteLens = async (id) => {
-  const res = await axios.delete(`/api/equipment/lenses/${id}`);
-  return res.data;
-};
+export const getLenses = () => api.http.get('/api/equipment/lenses');
+export const getLens = (id) => api.http.get(`/api/equipment/lenses/${id}`);
+export const getCompatibleLenses = (cameraId) =>
+  api.http.get(`/api/equipment/compatible-lenses/${cameraId}`);
+export const createLens = (data) => api.http.post('/api/equipment/lenses', data);
+export const updateLens = (id, data) => api.http.put(`/api/equipment/lenses/${id}`, data);
+export const deleteLens = (id) => api.http.delete(`/api/equipment/lenses/${id}`);
 
 // ===== Flashes =====
-export const getFlashes = async () => {
-  const res = await axios.get('/api/equipment/flashes');
-  return res.data;
-};
-
-export const getFlash = async (id) => {
-  const res = await axios.get(`/api/equipment/flashes/${id}`);
-  return res.data;
-};
-
-export const createFlash = async (data) => {
-  const res = await axios.post('/api/equipment/flashes', data);
-  return res.data;
-};
-
-export const updateFlash = async (id, data) => {
-  const res = await axios.put(`/api/equipment/flashes/${id}`, data);
-  return res.data;
-};
-
-export const deleteFlash = async (id) => {
-  const res = await axios.delete(`/api/equipment/flashes/${id}`);
-  return res.data;
-};
+export const getFlashes = () => api.http.get('/api/equipment/flashes');
+export const getFlash = (id) => api.http.get(`/api/equipment/flashes/${id}`);
+export const createFlash = (data) => api.http.post('/api/equipment/flashes', data);
+export const updateFlash = (id, data) => api.http.put(`/api/equipment/flashes/${id}`, data);
+export const deleteFlash = (id) => api.http.delete(`/api/equipment/flashes/${id}`);
 
 // ===== Film Formats =====
-export const getFilmFormats = async () => {
-  const res = await axios.get('/api/equipment/film-formats');
-  return res.data;
-};
+// Server route is /api/equipment/formats (the old /film-formats path was a dead
+// route — fixed by routing through the shared client's canonical path).
+export const getFilmFormats = () => api.http.get('/api/equipment/formats');
 
 // ===== Suggestions =====
-export const getEquipmentSuggestions = async () => {
-  const res = await axios.get('/api/equipment/suggestions');
-  return res.data;
-};
+export const getEquipmentSuggestions = () => api.http.get('/api/equipment/suggestions');
 
 // ===== Rolls by Equipment =====
 /**
@@ -106,16 +42,13 @@ export const getEquipmentSuggestions = async () => {
  * @param {number|string} idOrName - Equipment ID or name (for cameras without ID)
  * @returns {Promise<Array>} List of rolls with display_camera and display_lens fields
  */
-export const getRollsByEquipment = async (type, idOrName) => {
-  // Use the rolls endpoint with appropriate filter
+export const getRollsByEquipment = (type, idOrName) => {
   let param;
   switch (type) {
     case 'camera':
-      // Support both ID (number) and name (string) filtering
       if (typeof idOrName === 'number' && idOrName > 0) {
         param = `camera_equip_id=${idOrName}`;
       } else {
-        // Filter by camera name (text)
         param = `camera=${encodeURIComponent(idOrName)}`;
       }
       break;
@@ -135,6 +68,5 @@ export const getRollsByEquipment = async (type, idOrName) => {
     default:
       throw new Error(`Unknown equipment type: ${type}`);
   }
-  const res = await axios.get(`/api/rolls?${param}`);
-  return res.data;
+  return api.http.get(`/api/rolls?${param}`);
 };

@@ -38,7 +38,7 @@ import EquipmentRollsScreen from './src/screens/EquipmentRollsScreen';
 import LocationDiagnosticScreen from './src/screens/LocationDiagnosticScreen';
 import AISettingsScreen from './src/screens/AISettingsScreen';
 import { ApiContext } from './src/context/ApiContext';
-import { configureAxios } from './src/setupAxios';
+import { configureApi } from './src/api/client';
 import appTheme, { appDarkTheme } from './src/theme';
 
 const Stack = createNativeStackNavigator();
@@ -165,7 +165,7 @@ export default function App() {
   // Reconfigure axios whenever baseUrl changes after initial load
   useEffect(() => {
     if (!loading && baseUrl) {
-      configureAxios(baseUrl, backupUrl);
+      configureApi(baseUrl, backupUrl);
     }
   }, [loading, baseUrl, backupUrl]);
 

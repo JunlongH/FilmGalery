@@ -26,7 +26,7 @@ import {
 } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import axios from 'axios';
+import { api } from '../api/client';
 import { Icon, Card, Badge } from '../components/ui';
 import { ApiContext } from '../context/ApiContext';
 import { getPhotoUrl } from '../utils/urls';
@@ -86,14 +86,14 @@ export default function LibraryScreen() {
     try {
       // Fetch multiple endpoints in parallel
       const [favoritesRes, themesRes, gearStatsRes, statsRes] = await Promise.all([
-        axios.get(`${baseUrl}/api/photos/favorites`).catch(() => ({ data: [] })),
-        axios.get(`${baseUrl}/api/tags`).catch(() => ({ data: [] })),
-        axios.get(`${baseUrl}/api/stats/gear`).catch(() => ({ data: { cameras: [], lenses: [], films: [] } })),
-        axios.get(`${baseUrl}/api/stats/summary`).catch(() => ({ data: {} })),
+        api.http.get('/api/photos/favorites').catch(() => []),
+        api.http.get('/api/tags').catch(() => []),
+        api.http.get('/api/stats/gear').catch(() => ({ cameras: [], lenses: [], films: [] })),
+        api.http.get('/api/stats/summary').catch(() => ({})),
       ]);
 
       // Process favorites - fix thumbnail URLs
-      const favoritesRaw = Array.isArray(favoritesRes.data) ? favoritesRes.data : [];
+      const favoritesRaw = Array.isArray(favoritesRes) ? favoritesRes : [];
       console.log('[LibraryScreen] Favorites raw:', favoritesRaw.length, 'items');
       const favorites = favoritesRaw.map(p => {
         const thumbnailUrl = getPhotoUrl(baseUrl, p, 'thumb');
@@ -106,7 +106,7 @@ export default function LibraryScreen() {
       setRecentFavorites(favorites.slice(0, 4));
 
       // Process themes - use photos_count from API
-      const themesRaw = Array.isArray(themesRes.data) ? themesRes.data : [];
+      const themesRaw = Array.isArray(themesRes) ? themesRes : [];
       const themes = themesRaw.map(t => ({
         ...t,
         photo_count: t.photos_count || t.photo_count || t.count || 0
@@ -114,7 +114,7 @@ export default function LibraryScreen() {
       setTopThemes(themes.slice(0, 6));
 
       // Process gear stats - cameras with photo counts
-      const gearData = gearStatsRes.data || {};
+      const gearData = gearStatsRes || {};
       const cameras = Array.isArray(gearData.cameras) ? gearData.cameras : [];
       // Transform to equipment-like structure for display
       const equipmentWithStats = cameras.map((cam, idx) => ({
@@ -128,7 +128,7 @@ export default function LibraryScreen() {
       setTopEquipment(equipmentWithStats.slice(0, 4));
 
       // Process stats
-      const statsData = statsRes.data || {};
+      const statsData = statsRes || {};
       setStats({
         favorites: favorites.length,
         themes: themes.length,

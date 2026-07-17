@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { api } from './client';
 
 // NOTE: 尽量与桌面端 client/src/api.js 中的 getFilmItems / getFilmItem 语义保持一致，
 // 这样后端改动时只需要同时更新两处 API 封装即可。
@@ -14,50 +14,45 @@ export async function getFilmItems(params = {}) {
   if (params.limit) search.set('limit', String(params.limit));
   if (params.offset) search.set('offset', String(params.offset));
   const qs = search.toString();
-  const res = await axios.get(`/api/film-items${qs ? `?${qs}` : ''}`);
-  return res.data; // { ok, items }
+  return api.http.get(`/api/film-items${qs ? `?${qs}` : ''}`); // { ok, items }
 }
 
 export async function getFilmItem(id) {
-  const res = await axios.get(`/api/film-items/${id}`);
-  if (res.data && res.data.item) return res.data.item;
-  return res.data;
+  const data = await api.http.get(`/api/film-items/${id}`);
+  if (data && data.item) return data.item;
+  return data;
 }
 
 export async function updateFilmItem(id, patch) {
-  const res = await axios.put(`/api/film-items/${id}`, patch || {});
-  if (res.data && res.data.item) return res.data.item;
-  return res.data;
+  const data = await api.http.put(`/api/film-items/${id}`, patch || {});
+  if (data && data.item) return data.item;
+  return data;
 }
 
 export async function deleteFilmItem(id, { hard = false } = {}) {
-  const params = {};
-  if (hard) params.hard = 'true';
-  const res = await axios.delete(`/api/film-items/${id}`, { params });
-  return res.data;
+  return api.http.delete(`/api/film-items/${id}${hard ? '?hard=true' : ''}`);
 }
 
 // Films API (mobile side, aligned with desktop client/src/api.js)
 export async function getFilms() {
-  const res = await axios.get('/api/films');
-  const data = res.data;
+  const data = await api.http.get('/api/films');
   if (Array.isArray(data)) return data;
   if (data && Array.isArray(data.films)) return data.films;
   return [];
 }
 
 export async function getMetadataOptions() {
-  const res = await axios.get('/api/metadata/options');
-  return res.data || {};
+  const data = await api.http.get('/api/metadata/options');
+  return data || {};
 }
 
 // Locations (shared with desktop API semantics)
 export async function getCountries() {
-  const res = await axios.get('/api/locations/countries');
-  return res.data || [];
+  const data = await api.http.get('/api/locations/countries');
+  return data || [];
 }
 
 export async function searchLocations(params = {}) {
-  const res = await axios.get('/api/locations', { params });
-  return res.data || [];
+  const data = await api.http.get('/api/locations', params);
+  return data || [];
 }

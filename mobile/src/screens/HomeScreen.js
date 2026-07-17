@@ -4,7 +4,7 @@ import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import { colors, spacing, radius } from '../theme';
 import CachedImage from '../components/CachedImage';
 import { ApiContext } from '../context/ApiContext';
-import axios from 'axios';
+import { api } from '../api/client';
 import { format } from 'date-fns';
 import { getRollCoverUrl } from '../utils/urls';
 import { Icon } from '../components/ui';
@@ -50,8 +50,8 @@ export default function HomeScreen({ navigation }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get(`${baseUrl}/api/rolls`);
-      setRolls(res.data);
+      const res = await api.http.get('/api/rolls');
+      setRolls(res);
     } catch (err) {
       setError('Failed to connect to server. Check Settings.');
       console.log(err);

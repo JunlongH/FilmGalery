@@ -6,7 +6,7 @@ import { Text, Chip, useTheme } from 'react-native-paper';
 import { Icon } from '../components/ui';
 import TouchScale from '../components/TouchScale';
 import CachedImage from '../components/CachedImage';
-import axios from 'axios';
+import { api } from '../api/client';
 import { colors, spacing, radius } from '../theme';
 
 const { width } = Dimensions.get('window');
@@ -40,8 +40,8 @@ export default function NegativeScreen({ navigation }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get(`${baseUrl}/api/photos/negatives`);
-      setPhotos(Array.isArray(res.data) ? res.data : []);
+      const res = await api.http.get('/api/photos/negatives');
+      setPhotos(Array.isArray(res) ? res : []);
     } catch (e) {
       setError('Failed to load negatives');
     } finally {

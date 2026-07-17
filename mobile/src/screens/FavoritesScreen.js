@@ -4,7 +4,7 @@ import CachedImage from '../components/CachedImage';
 import { colors, spacing, radius } from '../theme';
 import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import { ApiContext } from '../context/ApiContext';
-import axios from 'axios';
+import { api } from '../api/client';
 import { useFocusEffect } from '@react-navigation/native';
 import { getPhotoUrl } from '../utils/urls';
 import { Icon } from '../components/ui';
@@ -27,8 +27,8 @@ export default function FavoritesScreen({ navigation }) {
     if (!baseUrl) return;
     setLoading(true);
     try {
-      const res = await axios.get(`${baseUrl}/api/photos/favorites`);
-      setPhotos(res.data);
+      const res = await api.http.get('/api/photos/favorites');
+      setPhotos(res);
     } catch (err) {
       console.error(err);
     } finally {

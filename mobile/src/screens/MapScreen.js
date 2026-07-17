@@ -27,7 +27,7 @@ import {
 } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import axios from 'axios';
+import { api } from '../api/client';
 import { Icon, Badge } from '../components/ui';
 import { ApiContext } from '../context/ApiContext';
 import { getPhotoUrl } from '../utils/urls';
@@ -69,16 +69,16 @@ export default function MapScreen() {
     try {
       setLoading(true);
       console.log('[MapScreen] Fetching photos from:', `${baseUrl}/api/photos/geo`);
-      const response = await axios.get(`${baseUrl}/api/photos/geo`);
-      console.log('[MapScreen] Response data:', JSON.stringify(response.data).slice(0, 200));
-      
+      const data = await api.http.get('/api/photos/geo');
+      console.log('[MapScreen] Response data:', JSON.stringify(data).slice(0, 200));
+
       // Handle response format: { photos: [...], total: N, returned: N }
       let photoData = [];
-      if (response.data) {
-        if (Array.isArray(response.data)) {
-          photoData = response.data;
-        } else if (response.data.photos && Array.isArray(response.data.photos)) {
-          photoData = response.data.photos;
+      if (data) {
+        if (Array.isArray(data)) {
+          photoData = data;
+        } else if (data.photos && Array.isArray(data.photos)) {
+          photoData = data.photos;
         }
       }
       

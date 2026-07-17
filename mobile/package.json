@@ -15,6 +15,7 @@
     "build:aab": "node -e \"require('child_process').spawn('cmd', ['/c','set','EAS_NO_VCS=1','&&','npx','-y','eas-cli','build','-p','android','--profile','production'], { stdio: 'inherit' })\""
   },
   "dependencies": {
+    "@filmgallery/api-client": "file:../packages/@filmgallery/api-client",
     "@filmgallery/shared": "file:../packages/shared",
     "@expo/vector-icons": "^15.0.3",
     "@gorhom/bottom-sheet": "^5.2.8",
@@ -25,7 +26,6 @@
     "@react-navigation/bottom-tabs": "^6.0.0",
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/native-stack": "^6.9.17",
-    "axios": "^1.6.2",
     "date-fns": "^2.30.0",
     "expo": "~54.0.25",
     "expo-asset": "^12.0.12",

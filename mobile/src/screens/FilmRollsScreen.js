@@ -7,7 +7,7 @@ import CoverOverlay from '../components/CoverOverlay';
 import { colors, spacing, radius } from '../theme';
 import { ApiContext } from '../context/ApiContext';
 import { Icon } from '../components/ui';
-import axios from 'axios';
+import { api } from '../api/client';
 import { format } from 'date-fns';
 
 export default function FilmRollsScreen({ route, navigation }) {
@@ -23,9 +23,9 @@ export default function FilmRollsScreen({ route, navigation }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get(`${baseUrl}/api/rolls`);
+      const res = await api.http.get('/api/rolls');
       // Filter by filmId
-      const filtered = res.data.filter(r => r.filmId === filmId);
+      const filtered = res.filter(r => r.filmId === filmId);
       setRolls(filtered);
     } catch (err) {
       setError('Failed to connect to server.');

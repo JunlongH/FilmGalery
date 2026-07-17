@@ -10,7 +10,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import TagEditModal from '../components/TagEditModal';
 import NoteEditModal from '../components/NoteEditModal';
-import axios from 'axios';
+import { api } from '../api/client';
 import ImageViewer from 'react-native-image-zoom-viewer';
 import CachedImage from '../components/CachedImage';
 import { colors, spacing, radius } from '../theme';
@@ -34,9 +34,9 @@ export default function PhotoViewScreen({ route, navigation }) {
   useEffect(() => {
     if (!initialPhoto && photoId && baseUrl) {
       setLoading(true);
-      axios.get(`${baseUrl}/api/photos/single/${photoId}`)
+      api.http.get(`/api/photos/single/${photoId}`)
         .then(res => {
-          setPhoto(res.data);
+          setPhoto(res);
         })
         .catch(err => {
           console.error('Failed to fetch photo:', err.message);
@@ -74,7 +74,7 @@ export default function PhotoViewScreen({ route, navigation }) {
 
   const handleNoteSaved = async (newNote) => {
     try {
-      await axios.put(`${baseUrl}/api/photos/${photo.id}`, { caption: newNote });
+      await api.http.put(`/api/photos/${photo.id}`, { caption: newNote });
       setPhoto({ ...photo, caption: newNote });
     } catch (e) {
       console.error('Failed saving note', e?.message || e);
@@ -84,7 +84,7 @@ export default function PhotoViewScreen({ route, navigation }) {
   const toggleLike = async () => {
     const next = photo?.rating === 1 ? 0 : 1;
     try {
-      await axios.put(`${baseUrl}/api/photos/${photo.id}`, { rating: next });
+      await api.http.put(`/api/photos/${photo.id}`, { rating: next });
       setPhoto(prev => ({ ...prev, rating: next }));
     } catch (e) {
       console.error('Failed toggling like', e?.message || e);

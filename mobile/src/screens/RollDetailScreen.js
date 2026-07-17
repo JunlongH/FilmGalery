@@ -6,7 +6,7 @@ import { ActivityIndicator, Text, Surface, Divider, useTheme, Switch } from 'rea
 import { useFocusEffect } from '@react-navigation/native';
 import { Icon } from '../components/ui';
 import { ApiContext } from '../context/ApiContext';
-import axios from 'axios';
+import { api } from '../api/client';
 import { format } from 'date-fns';
 import { getPhotoUrl } from '../utils/urls';
 
@@ -28,11 +28,11 @@ export default function RollDetailScreen({ route, navigation }) {
     const fetchData = async () => {
       try {
         const [rollRes, photosRes] = await Promise.all([
-          axios.get(`${baseUrl}/api/rolls/${rollId}`),
-          axios.get(`${baseUrl}/api/rolls/${rollId}/photos`)
+          api.http.get(`/api/rolls/${rollId}`),
+          api.http.get(`/api/rolls/${rollId}/photos`)
         ]);
-        setRoll(rollRes.data);
-        setPhotos(photosRes.data);
+        setRoll(rollRes);
+        setPhotos(photosRes);
       } catch (err) {
         console.error(err);
       } finally {
@@ -54,11 +54,11 @@ export default function RollDetailScreen({ route, navigation }) {
             await clearImageCache();
             try {
               const [rollRes, photosRes] = await Promise.all([
-                axios.get(`${baseUrl}/api/rolls/${rollId}`),
-                axios.get(`${baseUrl}/api/rolls/${rollId}/photos`)
+                api.http.get(`/api/rolls/${rollId}`),
+                api.http.get(`/api/rolls/${rollId}/photos`)
               ]);
-              setRoll(rollRes.data);
-              setPhotos(photosRes.data);
+              setRoll(rollRes);
+              setPhotos(photosRes);
             } finally {
               setLoading(false);
             }

@@ -3,7 +3,7 @@ import { View, FlatList, StyleSheet, TouchableOpacity, Dimensions, Animated } fr
 import { ActivityIndicator, useTheme } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { ApiContext } from '../context/ApiContext';
-import axios from 'axios';
+import { api } from '../api/client';
 import CachedImage from '../components/CachedImage';
 import { getPhotoUrl } from '../utils/urls';
 import { Icon } from '../components/ui';
@@ -22,8 +22,8 @@ export default function TagDetailScreen({ route, navigation }) {
     if (!baseUrl) return;
     setLoading(true);
     try {
-      const res = await axios.get(`${baseUrl}/api/tags/${tagId}/photos`);
-      setPhotos(res.data);
+      const res = await api.http.get(`/api/tags/${tagId}/photos`);
+      setPhotos(res);
     } catch (err) {
       console.error(err);
     } finally {

@@ -4,7 +4,7 @@ import { ActivityIndicator, useTheme } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { Icon } from '../components/ui';
 import { ApiContext } from '../context/ApiContext';
-import axios from 'axios';
+import { api } from '../api/client';
 import FilmCard from '../components/FilmCard';
 
 const numColumns = 2;
@@ -21,8 +21,8 @@ export default function FilmsScreen({ navigation }) {
     if (!baseUrl) return;
     setLoading(true);
     try {
-      const res = await axios.get(`${baseUrl}/api/films`);
-      setFilms(res.data);
+      const res = await api.http.get('/api/films');
+      setFilms(res);
     } catch (err) {
       console.error(err);
     } finally {
