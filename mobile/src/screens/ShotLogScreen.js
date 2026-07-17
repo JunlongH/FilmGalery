@@ -132,7 +132,7 @@ export default function ShotLogScreen({ route, navigation }) {
             setPreloadedLocation({
               country: result.geocode.country || '',
               city: result.geocode.city || '',
-              detail: result.geocode.detail || '',
+              detail: result.geocode.displayName || '',
               latitude: result.coords.latitude,
               longitude: result.coords.longitude,
               altitude: result.coords.altitude
@@ -148,7 +148,7 @@ export default function ShotLogScreen({ route, navigation }) {
               setPreloadedLocation({
                 country: geocode.country || '',
                 city: geocode.city || '',
-                detail: geocode.detail || '',
+                detail: geocode.displayName || '',
                 latitude: result.coords.latitude,
                 longitude: result.coords.longitude,
                 altitude: result.coords.altitude

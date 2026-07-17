@@ -40,15 +40,10 @@ const ShotLogLocationScreen: React.FC = () => {
       const location = await autoDetectLocation();
       console.log('[ShotLogLocation] Auto-detect result:', JSON.stringify(location));
       
-      // Always set coordinates if available
-      if (location.latitude !== undefined) {
-        setLatitude(location.latitude.toFixed(6));
-        console.log('[ShotLogLocation] Set latitude:', location.latitude);
-      }
-      if (location.longitude !== undefined) {
-        setLongitude(location.longitude.toFixed(6));
-        console.log('[ShotLogLocation] Set longitude:', location.longitude);
-      }
+      // Coordinates are always echoed by reverseGeocode (GeocodeResult).
+      setLatitude(location.latitude.toFixed(6));
+      setLongitude(location.longitude.toFixed(6));
+      console.log('[ShotLogLocation] Set coords:', location.latitude, location.longitude);
       
       // Set geocoded address fields
       if (location.country) {
@@ -59,13 +54,13 @@ const ShotLogLocationScreen: React.FC = () => {
         setCity(location.city);
         console.log('[ShotLogLocation] Set city:', location.city);
       }
-      if (location.detail_location) {
-        setDetailLocation(location.detail_location);
-        console.log('[ShotLogLocation] Set detail:', location.detail_location);
+      if (location.displayName) {
+        setDetailLocation(location.displayName);
+        console.log('[ShotLogLocation] Set detail:', location.displayName);
       }
-      
+
       // If no geocode data, show alert
-      if (!location.country && !location.city && !location.detail_location) {
+      if (!location.country && !location.city && !location.displayName) {
         Alert.alert(
           'Coordinates Found',
           `Got coordinates but reverse geocoding failed.\n\nPlease check internet connection or enter address manually.`

@@ -26,6 +26,7 @@ const rawUtils = require('./rawUtils');
 const coordTransform = require('./coordTransform');
 const portDiscovery = require('./portDiscovery');
 const serverCapabilities = require('./serverCapabilities');
+const geocode = require('./geocode');
 
 // GLSL 着色器模块 (Phase 3)
 const shaders = require('./shaders');
@@ -421,4 +422,13 @@ module.exports = {
   getCapabilities: serverCapabilities.getCapabilities,
   isComputeEnabled: serverCapabilities.isComputeEnabled,
   isComputeRoute: serverCapabilities.isComputeRoute,
+
+  // ============================================================================
+  // 反向地理编码（BigDataCloud 共享 provider）
+  // ============================================================================
+
+  /** BigDataCloud 反向地理编码（mobile/watch 共用） */
+  reverseGeocodeBigDataCloud: geocode.reverseGeocodeBigDataCloud,
+  normalizeBigDataCloud: geocode.normalizeBigDataCloud,
+  BDC_BASE: geocode.BDC_BASE,
 };

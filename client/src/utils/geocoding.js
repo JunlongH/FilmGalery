@@ -315,13 +315,28 @@ const reverseWithNominatim = async (latitude, longitude) => {
 };
 
 /**
- * Reverse geocode: get address from coordinates
- * @param {number} latitude 
- * @param {number} longitude 
- * @returns {Promise<{displayName: string, country: string, city: string} | null>}
+ * Reverse geocode: get address from coordinates.
+ *
+ * Returns the canonical GeocodeResult (see @filmgallery/types) — never null.
+ * On total failure every string field is '' (coordinates are still echoed).
+ *
+ * @param {number} latitude
+ * @param {number} longitude
+ * @returns {Promise<import('@filmgallery/types').GeocodeResult>}
  */
 export const reverseGeocode = async (latitude, longitude) => {
-  if (!latitude || !longitude) return null;
+  // Normalise any provider's raw shape into the canonical contract.
+  const toResult = (r) => ({
+    displayName: (r && r.displayName) || '',
+    country: (r && r.country) || '',
+    city: (r && r.city) || '',
+    state: (r && r.state) || '',
+    latitude,
+    longitude,
+  });
+  const empty = () => toResult(null);
+
+  if (!latitude || !longitude) return empty();
 
   // Check if Amap is configured
   const mapProvider = localStorage.getItem('map_provider') || 'osm';
@@ -330,7 +345,7 @@ export const reverseGeocode = async (latitude, longitude) => {
     if (amapKey) {
       try {
         const result = await reverseWithAmap(latitude, longitude, amapKey);
-        if (result) return result;
+        if (result) return toResult(result);
       } catch (err) {
         console.warn('Amap reverse geocoding failed, falling back to OSM:', err.message);
       }
@@ -339,17 +354,18 @@ export const reverseGeocode = async (latitude, longitude) => {
 
   try {
     const result = await reverseWithPhoton(latitude, longitude);
-    if (result) return result;
+    if (result) return toResult(result);
   } catch (err) {
     console.warn('Photon reverse geocoding failed, falling back to Nominatim:', err.message);
   }
 
   try {
-    return await reverseWithNominatim(latitude, longitude);
+    const result = await reverseWithNominatim(latitude, longitude);
+    if (result) return toResult(result);
   } catch (err) {
     console.error('All reverse geocoding services failed:', err);
-    return null;
   }
+  return empty();
 };
 
 const geocodingService = {

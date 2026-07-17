@@ -16,7 +16,15 @@
     "./portDiscovery": "./portDiscovery.js",
     "./serverCapabilities": "./serverCapabilities.js",
     "./sourcePathResolver": "./sourcePathResolver.js",
-    "./rawUtils": "./rawUtils.js"
+    "./rawUtils": "./rawUtils.js",
+    "./geocode": {
+      "types": "./geocode.d.ts",
+      "require": "./geocode.js",
+      "default": "./geocode.js"
+    }
+  },
+  "dependencies": {
+    "@filmgallery/types": "file:../@filmgallery/types"
   },
   "private": true
 }

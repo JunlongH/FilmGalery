@@ -127,3 +127,38 @@ export interface ServerConfig {
   amapKey?: string;
   [key: string]: any;
 }
+
+/**
+ * Canonical reverse-geocode result — the single contract returned by every
+ * platform's reverseGeocode (client / mobile / watch).
+ *
+ * The string fields are NEVER undefined: when a provider cannot resolve an
+ * address, callers return an object with empty strings (coordinates are still
+ * known). This replaces the platform-specific shapes that previously diverged
+ * (`displayName` / `detail` / `detail_location` for the full-address field).
+ */
+export interface GeocodeResult {
+  /** Full formatted address / street-level detail. '' when unavailable. */
+  displayName: string;
+  /** Country name. '' when unavailable. */
+  country: string;
+  /** City (or locality / district / region fallback). '' when unavailable. */
+  city: string;
+  /** First-level administrative division (state / province). '' when unavailable. */
+  state: string;
+  /** Echoed input latitude. */
+  latitude: number;
+  /** Echoed input longitude. */
+  longitude: number;
+}
+
+/**
+ * A reverse-geocoder function. Never throws for "no address found"; returns a
+ * GeocodeResult with empty string fields instead. May throw on transport error
+ * only when used as an individual provider (the public reverseGeocode wrappers
+ * catch and degrade to empty fields).
+ */
+export type ReverseGeocoder = (
+  latitude: number,
+  longitude: number
+) => Promise<GeocodeResult>;

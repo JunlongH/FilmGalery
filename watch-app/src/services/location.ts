@@ -7,6 +7,8 @@
  * VERSION: 2026-01-13-v2
  */
 import { PermissionsAndroid, Platform, NativeModules } from 'react-native';
+import { reverseGeocodeBigDataCloud } from '@filmgallery/shared/geocode';
+import type { GeocodeResult } from '@filmgallery/types';
 
 // Try to use @react-native-community/geolocation first, fallback to react-native-geolocation-service
 let Geolocation: any;
@@ -26,13 +28,9 @@ try {
   }
 }
 
-export interface LocationResult {
-  country?: string;
-  city?: string;
-  detail_location?: string;
-  latitude?: number;
-  longitude?: number;
-}
+// Canonical reverse-geocode result lives in @filmgallery/types. This alias
+// keeps the legacy export name for any existing importers.
+export type LocationResult = GeocodeResult;
 
 export interface LocationCoords {
   latitude: number;
@@ -228,63 +226,23 @@ export const getCurrentLocation = async (): Promise<LocationCoords | null> => {
   }
 };
 
-// Reverse geocoding using BigDataCloud API (works in China, no API key needed)
+// Reverse geocoding via the shared BigDataCloud provider (works in China, no API key).
 export const reverseGeocode = async (
   latitude: number,
   longitude: number
-): Promise<LocationResult> => {
+): Promise<GeocodeResult> => {
   console.log(`[Location] reverseGeocode called: (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
-  
   try {
-    // Use BigDataCloud API - free, no API key, works in China
-    const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`;
-    console.log('[Location] Fetching BigDataCloud...');
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      console.log('[Location] BigDataCloud request timeout (15s), aborting...');
-      controller.abort();
-    }, 15000);
-    
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'FilmGalleryWatch/1.0',
-      },
-      signal: controller.signal,
+    const result = await reverseGeocodeBigDataCloud(latitude, longitude, {
+      timeout: 15000,
+      userAgent: 'FilmGalleryWatch/1.0',
     });
-    
-    clearTimeout(timeoutId);
-    console.log('[Location] BigDataCloud response status:', response.status);
-    
-    if (!response.ok) {
-      throw new Error(`BigDataCloud API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    console.log('[Location] BigDataCloud data:', JSON.stringify(data).slice(0, 300));
-    
-    // Extract English names from BigDataCloud response
-    const result: LocationResult = {
-      country: data.countryName || '',
-      city: data.city || data.locality || data.principalSubdivision || '',
-      detail_location: [data.street, data.neighbourhood, data.locality].filter(Boolean).join(', ') || data.localityInfo?.administrative?.[0]?.name || '',
-      latitude,
-      longitude,
-    };
-    
-    console.log(`[Location] ✓ Geocoded: ${result.city}, ${result.country}, ${result.detail_location}`);
+    console.log(`[Location] ✓ Geocoded: ${result.city}, ${result.country}, ${result.displayName}`);
     return result;
   } catch (error: any) {
     console.warn(`[Location] Reverse geocode failed:`, error.name, error.message);
     // Fallback - return coordinates but no address data
-    console.log('[Location] Falling back to coordinates only (no address)');
-    return {
-      country: '',
-      city: '',
-      detail_location: '',
-      latitude,
-      longitude,
-    };
+    return { displayName: '', country: '', city: '', state: '', latitude, longitude };
   }
 };
 

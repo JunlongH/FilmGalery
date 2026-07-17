@@ -11,6 +11,7 @@ import { Platform, PermissionsAndroid, Alert, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { wgs84ToGcj02 } from '@filmgallery/shared/coordTransform';
+import { reverseGeocodeBigDataCloud } from '@filmgallery/shared/geocode';
 
 // ============================================================================
 // Configuration
@@ -57,9 +58,13 @@ const log = (msg, level = 'info') => {
  * @returns {Promise<{country: string, city: string, detail: string}>}
  */
 const reverseGeocode = async (latitude, longitude) => {
+  // Canonical GeocodeResult (@filmgallery/types). Empty strings on failure;
+  // coordinates are still echoed.
+  const empty = () => ({ displayName: '', country: '', city: '', state: '', latitude, longitude });
+
   try {
     log(`Reverse geocoding: (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
-    
+
     // Check if Amap is configured
     const mapProvider = await AsyncStorage.getItem('map_provider');
     if (mapProvider === 'amap') {
@@ -73,15 +78,18 @@ const reverseGeocode = async (latitude, longitude) => {
           const timeoutId = setTimeout(() => controller.abort(), 5000);
           const response = await fetch(amapUrl, { signal: controller.signal });
           clearTimeout(timeoutId);
-          
+
           if (response.ok) {
             const data = await response.json();
             if (data.status === '1' && data.regeocode) {
               const comp = data.regeocode.addressComponent || {};
               const geocode = {
+                displayName: data.regeocode.formatted_address || '',
                 country: comp.country || '中国',
                 city: comp.city || comp.district || '',
-                detail: data.regeocode.formatted_address || ''
+                state: comp.province || '',
+                latitude,
+                longitude,
               };
               log(`✓ Amap geocoded: ${geocode.city}, ${geocode.country}`);
               return geocode;
@@ -92,53 +100,38 @@ const reverseGeocode = async (latitude, longitude) => {
         }
       }
     }
-    
-    // Fallback: BigDataCloud (works in China, no API key)
-    const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`;
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'FilmGallery/1.0',
-      },
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      throw new Error(`BigDataCloud API error: ${response.status}`);
+
+    // Fallback: BigDataCloud via the shared provider (no API key, works in China)
+    try {
+      const geocode = await reverseGeocodeBigDataCloud(latitude, longitude, {
+        timeout: 5000,
+        userAgent: 'FilmGallery/1.0',
+      });
+      log(`✓ Geocoded: ${geocode.city}, ${geocode.country}`);
+      return geocode;
+    } catch (e) {
+      log(`BigDataCloud geocode failed: ${e.message}, falling back to Expo`, 'warn');
     }
-    
-    const data = await response.json();
-    
-    // Extract English names from BigDataCloud response
-    const geocode = {
-      country: data.countryName || '',
-      city: data.city || data.locality || data.principalSubdivision || '',
-      detail: [data.street, data.neighbourhood, data.locality].filter(Boolean).join(', ') || data.localityInfo?.administrative?.[0]?.name || ''
-    };
-    
-    log(`✓ Geocoded: ${geocode.city}, ${geocode.country}`);
-    return geocode;
-  } catch (e) {
-    log(`BigDataCloud geocode failed: ${e.message}, falling back to Expo`, 'warn');
-    
-    // Fallback to Expo Location if BigDataCloud fails
+
+    // Final fallback: Expo Location (on-device)
     try {
       const results = await Location.reverseGeocodeAsync({ latitude, longitude });
       const addr = results?.[0] || {};
       return {
+        displayName: `${addr.street || ''} ${addr.name || ''}`.trim(),
         country: addr.country || '',
         city: addr.city || addr.subregion || addr.region || '',
-        detail: `${addr.street || ''} ${addr.name || ''}`.trim() || ''
+        state: addr.region || '',
+        latitude,
+        longitude,
       };
     } catch (fallbackError) {
       log(`Fallback geocode also failed: ${fallbackError.message}`, 'warn');
-      return { country: '', city: '', detail: '' };
+      return empty();
     }
+  } catch (e) {
+    log(`reverseGeocode error: ${e.message}`, 'warn');
+    return empty();
   }
 };
 

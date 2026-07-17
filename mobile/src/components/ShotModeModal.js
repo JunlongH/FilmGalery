@@ -300,7 +300,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
           setLocation({
             country: result.geocode.country || '',
             city: result.geocode.city || '',
-            detail: result.geocode.detail || '',
+            detail: result.geocode.displayName || '',
             latitude: result.coords.latitude,
             longitude: result.coords.longitude,
             altitude: result.coords.altitude
@@ -373,7 +373,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
       setLocation({
         country: geocode.country || '',
         city: geocode.city || '',
-        detail: geocode.detail || '',
+        detail: geocode.displayName || '',
         latitude: coords.latitude,
         longitude: coords.longitude,
         altitude: coords.altitude

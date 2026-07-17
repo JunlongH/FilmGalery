@@ -18,7 +18,7 @@
 | 2A.3.2 portDiscovery 常量源 | 🟨 | server `mdns-service.js` ✅（已验证）；mobile `portDiscovery.js` ✅（常量 + 4 个纯工具函数 cleanIpAddress/extractPort/buildUrl/isPrivateIp 全部下沉到 shared，仅保留运行时扫描/mDNS 逻辑；metro 子路径解析由既有 `expo-file-system/legacy` 佐证，仍需 `expo start` 终验）；**watch DEFERRED**（TS，需 shared 类型声明） |
 | 2A.3.3 api-client | 🟨 硬化完成 / 采用待定 | 补非 2xx 抛错语义（对齐 `jsonFetch`）+ 修 `return await parseResponse` 致 `onError` 失效的真 bug + 6 个测试；**消费端迁移 DEFERRED** —— 经核对 client `core.js`（动态 base / React Query 过滤 / cache-buster / XHR 上传）与 api-client（静态 base / 数组 / isomorphic）**是合理的上下文分叉，非冗余**，强行合并属错配；api-client 的真正消费方是 mobile/watch（替换各自的 axios 层），需对应构建环境 |
 | 2A.3.4 endpoint 常量去重 | ⏸ DEFERRED | `DATA_ROUTES` 是服务端能力清单，非客户端端点常量；强行共享属过度设计。消费者各自 `api/*` 已集中路径。保留观察 |
-| 2A.3.5 reverse-geocode 接口 | ⏸ DEFERRED | 决策落定：**选项 A**（shared 定义 `ReverseGeocoder` 接口 + `GeocodeResult` 类型，各端保留 provider adapter）。实现推迟到有消费者迁移时，避免无消费者的死接口 |
+| 2A.3.5 reverse-geocode 接口 | ✅ | `GeocodeResult`/`ReverseGeocoder` 类型入 `@filmgallery/types`（统一 displayName/country/city/state/lat/lng，取代三端的 displayName/detail/detail_location 分叉）。**比选项 A 更进一步**：mobile+watch 重复的 BigDataCloud 逻辑抽成 `packages/shared/geocode.js`（+ `.d.ts` + barrel/subpath 导出 + jest 测试，**260 tests green**），三端 `reverseGeocode` 全部对齐为 `GeocodeResult`；client（Amap/Photon/Nominatim，browser-only，死代码）也规整。mobile/watch 消费者 `.detail(_location)`→`.displayName`。client 经 CRA 构建验证；mobile/watch 因无 metro/tsc 环境需终验 |
 | 2A.4 mobile TS / workspace | ⏸ 暂停点 | 按指令在 mobile 迁 TS 前暂停 |
 
 **2A 出口（进入 2B 硬门槛）已达成**：① PR/push CI test+lint 硬门禁 ✅ ② build-desktop 去 continue-on-error ✅ ③ server path-security/shutdown/ensureStartDateColumn 复现用例固化 ✅（watch-app typecheck 因依赖树未稳定暂缓，不阻塞 2B）。
