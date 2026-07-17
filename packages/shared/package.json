@@ -13,7 +13,11 @@
     "./constants": "./filmLabConstants.js",
     "./constants/equipment": "./constants/equipment.js",
     "./coordTransform": "./coordTransform.js",
-    "./portDiscovery": "./portDiscovery.js",
+    "./portDiscovery": {
+      "types": "./portDiscovery.d.ts",
+      "require": "./portDiscovery.js",
+      "default": "./portDiscovery.js"
+    },
     "./serverCapabilities": "./serverCapabilities.js",
     "./sourcePathResolver": "./sourcePathResolver.js",
     "./rawUtils": "./rawUtils.js",

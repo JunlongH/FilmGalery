@@ -9,6 +9,20 @@
  */
 
 import Zeroconf from 'react-native-zeroconf';
+import {
+  PORT_SCAN_RANGE,
+  DISCOVERY_TIMEOUT,
+  APP_IDENTIFIER,
+  DISCOVERY_MODE,
+  MDNS_CONFIG,
+  cleanIpAddress,
+  extractPort,
+  buildUrl,
+  isPrivateIp,
+} from '@filmgallery/shared/portDiscovery';
+
+// Re-export so existing watch callers keep working unchanged.
+export { DISCOVERY_MODE, cleanIpAddress, extractPort, buildUrl, isPrivateIp };
 
 // ==================== 类型定义 ====================
 
@@ -51,78 +65,17 @@ export interface DiscoveryServicesResult {
 }
 
 // ==================== 配置常量 ====================
+// Constants are imported from @filmgallery/shared (single source for
+// server/mobile/watch). The fully-qualified mDNS service name is derived here
+// (trailing dot, RFC 6763).
 
-// Common ports to scan (in priority order)
-const PORT_SCAN_RANGE = [4000, 4001, 4002, 4003, 4004, 4005, 4010, 4020, 4100];
-
-// Discovery request timeout (ms)
-const DISCOVERY_TIMEOUT = 2000;
-
-// mDNS browse timeout (ms)
-const MDNS_BROWSE_TIMEOUT = 5000;
-
-// App identifier for validation
-const APP_IDENTIFIER = 'FilmGallery';
-
-// mDNS service type
-const MDNS_SERVICE_TYPE = '_filmgallery._tcp.';
-
-// Discovery modes
 export type DiscoveryMode = 'auto' | 'mdns' | 'portscan' | 'manual';
 
-export const DISCOVERY_MODE: Record<string, DiscoveryMode> = {
-  AUTO: 'auto',           // 自动选择（优先 mDNS，回退端口扫描）
-  MDNS_ONLY: 'mdns',      // 仅 mDNS
-  PORT_SCAN: 'portscan',  // 仅端口扫描（适用于公网）
-  MANUAL: 'manual'        // 手动配置
-};
+const MDNS_SERVICE_TYPE = `_${MDNS_CONFIG.SERVICE_TYPE}._${MDNS_CONFIG.PROTOCOL}.`;
+const MDNS_BROWSE_TIMEOUT = MDNS_CONFIG.BROWSE_TIMEOUT;
 
-// ==================== 工具函数 ====================
-
-/**
- * Clean IP address input (remove protocol and port if present)
- */
-export function cleanIpAddress(input: string): string {
-  if (!input) return '';
-  let clean = input.trim();
-  // Remove protocol
-  clean = clean.replace(/^https?:\/\//, '');
-  // Remove port
-  clean = clean.replace(/:\d+$/, '');
-  // Remove trailing slash
-  clean = clean.replace(/\/$/, '');
-  return clean;
-}
-
-/**
- * Extract port from URL if present
- */
-export function extractPort(url: string): number | null {
-  if (!url) return null;
-  const match = url.match(/:(\d+)(?:\/|$)/);
-  return match ? parseInt(match[1], 10) : null;
-}
-
-/**
- * Build full URL from IP and port
- */
-export function buildUrl(ip: string, port: number): string {
-  const cleanIp = cleanIpAddress(ip);
-  return `http://${cleanIp}:${port}`;
-}
-
-/**
- * 判断是否为局域网 IP
- */
-export function isPrivateIp(ip: string): boolean {
-  const cleanIp = cleanIpAddress(ip);
-  if (/^10\./.test(cleanIp)) return true;
-  if (/^172\.(1[6-9]|2[0-9]|3[01])\./.test(cleanIp)) return true;
-  if (/^192\.168\./.test(cleanIp)) return true;
-  if (/^169\.254\./.test(cleanIp)) return true;
-  if (cleanIp === 'localhost' || cleanIp === '127.0.0.1') return true;
-  return false;
-}
+// Pure helpers (cleanIpAddress/extractPort/buildUrl/isPrivateIp) are imported
+// and re-exported from @filmgallery/shared above.
 
 // ==================== HTTP 端口扫描 ====================
 
