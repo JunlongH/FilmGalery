@@ -15,9 +15,9 @@ function createLocationsApi(http) {
     // ========================================
     
     /**
-     * Search locations (geocoding)
+     * Search locations (server route: GET /api/locations?q=...)
      */
-    search: (query) => http.get('/api/locations/search', { q: query }),
+    search: (query, params = {}) => http.get('/api/locations', { q: query, ...params }),
     
     /**
      * Get location by ID

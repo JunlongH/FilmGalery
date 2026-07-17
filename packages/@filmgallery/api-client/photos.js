@@ -16,9 +16,12 @@ function createPhotosApi(http) {
     search: (filters = {}) => http.get('/api/photos/search', filters),
     
     /**
-     * Get single photo by ID
+     * Get single photo by ID (server route: GET /api/photos/single/:id)
      */
-    get: (id) => http.get(`/api/photos/${id}`),
+    get: (id) => http.get(`/api/photos/single/${id}`),
+
+    /** Alias of get() — explicit name for the single-photo lookup. */
+    getSingle: (id) => http.get(`/api/photos/single/${id}`),
     
     /**
      * Update photo metadata
@@ -29,11 +32,20 @@ function createPhotosApi(http) {
      * Delete photo
      */
     delete: (id) => http.delete(`/api/photos/${id}`),
-    
+
     /**
-     * Get favorite photos
+     * Get favorite photos (server route: GET /api/photos/favorites)
      */
-    getFavorites: () => http.get('/api/photos', { favorite: 1 }),
+    getFavorites: () => http.get('/api/photos/favorites'),
+
+    /** Random photos (server route: GET /api/photos/random?limit=N) */
+    getRandom: (limit) => http.get('/api/photos/random', { limit }),
+
+    /** Photos with GPS coordinates for the map (GET /api/photos/geo) */
+    getGeo: (params = {}) => http.get('/api/photos/geo', params),
+
+    /** Negative photos (GET /api/photos/negatives) */
+    getNegatives: (params = {}) => http.get('/api/photos/negatives', params),
     
     /**
      * Update positive from negative (save processed image)

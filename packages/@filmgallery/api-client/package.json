@@ -3,14 +3,21 @@
   "version": "1.0.0",
   "description": "Shared API client for FilmGallery applications (Web, Mobile, Watch)",
   "main": "index.js",
+  "types": "index.d.ts",
   "type": "commonjs",
   "exports": {
-    ".": "./index.js",
+    ".": {
+      "types": "./index.d.ts",
+      "require": "./index.js",
+      "default": "./index.js"
+    },
     "./equipment": "./equipment.js",
     "./rolls": "./rolls.js",
     "./photos": "./photos.js",
     "./films": "./films.js",
-    "./locations": "./locations.js"
+    "./locations": "./locations.js",
+    "./stats": "./stats.js",
+    "./metadata": "./metadata.js"
   },
   "private": true,
   "keywords": [

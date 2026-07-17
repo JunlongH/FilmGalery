@@ -1,16 +1,21 @@
-import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createApiClient } from '@filmgallery/api-client';
+import type { ApiClient } from '@filmgallery/api-client';
 import { Photo, FilmItem, ShotLog, Roll, Film } from '../types';
 
 const SERVER_URL_KEY = '@server_url';
-// Default to empty - user must configure server URL in settings
-// This avoids having placeholder IP addresses in production code
+// Default to empty - user must configure server URL in settings.
+// This avoids having placeholder IP addresses in production code.
 const DEFAULT_URL = '';
-const MAX_RETRIES = 2;
-const RETRY_DELAY = 1000;
 
 class ApiService {
-  private client: AxiosInstance;
+  // Shared client. Resilience matches the previous axios setup:
+  //   timeout 15s, up to 2 retries on network errors with linear 1s/2s backoff.
+  private client: ApiClient = createApiClient({
+    baseUrl: DEFAULT_URL,
+    timeout: 15000,
+    retry: { maxRetries: 2, delayMs: 1000, backoff: 'linear' },
+  });
   private baseURL: string = DEFAULT_URL;
   private filmsCache: Film[] | null = null;
   private filmsCacheAt: number = 0;
@@ -26,54 +31,12 @@ class ApiService {
     return data as T;
   }
 
-  constructor() {
-    this.client = axios.create({
-      baseURL: this.baseURL,
-      timeout: 15000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    // Add retry interceptor for network errors
-    this.client.interceptors.response.use(
-      response => response,
-      async (error: AxiosError) => {
-        const config = error.config as AxiosRequestConfig & { _retryCount?: number };
-        if (!config) return Promise.reject(error);
-
-        const isNetworkError = !error.response && (
-          error.code === 'ERR_NETWORK' ||
-          error.code === 'ECONNABORTED' ||
-          (error.message && (error.message.includes('Network Error') || error.message.includes('timeout')))
-        );
-
-        if (isNetworkError) {
-          config._retryCount = (config._retryCount || 0) + 1;
-          if (config._retryCount <= MAX_RETRIES) {
-            console.log(`[API] Retry ${config._retryCount}/${MAX_RETRIES} for ${config.url}`);
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * config._retryCount!));
-            return this.client.request(config);
-          }
-        }
-
-        console.error('[API] Request failed:', {
-          url: config.url,
-          method: config.method,
-          error: error.message,
-          code: error.code,
-        });
-        return Promise.reject(error);
-      }
-    );
-  }
-
   async loadServerURL(): Promise<string> {
     try {
       const url = await AsyncStorage.getItem(SERVER_URL_KEY);
       if (url) {
         this.baseURL = url;
-        this.client.defaults.baseURL = url;
+        this.client.setBaseUrl(url);
         return url;
       }
     } catch (error) {
@@ -86,7 +49,7 @@ class ApiService {
     try {
       await AsyncStorage.setItem(SERVER_URL_KEY, url);
       this.baseURL = url;
-      this.client.defaults.baseURL = url;
+      this.client.setBaseUrl(url);
     } catch (error) {
       console.error('Failed to save server URL:', error);
       throw error;
@@ -98,15 +61,11 @@ class ApiService {
   }
 
   getImageURL(relativePath: string | undefined): string | null {
-    if (!relativePath) return null;
-    return `${this.baseURL}/uploads/${relativePath}`;
+    return this.client.http.buildUploadUrl(relativePath);
   }
 
   async getRandomPhotos(limit: number = 10): Promise<Photo[]> {
-    const response = await this.client.get<Photo[]>('/api/photos/random', {
-      params: { limit },
-    });
-    return response.data;
+    return (await this.client.photos.getRandom(limit)) as Photo[];
   }
 
   async getFilms(options?: { force?: boolean }): Promise<Film[]> {
@@ -116,8 +75,8 @@ class ApiService {
     if (!force && this.filmsCache && now - this.filmsCacheAt < 5 * 60 * 1000) {
       return this.filmsCache;
     }
-    const response = await this.client.get('/api/films');
-    const films = this.unwrapList<Film>(response.data);
+    const data = await this.client.films.list();
+    const films = this.unwrapList<Film>(data);
     this.filmsCache = films;
     this.filmsCacheAt = now;
     return films;
@@ -125,10 +84,8 @@ class ApiService {
 
   async getFilmItems(status?: string | string[]): Promise<FilmItem[]> {
     const statusParam = Array.isArray(status) ? status.join(',') : status;
-    const response = await this.client.get('/api/film-items', {
-      params: statusParam ? { status: statusParam } : {},
-    });
-    const items = this.unwrapList<FilmItem>(response.data);
+    const data = await this.client.films.items.list(statusParam ? { status: statusParam } : {});
+    const items = this.unwrapList<FilmItem>(data);
     // Ensure title is readable
     return items.map(item => ({
       ...item,
@@ -137,33 +94,27 @@ class ApiService {
   }
 
   async getFilmItem(id: number): Promise<FilmItem> {
-    const response = await this.client.get(`/api/film-items/${id}`);
-    return response.data.item;
+    const data = await this.client.films.items.get(id);
+    return this.unwrapItem<FilmItem>(data);
   }
 
   async updateFilmItemShotLogs(
     id: number,
     shotLogs: ShotLog[]
   ): Promise<FilmItem> {
-    const response = await this.client.put(
-      `/api/film-items/${id}`,
-      {
-        shot_logs: JSON.stringify(shotLogs),
-      }
-    );
-    return response.data.item;
+    const data = await this.client.films.items.update(id, {
+      shot_logs: JSON.stringify(shotLogs),
+    });
+    return this.unwrapItem<FilmItem>(data);
   }
 
   async getPhotosByRoll(rollId: number): Promise<Photo[]> {
-    const response = await this.client.get<Photo[]>('/api/photos', {
-      params: { roll_id: rollId },
-    });
-    return response.data;
+    return (await this.client.http.get('/api/photos', { roll_id: rollId })) as Photo[];
   }
 
   async getRolls(): Promise<Roll[]> {
-    const response = await this.client.get<Roll[]>('/api/rolls');
-    const rolls = this.unwrapList<Roll>(response.data);
+    const data = await this.client.rolls.list();
+    const rolls = this.unwrapList<Roll>(data);
     // Map film_name_joined to film_type for display compatibility
     return rolls.map(roll => ({
       ...roll,
@@ -181,8 +132,7 @@ class ApiService {
     mount?: string;
   } | null> {
     try {
-      const response = await this.client.get(`/api/equipment/cameras/${id}`);
-      return response.data;
+      return await this.client.equipment.cameras.get(id);
     } catch (error) {
       console.error('Failed to get camera:', error);
       return null;
