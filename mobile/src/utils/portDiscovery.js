@@ -10,77 +10,28 @@
 
 import Zeroconf from 'react-native-zeroconf';
 
-// ==================== 配置常量 ====================
-// Operational constants come from @filmgallery/shared so server/mobile/watch
-// agree on the port list, timeouts, app id, and discovery modes. The
-// fully-qualified mDNS service name is derived here (trailing dot, RFC 6763).
+// ==================== 配置常量 + 纯工具函数 ====================
+// Constants and pure helpers come from @filmgallery/shared so server/mobile/watch
+// agree (single source). The fully-qualified mDNS service name is derived here
+// (trailing dot, RFC 6763). Only the runtime scanning/mDNS logic below is
+// mobile-specific.
 import {
   PORT_SCAN_RANGE,
   DISCOVERY_TIMEOUT,
   APP_IDENTIFIER,
   DISCOVERY_MODE,
   MDNS_CONFIG,
+  cleanIpAddress,
+  extractPort,
+  buildUrl,
+  isPrivateIp,
 } from '@filmgallery/shared/portDiscovery';
-export { DISCOVERY_MODE };
+export { DISCOVERY_MODE, cleanIpAddress, extractPort, buildUrl, isPrivateIp };
 
 const MDNS_SERVICE_TYPE = `_${MDNS_CONFIG.SERVICE_TYPE}._${MDNS_CONFIG.PROTOCOL}.`;
 const MDNS_BROWSE_TIMEOUT = MDNS_CONFIG.BROWSE_TIMEOUT;
 
-// ==================== 工具函数 ====================
 
-/**
- * Clean IP address input (remove protocol and port if present)
- * @param {string} input - Raw input from user
- * @returns {string} Clean IP address
- */
-export function cleanIpAddress(input) {
-  if (!input) return '';
-  let clean = input.trim();
-  // Remove protocol
-  clean = clean.replace(/^https?:\/\//, '');
-  // Remove port
-  clean = clean.replace(/:\d+$/, '');
-  // Remove trailing slash
-  clean = clean.replace(/\/$/, '');
-  return clean;
-}
-
-/**
- * Extract port from URL if present
- * @param {string} url - URL string
- * @returns {number|null} Port number or null
- */
-export function extractPort(url) {
-  if (!url) return null;
-  const match = url.match(/:(\d+)(?:\/|$)/);
-  return match ? parseInt(match[1], 10) : null;
-}
-
-/**
- * Build full URL from IP and port
- * @param {string} ip - IP address
- * @param {number} port - Port number
- * @returns {string} Full URL
- */
-export function buildUrl(ip, port) {
-  const cleanIp = cleanIpAddress(ip);
-  return `http://${cleanIp}:${port}`;
-}
-
-/**
- * 判断是否为局域网 IP
- * @param {string} ip - IP address
- * @returns {boolean}
- */
-export function isPrivateIp(ip) {
-  const cleanIp = cleanIpAddress(ip);
-  if (/^10\./.test(cleanIp)) return true;
-  if (/^172\.(1[6-9]|2[0-9]|3[01])\./.test(cleanIp)) return true;
-  if (/^192\.168\./.test(cleanIp)) return true;
-  if (/^169\.254\./.test(cleanIp)) return true;
-  if (cleanIp === 'localhost' || cleanIp === '127.0.0.1') return true;
-  return false;
-}
 
 // ==================== HTTP 端口扫描 ====================
 

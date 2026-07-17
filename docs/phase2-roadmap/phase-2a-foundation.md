@@ -15,8 +15,8 @@
 | 2A.2 CI 门禁 | ✅ | 新建 `.github/workflows/ci.yml`（PR/push，lint+test 硬门禁）；`build-desktop.yml` 删 `continue-on-error`、test 移到 rebuild 前；`eslint.config.mjs`（多环境，**0 error / 163 warn**） |
 | 2A.3.0 shared 采用基础 | ✅ | `coordTransform.js` ESM→CJS 归一；`index.js` barrel + `package.json` subpath 导出 coord/port/serverCapabilities；client/server/mobile/watch 声明 `file:` 依赖；server.js 相对路径 require→包名 |
 | 2A.3.1 coordTransform 去重 | ✅ | client+mobile 本地副本删除，4 处消费者改 import 自 `@filmgallery/shared/coordTransform`；`wgs84ToGcj02` 仅存于 shared |
-| 2A.3.2 portDiscovery 常量源 | 🟨 | server `mdns-service.js` ✅（已验证）；mobile `portDiscovery.js` ✅（metro 子路径解析由既有 `expo-file-system/legacy` 佐证，仍需 `expo start` 终验）；**watch DEFERRED**（TS，需 shared 类型声明） |
-| 2A.3.3 api-client | 🟨 硬化完成 / 采用待定 | 补非 2xx 抛错语义（对齐 `jsonFetch`）+ 修 `return await parseResponse` 致 `onError` 失效的真 bug + 6 个测试；**消费端迁移 DEFERRED**（需扩展 api-client 覆盖 luts/metadata/processing 等模块 + CRA/metro 构建验证，体量大，与 2B 并行） |
+| 2A.3.2 portDiscovery 常量源 | 🟨 | server `mdns-service.js` ✅（已验证）；mobile `portDiscovery.js` ✅（常量 + 4 个纯工具函数 cleanIpAddress/extractPort/buildUrl/isPrivateIp 全部下沉到 shared，仅保留运行时扫描/mDNS 逻辑；metro 子路径解析由既有 `expo-file-system/legacy` 佐证，仍需 `expo start` 终验）；**watch DEFERRED**（TS，需 shared 类型声明） |
+| 2A.3.3 api-client | 🟨 硬化完成 / 采用待定 | 补非 2xx 抛错语义（对齐 `jsonFetch`）+ 修 `return await parseResponse` 致 `onError` 失效的真 bug + 6 个测试；**消费端迁移 DEFERRED** —— 经核对 client `core.js`（动态 base / React Query 过滤 / cache-buster / XHR 上传）与 api-client（静态 base / 数组 / isomorphic）**是合理的上下文分叉，非冗余**，强行合并属错配；api-client 的真正消费方是 mobile/watch（替换各自的 axios 层），需对应构建环境 |
 | 2A.3.4 endpoint 常量去重 | ⏸ DEFERRED | `DATA_ROUTES` 是服务端能力清单，非客户端端点常量；强行共享属过度设计。消费者各自 `api/*` 已集中路径。保留观察 |
 | 2A.3.5 reverse-geocode 接口 | ⏸ DEFERRED | 决策落定：**选项 A**（shared 定义 `ReverseGeocoder` 接口 + `GeocodeResult` 类型，各端保留 provider adapter）。实现推迟到有消费者迁移时，避免无消费者的死接口 |
 | 2A.4 mobile TS / workspace | ⏸ 暂停点 | 按指令在 mobile 迁 TS 前暂停 |
