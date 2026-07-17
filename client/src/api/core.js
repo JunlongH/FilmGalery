@@ -108,13 +108,25 @@ export function buildUploadUrl(pathOrUrl) {
 
 /**
  * Generic JSON fetch wrapper
- * Uses dynamic API_BASE to support runtime server switching
+ * Uses dynamic API_BASE to support runtime server switching.
+ * Throws on non-2xx responses (parsing server `error`/`message` when present)
+ * so callers and React Query can distinguish success from failure.
  */
 export async function jsonFetch(url, opts = {}) {
   const apiBase = getApiBase();
   const r = await fetch(`${apiBase}${url}`, opts);
   const text = await r.text();
-  try { return JSON.parse(text); } catch { return text; }
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { parsed = undefined; }
+  if (!r.ok) {
+    const serverMsg = parsed && (parsed.error || parsed.message);
+    const msg = (typeof serverMsg === 'string' && serverMsg) || `HTTP ${r.status} ${r.statusText || ''}`.trim();
+    const err = new Error(msg || `HTTP ${r.status}`);
+    err.status = r.status;
+    if (parsed !== undefined) err.body = parsed;
+    throw err;
+  }
+  return parsed !== undefined ? parsed : text;
 }
 
 /**

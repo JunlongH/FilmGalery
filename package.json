@@ -4,8 +4,11 @@
   "private": true,
   "description": "Film Gallery — Electron desktop wrapper for the Film Manager app",
   "main": "electron-main.js",
-  "author": "Your Name",
+  "author": "FilmGallery",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "workspaces": [
     "packages/shared",
     "packages/@filmgallery/*"
@@ -28,7 +31,7 @@
     "test:verbose": "jest --config tests/jest.config.js --verbose"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.2",
+    "@electron/rebuild": "^3.7.1",
     "concurrently": "^8.2.0",
     "cross-env": "^7.0.3",
     "electron": "26.6.10",
@@ -112,6 +115,5 @@
       "createStartMenuShortcut": true,
       "allowToChangeInstallationDirectory": true
     }
-  },
-  "dependencies": {}
+  }
 }

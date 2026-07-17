@@ -19,6 +19,7 @@ const {
   NAMING_PATTERNS 
 } = require('../services/download-service');
 const { uploadsDir } = require('../config/paths');
+const { isPathAllowed } = require('../utils/path-security');
 const exportHistory = require('../services/export-history-service');
 
 // ============================================================================
@@ -78,7 +79,13 @@ router.post('/', async (req, res) => {
     if (!outputDir) {
       return res.status(400).json({ error: 'outputDir is required' });
     }
-    
+
+    // SECURITY: outputDir must be inside a configured allow-list to prevent
+    // arbitrary file writes anywhere on the host filesystem.
+    if (!isPathAllowed(outputDir)) {
+      return res.status(403).json({ error: 'outputDir is not in an allowed location' });
+    }
+
     // 获取照片 ID 列表
     const ids = await getPhotoIdsByScope(rollId, scope, photoIds);
     if (ids.length === 0) {

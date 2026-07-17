@@ -97,6 +97,13 @@ android {
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
+    // Read release signing config from android/keystore.properties (gitignored).
+    // Fallback to the debug keystore if not present (NOT safe for production).
+    def keystoreProps = new Properties()
+    def keystorePropsFile = rootProject.file('app/keystore.properties')
+    if (keystorePropsFile.exists()) {
+        keystoreProps.load(new FileInputStream(keystorePropsFile))
+    }
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -104,15 +111,24 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (keystoreProps.containsKey('storeFile')) {
+            release {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Caution! In production, generate your own keystore (see
+            // scripts/generate-release-keystore.sh) and place its path in
+            // android/app/keystore.properties. Falls back to debug signing otherwise.
+            signingConfig keystoreProps.containsKey('storeFile') ? signingConfigs.release : signingConfigs.debug
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

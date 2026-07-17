@@ -7,6 +7,7 @@
 
 const express = require('express');
 const router = express.Router();
+const { isPathAllowed } = require('../utils/path-security');
 const {
   MATCH_STRATEGY,
   MATCH_STATUS,
@@ -16,6 +17,13 @@ const {
   updateManualMatch,
   getPhotosForRoll
 } = require('../services/import-service');
+
+// Deny any source path outside the allow-list (defense-in-depth against
+// arbitrary file read via /api/import).
+function filterAllowedPaths(filePaths) {
+  if (!Array.isArray(filePaths)) return [];
+  return filePaths.filter(p => typeof p === 'string' && isPathAllowed(p));
+}
 
 // ============================================================================
 // 任务管理
@@ -49,8 +57,14 @@ router.post('/preview', async (req, res) => {
     if (!filePaths || !Array.isArray(filePaths) || filePaths.length === 0) {
       return res.status(400).json({ error: 'filePaths is required and must be a non-empty array' });
     }
-    
-    const result = await previewImport(rollId, filePaths, strategy);
+
+    // SECURITY: only allow paths within configured allow-lists
+    const safePaths = filterAllowedPaths(filePaths);
+    if (safePaths.length === 0) {
+      return res.status(403).json({ error: 'No accessible paths in filePaths' });
+    }
+
+    const result = await previewImport(rollId, safePaths, strategy);
     res.json(result);
   } catch (e) {
     console.error('[Import] Preview error:', e);
@@ -121,7 +135,13 @@ router.post('/execute', async (req, res) => {
     if (!matches || !Array.isArray(matches)) {
       return res.status(400).json({ error: 'matches is required and must be an array' });
     }
-    
+
+    // SECURITY: reject any match whose source path is outside the allow-list
+    const blockedMatch = matches.find(m => m && m.file && !isPathAllowed(m.file));
+    if (blockedMatch) {
+      return res.status(403).json({ error: 'A source path is not accessible' });
+    }
+
     // 过滤可导入的匹配项
     const importable = matches.filter(m => {
       if (!m.photoId) return false;

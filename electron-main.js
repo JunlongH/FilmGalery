@@ -449,13 +449,29 @@ function createWindow() {
     },
   });
 
-  // Remove restrictive CSP - allow all sources for desktop Electron app
-  // This is safe for a local desktop application that doesn't load untrusted user content
+  // Content Security Policy.
+  // Previously the app DELETED all CSP headers to allow external resources
+  // (maps, globe textures, geocoding). Instead we now SET a permissive-but-
+  // present policy: it keeps everything the app needs (inline scripts/styles,
+  // arbitrary image/connect sources for map tiles & geocoding) while closing
+  // the most dangerous vectors (plugins/embeds, base-uri tampering, framing).
+  const fgCsp = [
+    "default-src 'self' 'unsafe-inline' data: blob:",
+    "img-src * data: blob: file:",
+    "connect-src * data: blob:",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https:",
+    "font-src * data:",
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    // Remove any CSP headers to allow all external resources (maps, globe textures, geocoding APIs)
     const responseHeaders = { ...details.responseHeaders };
+    responseHeaders['Content-Security-Policy'] = [fgCsp];
+    // Drop any conflicting variants coming from upstream
     delete responseHeaders['content-security-policy'];
-    delete responseHeaders['Content-Security-Policy'];
     delete responseHeaders['x-content-security-policy'];
     delete responseHeaders['X-Content-Security-Policy'];
     callback({ responseHeaders });
@@ -693,6 +709,18 @@ ipcMain.handle('filmlab-gpu:process', async (_e, payload) => {
       // Normalize localhost to IPv4 to avoid ::1 resolution on Windows/Node
       let fetchUrl = String(payload.imageUrl || '');
       fetchUrl = fetchUrl.replace('://localhost', '://127.0.0.1').replace('://[::1]', '://127.0.0.1');
+      // SECURITY: only allow fetching from loopback or the configured API host.
+      // Prevents a compromised renderer from using the GPU worker as an SSRF
+      // proxy to arbitrary external hosts.
+      const allowedHosts = new Set(['127.0.0.1', 'localhost', '::1']);
+      try {
+        const apiBaseHost = appConfig && appConfig.apiBase ? new URL(appConfig.apiBase).hostname : null;
+        if (apiBaseHost) allowedHosts.add(apiBaseHost);
+      } catch (_) { /* ignore */ }
+      const reqHost = (() => { try { return new URL(fetchUrl).hostname; } catch (_) { return null; } })();
+      if (!reqHost || !allowedHosts.has(reqHost)) {
+        return { ok: false, error: 'image_url_host_not_allowed' };
+      }
       imageBuffer = await fetchBuffer(fetchUrl);
       // rudimentary mime by extension (robust check)
       try {
@@ -1001,6 +1029,20 @@ ipcMain.handle('config-set-api-base', async (e, url) => {
     return { ok: false, error: 'invalid_url' };
   }
   const trimmed = url.trim();
+  // SECURITY: only allow well-formed http(s) URLs to prevent scheme-injection
+  // (e.g. javascript:/data:/file:) that could redirect API traffic.
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch (_) {
+    return { ok: false, error: 'invalid_url' };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { ok: false, error: 'unsupported_scheme' };
+  }
+  if (!parsed.hostname) {
+    return { ok: false, error: 'invalid_host' };
+  }
   saveConfig({ apiBase: trimmed });
   LOG('config-set-api-base: saved', trimmed);
   return { ok: true, apiBase: trimmed };

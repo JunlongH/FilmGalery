@@ -1,5 +1,4 @@
 diff --git a/node_modules/react-native-zeroconf/android/build.gradle b/node_modules/react-native-zeroconf/android/build.gradle
-index 1234567..abcdefg 100644
 --- a/node_modules/react-native-zeroconf/android/build.gradle
 +++ b/node_modules/react-native-zeroconf/android/build.gradle
 @@ -1,35 +1,27 @@

@@ -32,3 +32,8 @@ dist/
 coverage/
 *.apk
 *.aab
+
+# Release signing secrets
+android/app/keystore.properties
+android/app/*-release.keystore
+*.keystore

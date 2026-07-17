@@ -3,6 +3,9 @@
   "version": "3.0.0",
   "private": true,
   "homepage": "./",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "devDependencies": {
     "@craco/craco": "^7.1.0",
     "@tailwindcss/postcss": "^4.1.18",
@@ -33,7 +36,8 @@
     "react-window": "^1.8.10",
     "recharts": "^3.5.1",
     "remark-gfm": "^4.0.1",
-    "three": "^0.182.0"
+    "three": "^0.182.0",
+    "three-render-objects": "^1.42.0"
   },
   "eslintConfig": {
     "extends": [

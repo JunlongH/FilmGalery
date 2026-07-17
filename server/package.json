@@ -3,6 +3,9 @@
   "version": "3.0.0",
   "description": "Film Manager desktop app (Electron + Express backend + React frontend)",
   "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "start:server": "node server.js",
     "start:server:dev": "nodemon --watch . --ext js,json --exec \"node server.js\"",
@@ -13,10 +16,6 @@
     "seed-db": "if [ -f ./seed.sql ]; then sqlite3 ./film.db < ./seed.sql; else echo 'no seed.sql'; fi",
     "migrate-roll-folders": "node migrate-roll-folders.js",
     "migrate-add-tags": "node migrate-add-tags.js",
-    "client:dev": "cd client && npm start",
-    "client:build": "cd client && npm run build",
-    "build": "npm run client:build && electron-builder",
-    "dist": "npm run build",
     "postinstall": "node -e \"if (!process.env.CI) { require('child_process').execSync('npm run init-db', {stdio: 'inherit'}).toString() }\" || exit 0",
     "start": "node server.js"
   },
@@ -30,6 +29,8 @@
     "cors": "^2.8.5",
     "exiftool-vendored": "^35.0.0",
     "express": "^4.18.2",
+    "express-rate-limit": "^8.6.0",
+    "helmet": "^8.3.0",
     "lightdrift-libraw": "^1.0.0-beta.1",
     "multer": "^1.4.5-lts.1",
     "openai": "^6.33.0",
@@ -39,37 +40,10 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.1",
+    "@electron/rebuild": "^3.7.1",
     "cross-env": "^7.0.3",
     "electron-builder": "^24.6.0",
     "nodemon": "^2.0.22"
-  },
-  "build": {
-    "appId": "com.junlonghuang.filmgallery",
-    "productName": "FilmGallery",
-    "files": [
-      "build/**/*",
-      "client/build/**/*",
-      "server.js",
-      "init-db.js",
-      "db.js",
-      "film.db",
-      "uploads/**",
-      "node_modules/**",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "resources/",
-        "to": "resources/",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ],
-    "win": {
-      "target": "nsis"
-    }
   },
   "keywords": []
 }

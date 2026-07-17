@@ -104,8 +104,19 @@ jobs:
           cd server
           npm install
 
+      - name: Install Linux native build deps (libraw)
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libraw-dev
+
       - name: Build client
         run: npm run build
+
+      - name: Rebuild native modules for Electron ABI
+        run: npm run rebuild:electron
+
+      - name: Run tests
+        run: npm test
+        continue-on-error: true
 
       - name: Build Electron app (Full Version)
         run: npx electron-builder --${{ matrix.platform }}

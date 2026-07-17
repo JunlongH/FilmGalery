@@ -18,108 +18,12 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 
-// 敏感路径黑名单 - 任何模式下都禁止访问
-const BLOCKED_PATHS = [
-  '/etc', '/var', '/usr', '/bin', '/sbin', '/lib', '/lib64',
-  '/proc', '/sys', '/dev', '/root', '/boot', '/run',
-  'C:\\Windows', 'C:\\Program Files', 'C:\\Program Files (x86)', 
-  'C:\\ProgramData', 'C:\\Users\\Default'
-];
-
-// 检查是否为完全开放模式
-const isOpenMode = () => {
-  return process.env.FILESYSTEM_OPEN_MODE === 'true';
-};
-
-// 检查是否允许所有挂载目录
-const isAllMountedMode = () => {
-  return process.env.ALLOW_ALL_MOUNTED_PATHS === 'true';
-};
-
-// 获取所有挂载点 (Linux /mnt 目录下的子目录)
-const getMountedPaths = () => {
-  const mountRoot = '/mnt';
-  try {
-    if (!fs.existsSync(mountRoot)) return [];
-    const entries = fs.readdirSync(mountRoot, { withFileTypes: true });
-    return entries
-      .filter(e => e.isDirectory())
-      .map(e => path.join(mountRoot, e.name));
-  } catch {
-    return [];
-  }
-};
-
-// 从环境变量获取允许浏览的路径
-const getAllowedPaths = () => {
-  const uploadsRoot = process.env.UPLOADS_ROOT || 
-    (process.env.DATA_ROOT ? path.join(process.env.DATA_ROOT, 'uploads') : '/app/uploads');
-  
-  // 完全开放模式 - 返回根目录
-  if (isOpenMode()) {
-    const roots = process.platform === 'win32' 
-      ? ['C:\\', 'D:\\', 'E:\\'] 
-      : ['/'];
-    return [...new Set([uploadsRoot, ...roots])];
-  }
-  
-  // 挂载目录模式 - 自动检测 /mnt 下的目录
-  if (isAllMountedMode()) {
-    const mounted = getMountedPaths();
-    return [...new Set([uploadsRoot, ...mounted])];
-  }
-  
-  // 白名单模式 - 只允许明确指定的路径
-  const envPaths = process.env.ALLOWED_BROWSE_PATHS || '';
-  const configuredPaths = envPaths
-    .split(',')
-    .map(p => p.trim())
-    .filter(p => p.length > 0);
-  
-  // 始终包含 uploads 目录
-  const allPaths = [uploadsRoot, ...configuredPaths];
-  
-  // 过滤掉不存在的路径
-  return allPaths.filter(p => {
-    try {
-      return fs.existsSync(p) && fs.statSync(p).isDirectory();
-    } catch {
-      return false;
-    }
-  });
-};
-
-// 检查路径是否被阻止 (敏感系统路径)
-const isPathBlocked = (targetPath) => {
-  const normalized = path.normalize(targetPath).toLowerCase();
-  return BLOCKED_PATHS.some(blocked => 
-    normalized === blocked.toLowerCase() ||
-    normalized.startsWith(blocked.toLowerCase() + path.sep)
-  );
-};
-
-// 检查路径是否在允许列表中
-const isPathAllowed = (targetPath) => {
-  // 首先检查是否被阻止
-  if (isPathBlocked(targetPath)) {
-    return false;
-  }
-  
-  // 完全开放模式 - 除了黑名单都允许
-  if (isOpenMode()) {
-    return true;
-  }
-  
-  const allowedPaths = getAllowedPaths();
-  const normalizedTarget = path.normalize(targetPath);
-  
-  return allowedPaths.some(allowed => {
-    const normalizedAllowed = path.normalize(allowed);
-    // 检查目标路径是否以允许路径开头（包含子目录）
-    return normalizedTarget === normalizedAllowed || 
-           normalizedTarget.startsWith(normalizedAllowed + path.sep);
-  });
-};
+// Path access control — single source of truth (server/utils/path-security.js)
+const {
+  isPathBlocked,
+  isPathAllowed,
+  getAllowedPaths,
+} = require('../utils/path-security');
 
 /**
  * GET /api/filesystem/roots

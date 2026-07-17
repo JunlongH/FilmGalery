@@ -19,6 +19,13 @@ try {
     native = require('node-gyp-build')(path.join(__dirname, '..'));
 } catch (e1) {
     try {
+        // Fallback to committed prebuilts in bin/<platform>-<arch>-<modules>/
+        // (these ship in the repo but are not on node-gyp-build's resolution path)
+        const prebuiltPath = path.join(__dirname, '..', 'bin',
+            `${process.platform}-${process.arch}-${process.versions.modules}`, 'libraw-native.node');
+        native = require(prebuiltPath);
+    } catch (e1b) {
+    try {
         // Fallback to direct build path
         native = require('../build/Release/libraw_native.node');
     } catch (e2) {
@@ -27,6 +34,7 @@ try {
         } catch (e3) {
             loadError = new Error(`Failed to load native addon: ${e1.message}`);
         }
+    }
     }
 }
 

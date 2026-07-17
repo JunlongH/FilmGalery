@@ -2,6 +2,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const compression = require('compression');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const sharp = require('sharp');
 const fs = require('fs');
@@ -15,6 +17,7 @@ const { runSchemaMigration } = require('./utils/schema-migration');
 const { runEquipmentMigration } = require('./utils/equipment-migration');
 const { runFilmStructMigration } = require('./utils/film-struct-migration');
 const { cacheSeconds } = require('./utils/cache');
+const { isPathConfined } = require('./utils/path-security');
 const { requestProfiler, getProfilerStats, scheduleProfilerLog } = require('./utils/profiler');
 const PreparedStmt = require('./utils/prepared-statements');
 const { computeGuard } = require('./middleware/compute-guard');
@@ -45,6 +48,22 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const app = express();
+// Security headers. CSP is managed by the Electron shell; the server is an
+// API + static-image host, so we keep cross-origin resource access open to
+// preserve image loading from file:// (Electron), mobile, and hybrid NAS.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+// Generous global anti-abuse limiter (plenty for single-user local use)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many requests, please slow down.' },
+});
+app.use('/api', apiLimiter);
 // lightweight request profiler for API
 app.use(requestProfiler());
 // Compute guard - blocks heavy routes in NAS mode
@@ -90,7 +109,12 @@ const caseInsensitiveStatic = (root, options = {}) => {
     }
     
     const filePath = path.join(root, decodedPath);
-    
+
+    // SECURITY: reject paths that escape `root` via ".." or absolute segments
+    if (!isPathConfined(root, decodedPath)) {
+      return next();
+    }
+
     // 1. Try exact match first
     if (fs.existsSync(filePath)) {
       // Check if it's a directory to avoid EISDIR
@@ -182,6 +206,15 @@ const mountRoutes = () => {
   app.use('/api/edge-detection', require('./routes/edge-detection')); // Edge detection for auto-crop
   app.use('/api/raw', require('./routes/raw')); // RAW file decoding
   app.use('/api/filesystem', require('./routes/filesystem')); // Filesystem browsing for hybrid mode
+  // Stricter limiter on billable AI endpoints
+  const aiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { ok: false, error: 'AI request limit reached, please slow down.' },
+  });
+  app.use('/api/ai', aiLimiter);
   app.use('/api/ai', require('./routes/ai-chat')); // AI assistant
   app.get('/api/_profiler', (req, res) => res.json(getProfilerStats()));
   app.get('/api/_prepared-statements', (req, res) => res.json(PreparedStmt.getStats()));
@@ -451,11 +484,16 @@ const seedLocations = async () => {
         console.log('[SERVER] Roll sequence recomputed.');
 
         // (Removed old ad-hoc ALTER TABLE blocks as they are now in schema-migration.js)
-		
-		mountRoutes();
-		
-		// Add graceful shutdown endpoint
+
+		// Add graceful shutdown endpoint (localhost-only).
+		// MUST be registered BEFORE mountRoutes() so the /api/* 404 catch-all
+		// inside mountRoutes() does not shadow it.
 		app.post('/api/shutdown', (req, res) => {
+			// SECURITY: only allow shutdown from loopback (Electron / local tools)
+			const remoteIp = (req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+			if (!['127.0.0.1', '::1', 'localhost'].includes(remoteIp) && remoteIp !== '') {
+				return res.status(403).json({ ok: false, error: 'Forbidden' });
+			}
 			console.log('[SERVER] Shutdown requested');
 			res.json({ ok: true, message: 'Shutting down...' });
 			// Close DB and exit after sending response
@@ -476,8 +514,10 @@ const seedLocations = async () => {
 				}
 			}, 100);
 		});
-		
-		// Port configuration:
+
+		mountRoutes();
+
+	// Port configuration:
 		// - Dev mode (ELECTRON_DEV=true or explicit PORT): use fixed port for easier debugging
 		// - Production mode (spawned by Electron): try ports starting from 4000
 		const isDev = process.env.NODE_ENV === 'development' || process.env.ELECTRON_DEV === 'true';

@@ -29,8 +29,25 @@ async function ensureDisplaySeqColumn() {
   }
 }
 
+// Ensure the `start_date` column exists on rolls (added by a migration that is
+// currently disabled — without this the server crashes on a fresh database at
+// first run). Idempotent; backfills from date_loaded when added.
+async function ensureStartDateColumn() {
+  const cols = await allAsync(`PRAGMA table_info(rolls)`);
+  if (cols.some(c => c.name === 'start_date')) return;
+  try {
+    await runAsync(`ALTER TABLE rolls ADD COLUMN start_date DATE`);
+    await runAsync(`UPDATE rolls SET start_date = date_loaded WHERE start_date IS NULL AND date_loaded IS NOT NULL`);
+    console.log('[MIGRATION] start_date column created via ALTER TABLE');
+  } catch (e) {
+    console.error('[MIGRATION] Failed to add start_date column:', e.message);
+    throw e;
+  }
+}
+
 async function recomputeRollSequence() {
   await ensureDisplaySeqColumn();
+  await ensureStartDateColumn();
   
   const rows = await allAsync(`
     SELECT id

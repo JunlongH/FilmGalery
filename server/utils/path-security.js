@@ -1,0 +1,124 @@
+/**
+ * Path Security Utilities
+ *
+ * Single source of truth for filesystem access control.
+ *
+ * Three access modes (mirrors routes/filesystem.js behavior):
+ *  1. Whitelist mode (default): ALLOWED_BROWSE_PATHS lists allowed dirs
+ *  2. Mounted mode: ALLOW_ALL_MOUNTED_PATHS=true allows all /mnt subdirs
+ *  3. Open mode: FILESYSTEM_OPEN_MODE=true allows all paths (DANGEROUS)
+ *
+ * Sensitive system paths are always blocked regardless of mode.
+ */
+
+const fs = require('fs');
+const path = require('path');
+
+// Sensitive system paths — always blocked in every mode.
+const BLOCKED_PATHS = [
+  '/etc', '/var', '/usr', '/bin', '/sbin', '/lib', '/lib64',
+  '/proc', '/sys', '/dev', '/root', '/boot', '/run',
+  'C:\\Windows', 'C:\\Program Files', 'C:\\Program Files (x86)',
+  'C:\\ProgramData', 'C:\\Users\\Default'
+];
+
+const isOpenMode = () => process.env.FILESYSTEM_OPEN_MODE === 'true';
+const isAllMountedMode = () => process.env.ALLOW_ALL_MOUNTED_PATHS === 'true';
+
+// Detect /mnt subdirs (Linux mounted shares)
+const getMountedPaths = () => {
+  const mountRoot = '/mnt';
+  try {
+    if (!fs.existsSync(mountRoot)) return [];
+    const entries = fs.readdirSync(mountRoot, { withFileTypes: true });
+    return entries.filter(e => e.isDirectory()).map(e => path.join(mountRoot, e.name));
+  } catch {
+    return [];
+  }
+};
+
+// Resolve the list of allowed root directories based on the active mode.
+const getAllowedPaths = () => {
+  const uploadsRoot = process.env.UPLOADS_ROOT ||
+    (process.env.DATA_ROOT ? path.join(process.env.DATA_ROOT, 'uploads') : '/app/uploads');
+
+  if (isOpenMode()) {
+    const roots = process.platform === 'win32' ? ['C:\\', 'D:\\', 'E:\\'] : ['/'];
+    return [...new Set([uploadsRoot, ...roots])];
+  }
+
+  if (isAllMountedMode()) {
+    const mounted = getMountedPaths();
+    return [...new Set([uploadsRoot, ...mounted])];
+  }
+
+  const envPaths = process.env.ALLOWED_BROWSE_PATHS || '';
+  const configuredPaths = envPaths.split(',').map(p => p.trim()).filter(p => p.length > 0);
+  const allPaths = [uploadsRoot, ...configuredPaths];
+
+  return allPaths.filter(p => {
+    try {
+      return fs.existsSync(p) && fs.statSync(p).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+};
+
+// True if the path is a sensitive system path.
+const isPathBlocked = (targetPath) => {
+  if (!targetPath || typeof targetPath !== 'string') return true;
+  const normalized = path.normalize(targetPath).toLowerCase();
+  return BLOCKED_PATHS.some(blocked =>
+    normalized === blocked.toLowerCase() ||
+    normalized.startsWith(blocked.toLowerCase() + path.sep)
+  );
+};
+
+// True if the path is within an allowed root (and not blocked).
+const isPathAllowed = (targetPath) => {
+  if (!targetPath || typeof targetPath !== 'string') return false;
+  if (isPathBlocked(targetPath)) return false;
+  if (isOpenMode()) return true;
+
+  const allowedPaths = getAllowedPaths();
+  const normalizedTarget = path.normalize(targetPath);
+
+  return allowedPaths.some(allowed => {
+    const normalizedAllowed = path.normalize(allowed);
+    return normalizedTarget === normalizedAllowed ||
+      normalizedTarget.startsWith(normalizedAllowed + path.sep);
+  });
+};
+
+/**
+ * Verify that a resolved path stays confined within `root`.
+ * Prevents traversal via ".." or absolute/symlink escapes.
+ * @returns {boolean} true if the resolved target is inside root.
+ */
+const isPathConfined = (root, targetPath) => {
+  if (!root || !targetPath || typeof targetPath !== 'string') return false;
+  const resolvedRoot = fs.realpathSync && fs.existsSync(root) ? safeRealpath(root) : path.resolve(root);
+  const resolvedTarget = path.resolve(root, targetPath);
+  const rel = path.relative(resolvedRoot, resolvedTarget);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+};
+
+// realpathSync that never throws (falls back to resolve)
+function safeRealpath(p) {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+module.exports = {
+  BLOCKED_PATHS,
+  isPathBlocked,
+  isPathAllowed,
+  isPathConfined,
+  getAllowedPaths,
+  isOpenMode,
+  isAllMountedMode,
+};

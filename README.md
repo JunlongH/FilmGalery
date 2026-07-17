@@ -4,7 +4,7 @@
 
 一款AI Vibe Coding的胶片摄影管理系统，支持多平台部署和混合算力架构。
 
-***目前暂时只支持Windows + 安卓端生态***
+***桌面端支持 Windows / Linux（deb、AppImage），移动端支持 Android（含 Wear OS 手表端）***
 
 ---
 
@@ -114,8 +114,10 @@ cd ../server && npm install
 # 开发模式
 npm run dev
 
-# 构建桌面应用
-npm run build:electron
+# 构建桌面应用（打包当前平台）
+npm run dist
+# 仅打包不发布：npm run pack
+# 重新编译 Electron native 模块：npm run rebuild:electron
 ```
 
 ---
@@ -135,11 +137,12 @@ npm run build:electron
 - 功能：浏览照片、查看拍摄记录、同步数据
 - 要求：连接到 FilmGallery 服务器
 
-### Apple Watch 应用
+### Wear OS 手表应用
 
 - 位置：`watch-app/`
+- 技术栈：React Native for Wear OS（非 SwiftUI）
 - 功能：快速查看拍摄参数、拍摄计数
-- 要求：配对 iPhone（开发中）
+- 要求：与 Android 手机配对（开发中）
 
 ---
 
@@ -207,10 +210,10 @@ npm test
 
 ### 项目配置
 
-- `package.json` - 主项目配置
+- `package.json` - 主项目配置（含内联的 electron-builder `build` 字段）
+- `electron-builder-client-only.json` - 仅客户端轻量版打包配置
 - `client/package.json` - 前端配置
 - `server/package.json` - 后端配置
-- `electron-builder.json5` - Electron 打包配置
 - `docker/docker-compose.yml` - Docker 配置
 
 ---
