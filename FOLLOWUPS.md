@@ -50,4 +50,8 @@
 7. **移动端明文流量**：根因是服务端无 TLS。需 server 加 HTTPS（混合模式必需），随后将 `usesCleartextTraffic`/`network_security_config` 收窄为服务器域 `domain-config`。
 8. **GPU worker `contextIsolation` 重构**：需重写 `electron-gpu/gpu-renderer.js`（当前页面内 `require('electron')`），改 preload 暴露，本次仅以 imageUrl 白名单堵 SSRF。
 9. **monorepo 收敛**：服务发现/坐标转换/反向地理编码/API 端点统一到 `packages/shared` + `@filmgallery/api-client`，三端共用；mobile 迁 TS 并消费 `@filmgallery/types`。
+   - **进度（Phase 2A）**：shared/api-client 已存在（非新建）。`coordTransform`（ESM→CJS 归一）+ `portDiscovery`/`serverCapabilities` 已接入 barrel 与 subpath 导出；client/server/mobile/watch 声明 `file:` 依赖，消除偶然 hoisting。`coordTransform` 三端去重完成；`portDiscovery` 常量源统一到 server+mobile。api-client 硬化（非 2xx 抛错 + 修 `onError` 失效 bug）。详见 `docs/phase2-roadmap/phase-2a-foundation.md`。
+   - **待办**：watch portDiscovery（需 shared 类型声明）；api-client 消费端迁移（client/mobile，需构建环境）；reverse-geocode 接口（选项 A）；mobile 迁 TS（暂停点）。
 10. **测试 + lint/typecheck 护栏**：前端 Vitest、后端 jest、移动 RNTL 种子测试；CI 跑 `npm test` + lint。
+   - **进度（Phase 2A）**：✅ 测试护栏与 CI 门禁已落地——`build-desktop.yml` 删除 `continue-on-error`（真问题），新增 PR/push 触发的 `ci.yml`（test+lint 硬门禁）；root jest 收集 shared+server+packages，固化 Phase 0–1 安全复现用例（path-security / shutdown 注册顺序 / ensureStartDateColumn 幂等）；ESLint flat config（0 error）。**241 tests / 10 suites green**。
+   - **修正原假设**：原描述「前端 Vitest」错配（client 是 CRA 纯 JS，Vitest 属 2D #3 Vite 迁移）；client/mobile/watch 的专用测试器因各自构建/依赖树未就绪而暂缓，不阻塞 2B。

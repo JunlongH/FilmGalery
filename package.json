@@ -28,7 +28,8 @@
     "dist": "npm run build && npm run rebuild:electron && electron-builder",
     "start": "electron .",
     "test": "jest --config tests/jest.config.js",
-    "test:verbose": "jest --config tests/jest.config.js --verbose"
+    "test:verbose": "jest --config tests/jest.config.js --verbose",
+    "lint": "eslint server packages tests tools"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.1",
@@ -36,7 +37,10 @@
     "cross-env": "^7.0.3",
     "electron": "26.6.10",
     "electron-builder": "^24.6.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.7.0",
     "jest": "^30.2.0",
+    "supertest": "^7.2.2",
     "wait-on": "^7.0.1"
   },
   "build": {
@@ -94,7 +98,7 @@
         "AppImage",
         "deb"
       ],
-      "icon": "assets/icon.png",
+      "icon": "assets/icons",
       "category": "Graphics",
       "synopsis": "Film Photography Management Tool",
       "maintainer": "FilmGallery <filmgallery@example.com>",

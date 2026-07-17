@@ -17,7 +17,7 @@ import PhotoGlobe from './PhotoGlobe';
 import useGeoPhotos from '../../hooks/useGeoPhotos';
 import { getApiBase } from '../../api';
 import { useTheme } from '../../providers';
-import { wgs84ToGcj02, gcj02ToWgs84 } from '../../utils/coordTransform';
+import { wgs84ToGcj02, gcj02ToWgs84 } from '@filmgallery/shared/coordTransform';
 
 // Import Leaflet CSS
 import 'leaflet/dist/leaflet.css';

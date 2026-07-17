@@ -11,7 +11,12 @@
     },
     "./filmlab-core": "./filmlab-core.js",
     "./constants": "./filmLabConstants.js",
-    "./constants/equipment": "./constants/equipment.js"
+    "./constants/equipment": "./constants/equipment.js",
+    "./coordTransform": "./coordTransform.js",
+    "./portDiscovery": "./portDiscovery.js",
+    "./serverCapabilities": "./serverCapabilities.js",
+    "./sourcePathResolver": "./sourcePathResolver.js",
+    "./rawUtils": "./rawUtils.js"
   },
   "private": true
 }

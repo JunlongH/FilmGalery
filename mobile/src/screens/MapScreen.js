@@ -32,7 +32,7 @@ import { Icon, Badge } from '../components/ui';
 import { ApiContext } from '../context/ApiContext';
 import { getPhotoUrl } from '../utils/urls';
 import LeafletMap from '../components/map/LeafletMap';
-import { wgs84ToGcj02 } from '../utils/coordTransform';
+import { wgs84ToGcj02 } from '@filmgallery/shared/coordTransform';
 
 const { width, height } = Dimensions.get('window');
 

@@ -22,6 +22,11 @@ const helpers = require('./filmLabHelpers');
 const sourcePathResolver = require('./sourcePathResolver');
 const rawUtils = require('./rawUtils');
 
+// Service discovery & coordinate transforms (consumed by client/mobile/watch/server).
+const coordTransform = require('./coordTransform');
+const portDiscovery = require('./portDiscovery');
+const serverCapabilities = require('./serverCapabilities');
+
 // GLSL 着色器模块 (Phase 3)
 const shaders = require('./shaders');
 
@@ -373,13 +378,47 @@ module.exports = {
   
   /** 完整着色器模块 */
   shaders,
-  
+
   /** 构建片元着色器 */
   buildFragmentShader: shaders.buildFragmentShader,
-  
+
   /** 顶点着色器 */
   VERTEX_SHADER: shaders.VERTEX_SHADER,
-  
+
   /** 着色器版本 */
   SHADER_VERSION: shaders.SHADER_VERSION,
+
+  // ============================================================================
+  // 服务发现与坐标转换
+  // ============================================================================
+
+  /** WGS-84 ↔ GCJ-02 坐标转换（中国火星坐标） */
+  wgs84ToGcj02: coordTransform.wgs84ToGcj02,
+  gcj02ToWgs84: coordTransform.gcj02ToWgs84,
+  isInChina: coordTransform.isInChina,
+
+  /** 服务发现配置与工具 */
+  APP_IDENTIFIER: portDiscovery.APP_IDENTIFIER,
+  DISCOVERY_ENDPOINT: portDiscovery.DISCOVERY_ENDPOINT,
+  DEFAULT_PORT: portDiscovery.DEFAULT_PORT,
+  PORT_SCAN_RANGE: portDiscovery.PORT_SCAN_RANGE,
+  DISCOVERY_TIMEOUT: portDiscovery.DISCOVERY_TIMEOUT,
+  MDNS_CONFIG: portDiscovery.MDNS_CONFIG,
+  DISCOVERY_MODE: portDiscovery.DISCOVERY_MODE,
+  buildDiscoverUrl: portDiscovery.buildDiscoverUrl,
+  cleanIpAddress: portDiscovery.cleanIpAddress,
+  extractPort: portDiscovery.extractPort,
+  buildUrl: portDiscovery.buildUrl,
+  isPrivateIp: portDiscovery.isPrivateIp,
+  recommendDiscoveryMode: portDiscovery.recommendDiscoveryMode,
+
+  /** 服务能力（模式、路由分类） */
+  SERVER_MODES: serverCapabilities.SERVER_MODES,
+  API_CATEGORIES: serverCapabilities.API_CATEGORIES,
+  COMPUTE_ROUTES: serverCapabilities.COMPUTE_ROUTES,
+  DATA_ROUTES: serverCapabilities.DATA_ROUTES,
+  getServerMode: serverCapabilities.getServerMode,
+  getCapabilities: serverCapabilities.getCapabilities,
+  isComputeEnabled: serverCapabilities.isComputeEnabled,
+  isComputeRoute: serverCapabilities.isComputeRoute,
 };

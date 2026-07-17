@@ -45,7 +45,7 @@ function transformLng(x, y) {
  * @param {number} wgsLng - WGS-84 longitude
  * @returns {{ lat: number, lng: number }} GCJ-02 coordinates
  */
-export function wgs84ToGcj02(wgsLat, wgsLng) {
+function wgs84ToGcj02(wgsLat, wgsLng) {
   if (!isInChina(wgsLat, wgsLng)) return { lat: wgsLat, lng: wgsLng };
 
   let dLat = transformLat(wgsLng - 105.0, wgsLat - 35.0);
@@ -65,7 +65,7 @@ export function wgs84ToGcj02(wgsLat, wgsLng) {
  * @param {number} gcjLng - GCJ-02 longitude
  * @returns {{ lat: number, lng: number }} WGS-84 coordinates
  */
-export function gcj02ToWgs84(gcjLat, gcjLng) {
+function gcj02ToWgs84(gcjLat, gcjLng) {
   if (!isInChina(gcjLat, gcjLng)) return { lat: gcjLat, lng: gcjLng };
 
   let wgsLat = gcjLat, wgsLng = gcjLng;
@@ -76,3 +76,11 @@ export function gcj02ToWgs84(gcjLat, gcjLng) {
   }
   return { lat: wgsLat, lng: wgsLng };
 }
+
+module.exports = {
+  wgs84ToGcj02,
+  gcj02ToWgs84,
+  isInChina,
+  transformLat,
+  transformLng,
+};

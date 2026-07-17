@@ -11,7 +11,14 @@
 module.exports = {
   testEnvironment: 'node',
   rootDir: '..',
-  testMatch: ['<rootDir>/tests/**/*.test.js'],
+  // Single node environment; covers shared (tests/) + server unit tests.
+  // Split into `projects` only when a suite needs a different environment
+  // (e.g. jsdom for client component tests after the Vite migration).
+  testMatch: [
+    '<rootDir>/tests/**/*.test.js',
+    '<rootDir>/server/**/__tests__/**/*.test.js',
+    '<rootDir>/packages/**/__tests__/**/*.test.js',
+  ],
   testPathIgnorePatterns: ['/node_modules/', '/dist_v9/', '/build/'],
   // 排除 dist 和 build 目录 (避免 Haste 模块命名冲突)
   modulePathIgnorePatterns: [

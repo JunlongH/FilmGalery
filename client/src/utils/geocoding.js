@@ -9,7 +9,7 @@
  * - No strict rate limiting
  */
 
-import { gcj02ToWgs84, wgs84ToGcj02 } from './coordTransform';
+import { gcj02ToWgs84, wgs84ToGcj02 } from '@filmgallery/shared/coordTransform';
 
 const PHOTON_BASE = 'https://photon.komoot.io';
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';

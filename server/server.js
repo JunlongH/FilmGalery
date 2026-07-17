@@ -21,7 +21,7 @@ const { isPathConfined } = require('./utils/path-security');
 const { requestProfiler, getProfilerStats, scheduleProfilerLog } = require('./utils/profiler');
 const PreparedStmt = require('./utils/prepared-statements');
 const { computeGuard } = require('./middleware/compute-guard');
-const { getServerMode, getCapabilities, isComputeEnabled } = require('../packages/shared/serverCapabilities');
+const { getServerMode, getCapabilities, isComputeEnabled } = require('@filmgallery/shared/serverCapabilities');
 
 // Log server mode
 const serverMode = getServerMode();
@@ -485,24 +485,17 @@ const seedLocations = async () => {
 
         // (Removed old ad-hoc ALTER TABLE blocks as they are now in schema-migration.js)
 
-		// Add graceful shutdown endpoint (localhost-only).
+		// Graceful shutdown endpoint (localhost-only).
 		// MUST be registered BEFORE mountRoutes() so the /api/* 404 catch-all
 		// inside mountRoutes() does not shadow it.
-		app.post('/api/shutdown', (req, res) => {
-			// SECURITY: only allow shutdown from loopback (Electron / local tools)
-			const remoteIp = (req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, '');
-			if (!['127.0.0.1', '::1', 'localhost'].includes(remoteIp) && remoteIp !== '') {
-				return res.status(403).json({ ok: false, error: 'Forbidden' });
-			}
-			console.log('[SERVER] Shutdown requested');
-			res.json({ ok: true, message: 'Shutting down...' });
-			// Close DB and exit after sending response
-			setTimeout(() => {
+		const { createShutdownRouter } = require('./routes/shutdown');
+		app.use('/api/shutdown', createShutdownRouter({
+			onShutdown: () => {
 				console.log('[SERVER] Closing database connection...');
-        // Ensure WAL is checkpointed (or no-op in write-through) before exit
-        PreparedStmt.finalizeAllWithCheckpoint().catch((err) => {
-          console.error('[SERVER] finalizeAllWithCheckpoint error:', err && err.message ? err.message : err);
-        });
+				// Ensure WAL is checkpointed (or no-op in write-through) before exit
+				PreparedStmt.finalizeAllWithCheckpoint().catch((err) => {
+					console.error('[SERVER] finalizeAllWithCheckpoint error:', err && err.message ? err.message : err);
+				});
 				if (db && typeof db.close === 'function') {
 					db.close((err) => {
 						if (err) console.error('[SERVER] Error closing DB:', err);
@@ -512,8 +505,8 @@ const seedLocations = async () => {
 				} else {
 					process.exit(0);
 				}
-			}, 100);
-		});
+			},
+		}));
 
 		mountRoutes();
 

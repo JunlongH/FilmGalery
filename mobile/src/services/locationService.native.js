@@ -10,7 +10,7 @@
 import { Platform, PermissionsAndroid, Alert, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { wgs84ToGcj02 } from '../utils/coordTransform';
+import { wgs84ToGcj02 } from '@filmgallery/shared/coordTransform';
 
 // ============================================================================
 // Configuration

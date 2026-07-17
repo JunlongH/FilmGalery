@@ -11,29 +11,20 @@
 import Zeroconf from 'react-native-zeroconf';
 
 // ==================== 配置常量 ====================
+// Operational constants come from @filmgallery/shared so server/mobile/watch
+// agree on the port list, timeouts, app id, and discovery modes. The
+// fully-qualified mDNS service name is derived here (trailing dot, RFC 6763).
+import {
+  PORT_SCAN_RANGE,
+  DISCOVERY_TIMEOUT,
+  APP_IDENTIFIER,
+  DISCOVERY_MODE,
+  MDNS_CONFIG,
+} from '@filmgallery/shared/portDiscovery';
+export { DISCOVERY_MODE };
 
-// Common ports to scan (in priority order)
-const PORT_SCAN_RANGE = [4000, 4001, 4002, 4003, 4004, 4005, 4010, 4020, 4100];
-
-// Discovery request timeout (ms)
-const DISCOVERY_TIMEOUT = 2000;
-
-// mDNS browse timeout (ms)
-const MDNS_BROWSE_TIMEOUT = 5000;
-
-// App identifier for validation
-const APP_IDENTIFIER = 'FilmGallery';
-
-// mDNS service type
-const MDNS_SERVICE_TYPE = '_filmgallery._tcp.';
-
-// Discovery modes
-export const DISCOVERY_MODE = {
-  AUTO: 'auto',           // 自动选择（优先 mDNS，回退端口扫描）
-  MDNS_ONLY: 'mdns',      // 仅 mDNS
-  PORT_SCAN: 'portscan',  // 仅端口扫描（适用于公网）
-  MANUAL: 'manual'        // 手动配置
-};
+const MDNS_SERVICE_TYPE = `_${MDNS_CONFIG.SERVICE_TYPE}._${MDNS_CONFIG.PROTOCOL}.`;
+const MDNS_BROWSE_TIMEOUT = MDNS_CONFIG.BROWSE_TIMEOUT;
 
 // ==================== 工具函数 ====================
 

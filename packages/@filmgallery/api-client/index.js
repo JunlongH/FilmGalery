@@ -64,11 +64,25 @@ function createHttpHelpers(baseUrl, fetchFn, onError) {
   
   const parseResponse = async (response) => {
     const text = await response.text();
+    let parsed;
     try {
-      return JSON.parse(text);
+      parsed = JSON.parse(text);
     } catch {
-      return text;
+      parsed = undefined;
     }
+    // Throw on non-2xx so callers/React Query can distinguish success from
+    // failure. Mirrors the client's jsonFetch contract: surface the server's
+    // `error`/`message` when present, and attach status + body for diagnostics.
+    if (!response.ok) {
+      const serverMsg = parsed && (parsed.error || parsed.message);
+      const msg = (typeof serverMsg === 'string' && serverMsg)
+        || `HTTP ${response.status} ${response.statusText || ''}`.trim();
+      const err = new Error(msg || `HTTP ${response.status}`);
+      err.status = response.status;
+      if (parsed !== undefined) err.body = parsed;
+      throw err;
+    }
+    return parsed !== undefined ? parsed : text;
   };
   
   return {
@@ -82,7 +96,7 @@ function createHttpHelpers(baseUrl, fetchFn, onError) {
         const qs = buildQueryString(params);
         const url = `${baseUrl}${path}${qs}`;
         const response = await fetchFn(url);
-        return parseResponse(response);
+        return await parseResponse(response);
       } catch (error) {
         return handleError(error);
       }
@@ -98,7 +112,7 @@ function createHttpHelpers(baseUrl, fetchFn, onError) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
-        return parseResponse(response);
+        return await parseResponse(response);
       } catch (error) {
         return handleError(error);
       }
@@ -114,7 +128,7 @@ function createHttpHelpers(baseUrl, fetchFn, onError) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
-        return parseResponse(response);
+        return await parseResponse(response);
       } catch (error) {
         return handleError(error);
       }
@@ -128,7 +142,7 @@ function createHttpHelpers(baseUrl, fetchFn, onError) {
         const response = await fetchFn(`${baseUrl}${path}`, {
           method: 'DELETE'
         });
-        return parseResponse(response);
+        return await parseResponse(response);
       } catch (error) {
         return handleError(error);
       }

@@ -627,6 +627,7 @@ module.exports = {
   // Display sequence
   recomputeRollSequence,
   ensureDisplaySeqColumn,
+  ensureStartDateColumn,
   
   // CRUD operations
   listRolls,

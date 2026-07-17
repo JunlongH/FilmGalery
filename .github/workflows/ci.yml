@@ -1,0 +1,40 @@
+# Lightweight continuous-integration gate for the core surface (server + shared).
+#
+# Runs on every pull request and push to main. Tests are a HARD gate
+# (regressions fail the build); lint reports (errors fail, warnings do not).
+#
+# Desktop packaging builds (build-desktop.yml) remain separate and are gated on
+# tags. Mobile/watch CI is intentionally deferred until those dependency trees
+# are stabilised (see docs/phase2-roadmap/phase-2a-foundation.md §2A.4).
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Root install bootstraps client + server via the postinstall hook.
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint (errors fail, warnings report)
+        run: npm run lint
+
+      - name: Test (root jest — shared + server)
+        run: npm test

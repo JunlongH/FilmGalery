@@ -8,16 +8,10 @@
  */
 
 const os = require('os');
-
-// mDNS 配置（硬编码以避免循环依赖）
-const MDNS_CONFIG = {
-  SERVICE_TYPE: 'filmgallery',
-  PROTOCOL: 'tcp',
-  SERVICE_NAME: 'FilmGallery Server',
-  get FULL_SERVICE_TYPE() {
-    return `_${this.SERVICE_TYPE}._${this.PROTOCOL}`;
-  }
-};
+// mDNS identity is shared with mobile/watch via @filmgallery/shared so all
+// clients agree on the service type/name. (The previous "hardcoded to avoid
+// circular dependency" note is obsolete — portDiscovery has no back-edges.)
+const { MDNS_CONFIG } = require('@filmgallery/shared/portDiscovery');
 
 // 全局状态
 let bonjourInstance = null;
