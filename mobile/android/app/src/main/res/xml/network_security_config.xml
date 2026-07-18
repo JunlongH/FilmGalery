@@ -1,8 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Phase 2B #7 — narrowed cleartext policy.
+
+  Base: cleartext FORBIDDEN everywhere (HTTPS only).
+  Exception: localhost + 10.0.2.2 (Android emulator → host loopback) so the
+  dev emulator can still talk to a local dev server without TLS.
+
+  Server domain trust (system CAs only). Release builds must NOT add
+  `<certificates src="user"/>` — user-installed CAs would let any
+  mitmproxy/Charles-style tool intercept release traffic.
+
+  See docs/phase2-roadmap/phase-2b-security.md §「移动端配置收窄」.
+-->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
 </network-security-config>

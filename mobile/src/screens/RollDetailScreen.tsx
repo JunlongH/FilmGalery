@@ -14,7 +14,7 @@ const numColumns = 3;
 const screenWidth = Dimensions.get('window').width;
 const tileSize = Math.floor((screenWidth - (spacing.sm * 2) - (numColumns * 2)) / numColumns);
 
-export default function RollDetailScreen({ route, navigation }) {
+export default function RollDetailScreen({ route, navigation }: any) {
   const theme = useTheme();
   const { rollId } = route.params;
   const { baseUrl } = useContext(ApiContext);
@@ -70,7 +70,7 @@ export default function RollDetailScreen({ route, navigation }) {
     });
   }, [navigation, baseUrl, rollId, theme]);
 
-  const hasNegatives = photos.some(p => p.negative_rel_path);
+  const hasNegatives = photos.some((p: any) => p.negative_rel_path);
 
   const renderHeader = () => {
     if (!roll) return null;
@@ -149,9 +149,9 @@ export default function RollDetailScreen({ route, navigation }) {
     );
   };
 
-  const visiblePhotos = showNegatives ? photos.filter(p => p.negative_rel_path) : photos;
+  const visiblePhotos = showNegatives ? photos.filter((p: any) => p.negative_rel_path) : photos;
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item }: any) => {
     let uri;
     if (showNegatives && item.negative_rel_path) {
         uri = getPhotoUrl(baseUrl, item, 'negative');

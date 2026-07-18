@@ -1,7 +1,7 @@
 import * as MediaLibrary from 'expo-media-library';
 import { Platform } from 'react-native';
 import * as FS from 'expo-file-system';
-import * as FSLegacy from 'expo-file-system/legacy';
+const FSLegacy: any = require('expo-file-system/legacy');
 
 export async function ensureMediaPermissionsAsync(): Promise<void> {
   if (Platform.OS === 'android' || Platform.OS === 'ios') {

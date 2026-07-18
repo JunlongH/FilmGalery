@@ -35,7 +35,7 @@ import { calculateExposure, formatExposureForDisplay } from './camera/ExposureCa
 import { getTapCoordinates } from './camera/SpotMeteringHandler';
 
 // Picker Modal Component
-const PickerModal = ({ visible, onClose, data, onSelect, title }) => {
+const PickerModal = ({ visible, onClose, data, onSelect, title }: any) => {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
@@ -67,7 +67,7 @@ const PickerModal = ({ visible, onClose, data, onSelect, title }) => {
   );
 };
 
-export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, forcePsMode = false, forcedMaxAperture = null, preloadedLocation = null }) {
+export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, forcePsMode = false, forcedMaxAperture = null, preloadedLocation = null }: any) {
   const { width, height } = useWindowDimensions();
   const cameraHeight = height * 0.55;
   const insets = useSafeAreaInsets();
@@ -96,7 +96,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
   const SNAP_THRESHOLD = 0.08; // Snap when within 8% of slider range
 
   const ISO_STEPS = [25, 50, 64, 100, 125, 160, 200, 250, 320, 400, 500, 640, 800, 1000, 1250, 1600, 2000, 2500, 3200, 4000, 5000, 6400, 8000, 12800];
-  const bumpIso = (direction) => {
+  const bumpIso = (direction: any) => {
     if (!iso) return;
     const list = ISO_STEPS;
     const idx = list.findIndex(v => v >= iso);
@@ -106,10 +106,10 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
   };
   
   // Convert focal length to zoom (base focal length is 24mm)
-  const focalToZoom = (focal) => focal / 24;
+  const focalToZoom = (focal: any) => focal / 24;
   
   // Handle zoom with snap-to common focal lengths
-  const handleZoomChange = (value) => {
+  const handleZoomChange = (value: any) => {
     const focalLength = 24 * value;
     const range = maxZoom - minZoom;
     
@@ -156,7 +156,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
   const [pickerType, setPickerType] = useState<any>(null);
 
   // Frame Processor callback - receives brightness/EV data
-  const handleExposureUpdate = useCallback((data) => {
+  const handleExposureUpdate = useCallback((data: any) => {
     if (data?.fpActive) {
       setDiagnosticInfo(prev => ({
         ...prev,
@@ -334,7 +334,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
   const startBackgroundOptimization = async () => {
     try {
       const watchResult = await locationService.startWatch(
-        async (coords, accuracy) => {
+        async (coords: any, accuracy: any) => {
           __DEV__ && console.log(`[Location] Watch update: accuracy=${accuracy?.toFixed(0)}m`);
           await updateLocationFromCoords(coords);
           
@@ -363,7 +363,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
   };
 
   // Helper to update location state from coordinates
-  const updateLocationFromCoords = async (coords) => {
+  const updateLocationFromCoords = async (coords: any) => {
     try {
       // Use centralized reverse geocoding (supports Amap when configured)
       const geocode = await locationService.reverseGeocode(
@@ -450,7 +450,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
   // Handle tap to focus/meter (for spot metering mode)
   // Strategy: Set spot point for Frame Processor to calculate brightness at that location,
   // then use brightness ratio to adjust the EXIF-based EV
-  const handleTapToFocus = useCallback(async (event) => {
+  const handleTapToFocus = useCallback(async (event: any) => {
     if (!cameraRef.current) return;
     
     // In average mode, just trigger standard measurement
@@ -524,7 +524,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
   }, [meteringMode, width, cameraHeight, triggerMeasurement, handleMeasure, setSpotPoint]);
 
   // Handle manual value selection
-  const handleManualSelect = useCallback((value) => {
+  const handleManualSelect = useCallback((value: any) => {
     if (pickerType === 'max_aperture') {
       setPsMaxAperture(value);
       return;

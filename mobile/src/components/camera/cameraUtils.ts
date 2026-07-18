@@ -24,7 +24,7 @@ export const SHUTTERS = [
  * @param {string|number} s - Shutter speed (e.g., "1/125" or 2)
  * @returns {number} - Numeric shutter speed value
  */
-export function parseShutter(s) {
+export function parseShutter(s: any) {
   if (typeof s === 'string' && s.includes('/')) {
     const [n, d] = s.split('/');
     return Number(n) / Number(d);
@@ -38,7 +38,7 @@ export function parseShutter(s) {
  * @param {number} filmIso - Target film ISO
  * @returns {number|null} - Calculated EV or null if insufficient data
  */
-export function calculateEV(metadata, filmIso) {
+export function calculateEV(metadata: any, filmIso: any) {
   if (!metadata || !metadata.iso || !metadata.exposureTime) {
     return null;
   }
@@ -61,11 +61,11 @@ export function calculateEV(metadata, filmIso) {
  * @param {number} targetT - Target shutter speed (numeric)
  * @returns {string} - Closest standard shutter speed
  */
-export function findClosestShutter(targetT) {
+export function findClosestShutter(targetT: any) {
   let closest = SHUTTERS[0];
   let minDiff = Infinity;
   
-  SHUTTERS.forEach(s => {
+  SHUTTERS.forEach((s: any) => {
     const val = parseShutter(s);
     const diff = Math.abs(val - targetT);
     if (diff < minDiff) {
@@ -82,10 +82,10 @@ export function findClosestShutter(targetT) {
  * @param {number} targetEV - Target exposure value
  * @returns {Array<{f: number, s: string}>} - Array of valid pairs
  */
-export function generateValidPairs(targetEV) {
-  const pairs = [];
+export function generateValidPairs(targetEV: any) {
+  const pairs: any[] = [];
   
-  APERTURES.forEach(f => {
+  APERTURES.forEach((f: any) => {
     // Calculate required shutter speed: t = f^2 / 2^EV
     const t = (f * f) / Math.pow(2, targetEV);
     const sStr = findClosestShutter(t);
@@ -108,7 +108,7 @@ export function generateValidPairs(targetEV) {
  * @param {number} maxAperture - Maximum aperture of lens
  * @returns {object} - Recommended settings {s: string, f: number, flash: boolean}
  */
-export function calculatePSExposure(ev, flashMode, maxAperture) {
+export function calculatePSExposure(ev: any, flashMode: any, maxAperture: any) {
   const BRIGHT_THRESHOLD = 12;
   const DARK_THRESHOLD = 8;
   const SYNC_SHUTTER = '1/60';
@@ -154,7 +154,7 @@ export function calculatePSExposure(ev, flashMode, maxAperture) {
  * @param {Array} formats - Available camera formats
  * @returns {object|null} - Best format or null
  */
-export function getBestFormat(formats) {
+export function getBestFormat(formats: any) {
   if (!formats || formats.length === 0) return null;
 
   // Prioritize:
@@ -162,7 +162,7 @@ export function getBestFormat(formats) {
   // 2. 4:3 aspect ratio
   // 3. Reasonable resolution (not too high to avoid performance issues)
   
-  const filtered = formats.filter(f => {
+  const filtered = formats.filter((f: any) => {
     const fps = f.maxFps || f.frameRateRanges?.[0]?.maxFrameRate || 0;
     const width = f.videoWidth || f.photoWidth || 0;
     const height = f.videoHeight || f.photoHeight || 0;
@@ -173,7 +173,7 @@ export function getBestFormat(formats) {
   if (filtered.length === 0) return formats[0];
 
   // Sort by aspect ratio closeness to 4:3
-  filtered.sort((a, b) => {
+  filtered.sort((a: any, b: any) => {
     const ratioA = (a.videoWidth || a.photoWidth) / (a.videoHeight || a.photoHeight);
     const ratioB = (b.videoWidth || b.photoWidth) / (b.videoHeight || b.photoHeight);
     const target = 4 / 3;

@@ -62,7 +62,7 @@ export default function LocationDiagnosticScreen() {
     }
   };
   
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: any) => {
     if (status === 'granted' || status === true || status === 'ON') return '#4ade80';
     if (status === 'denied' || status === false || status === 'OFF') return '#f87171';
     return '#fbbf24';

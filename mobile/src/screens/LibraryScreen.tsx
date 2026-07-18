@@ -86,16 +86,16 @@ export default function LibraryScreen() {
     try {
       // Fetch multiple endpoints in parallel
       const [favoritesRes, themesRes, gearStatsRes, statsRes] = await Promise.all([
-        api.http.get('/api/photos/favorites').catch(() => []),
-        api.http.get('/api/tags').catch(() => []),
-        api.http.get('/api/stats/gear').catch(() => ({ cameras: [], lenses: [], films: [] })),
-        api.http.get('/api/stats/summary').catch(() => ({})),
+        api.http.get('/api/photos/favorites').catch((): any[] => []),
+        api.http.get('/api/tags').catch((): any[] => []),
+        api.http.get('/api/stats/gear').catch((): any => ({ cameras: [] as any[], lenses: [] as any[], films: [] as any[] })),
+        api.http.get('/api/stats/summary').catch((): any => ({})),
       ]);
 
       // Process favorites - fix thumbnail URLs
       const favoritesRaw = Array.isArray(favoritesRes) ? favoritesRes : [];
       console.log('[LibraryScreen] Favorites raw:', favoritesRaw.length, 'items');
-      const favorites = favoritesRaw.map(p => {
+      const favorites = favoritesRaw.map((p: any) => {
         const thumbnailUrl = getPhotoUrl(baseUrl, p, 'thumb');
         console.log('[LibraryScreen] Photo', p.id, 'thumb:', thumbnailUrl);
         return {
@@ -107,7 +107,7 @@ export default function LibraryScreen() {
 
       // Process themes - use photos_count from API
       const themesRaw = Array.isArray(themesRes) ? themesRes : [];
-      const themes = themesRaw.map(t => ({
+      const themes = themesRaw.map((t: any) => ({
         ...t,
         photo_count: t.photos_count || t.photo_count || t.count || 0
       }));
@@ -117,7 +117,7 @@ export default function LibraryScreen() {
       const gearData = gearStatsRes || {};
       const cameras = Array.isArray(gearData.cameras) ? gearData.cameras : [];
       // Transform to equipment-like structure for display
-      const equipmentWithStats = cameras.map((cam, idx) => ({
+      const equipmentWithStats = cameras.map((cam: any, idx: any) => ({
         id: idx + 1,
         name: cam.name,
         brand: cam.name.split(' ')[0] || '',
@@ -370,7 +370,7 @@ export default function LibraryScreen() {
   });
 
   // Render empty state for a section
-  const renderEmpty = (text) => (
+  const renderEmpty = (text: any) => (
     <View style={styles.emptyState}>
       <Icon name="inbox" size={32} color={theme.colors.onSurfaceVariant} />
       <Text style={styles.emptyText}>{text}</Text>

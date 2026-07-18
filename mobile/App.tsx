@@ -178,17 +178,17 @@ export default function App() {
 
   return (
     <ApiContext.Provider value={{ baseUrl, setBaseUrl, backupUrl, setBackupUrl, darkMode, setDarkMode, mapProvider, setMapProvider, amapKey, setAmapKey }}>
-      <PaperProvider theme={themeToUse}>
+      <PaperProvider theme={themeToUse as any}>
         <GestureHandlerRootView style={{ flex: 1 }}>
-        <NavigationContainer theme={themeToUse}>
+        <NavigationContainer theme={themeToUse as any}>
           <Stack.Navigator 
             initialRouteName="Main"
             screenOptions={{
               headerStyle: { backgroundColor: themeToUse.colors.surface },
               headerTintColor: themeToUse.colors.primary,
-              headerTitleStyle: { fontWeight: '600', letterSpacing: 0.3 },
+              headerTitleStyle: { fontWeight: '600' as const, letterSpacing: 0.3 },
               contentStyle: { backgroundColor: themeToUse.colors.background },
-            }}
+            } as any}
           >
             <Stack.Screen 
               name="Main" 
@@ -198,17 +198,17 @@ export default function App() {
             <Stack.Screen 
               name="RollDetail" 
               component={RollDetailScreen} 
-              options={({ route }) => ({ title: route.params.rollName || 'Roll Details' })}
+              options={({ route }) => ({ title: (route.params as any).rollName || 'Roll Details' })}
             />
             <Stack.Screen 
               name="TagDetail" 
               component={TagDetailScreen} 
-              options={({ route }) => ({ title: route.params.tagName || 'Tag Details' })}
+              options={({ route }) => ({ title: (route.params as any).tagName || 'Tag Details' })}
             />
             <Stack.Screen 
               name="FilmRolls" 
               component={FilmRollsScreen} 
-              options={({ route }) => ({ title: route.params.filmName || 'Film Rolls' })}
+              options={({ route }) => ({ title: (route.params as any).filmName || 'Film Rolls' })}
             />
             <Stack.Screen 
               name="PhotoView" 
@@ -233,7 +233,7 @@ export default function App() {
             <Stack.Screen 
               name="EquipmentRolls" 
               component={EquipmentRollsScreen} 
-              options={({ route }) => ({ title: route.params?.name || 'Equipment Rolls' })}
+              options={({ route }) => ({ title: (route.params as any)?.name || 'Equipment Rolls' })}
             />
             <Stack.Screen 
               name="LocationDiagnostic" 

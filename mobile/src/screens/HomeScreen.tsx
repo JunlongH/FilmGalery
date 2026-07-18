@@ -12,7 +12,7 @@ import { useFocusEffect } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
-export default function HomeScreen({ navigation }) {
+export default function HomeScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
   const [rolls, setRolls] = useState([]);
@@ -67,7 +67,7 @@ export default function HomeScreen({ navigation }) {
   // Derive year list from rolls
   const years = useMemo(() => {
     const set = new Set();
-    rolls.forEach(r => {
+    rolls.forEach((r: any) => {
       const dateStr = r.start_date || r.startDate || r.shot_date || r.created_at || r.createdAt || r.date || r.end_date || r.endDate;
       if (!dateStr) return;
       const d = new Date(dateStr);
@@ -79,19 +79,19 @@ export default function HomeScreen({ navigation }) {
   // Filter rolls by selected year (null shows all)
   const filteredRolls = useMemo(() => {
     if (!selectedYear) return rolls;
-    return rolls.filter(r => {
+    return rolls.filter((r: any) => {
       const sStr = r.start_date || r.startDate || r.shot_date || r.created_at || r.createdAt || r.date;
       const eStr = r.end_date || r.endDate;
       const dates = [sStr, eStr].filter(Boolean);
       if (dates.length === 0) return false;
-      return dates.some(ds => {
+      return dates.some((ds: any) => {
         const d = new Date(ds);
         return !isNaN(d.getTime()) && d.getFullYear() === selectedYear;
       });
     });
   }, [rolls, selectedYear]);
 
-  const renderItem = ({ item, index }) => {
+  const renderItem = ({ item, index }: any) => {
     const coverUrl = getRollCoverUrl(baseUrl, item);
     const filmLabel = item.film_name_joined || item.film_type || 'Unknown Film';
     const dateStr = item.start_date ? format(new Date(item.start_date), 'yyyy-MM-dd') : '';
@@ -191,7 +191,7 @@ export default function HomeScreen({ navigation }) {
                   { color: !selectedYear ? '#fff' : theme.colors.primary }
                 ]}>All</Text>
               </TouchableOpacity>
-              {years.map(y => (
+              {years.map((y: any) => (
                 <TouchableOpacity
                   key={y as React.Key}
                   onPress={() => setSelectedYear(y)}

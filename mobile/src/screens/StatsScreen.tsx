@@ -23,7 +23,7 @@ const COLORS = [
   '#43e97b', '#38f9d7', '#fa709a', '#fee140', '#8fd3f4', '#84fab0'
 ];
 
-export default function StatsScreen({ navigation }) {
+export default function StatsScreen({ navigation }: any) {
   const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -96,16 +96,16 @@ export default function StatsScreen({ navigation }) {
 
   // Prepare Activity Data
   const activityData = {
-    labels: (activity || []).slice(0, 6).reverse().map(a => a.month.split('-')[1]), // Last 6 months, show month number
+    labels: (activity || []).slice(0, 6).reverse().map((a: any) => a.month.split('-')[1]), // Last 6 months, show month number
     datasets: [{
-      data: (activity || []).slice(0, 6).reverse().map(a => a.count)
+      data: (activity || []).slice(0, 6).reverse().map((a: any) => a.count)
     }]
   };
 
   // Prepare Pie Data Helper
-  const preparePieData = (items, labelKey = 'name', valueKey = 'count') => {
+  const preparePieData = (items: any, labelKey = 'name', valueKey = 'count') => {
     if (!items) return [];
-    return items.slice(0, 5).map((item, index) => ({
+    return items.slice(0, 5).map((item: any, index: any) => ({
       name: item[labelKey],
       population: item[valueKey],
       color: COLORS[index % COLORS.length],
@@ -207,7 +207,7 @@ export default function StatsScreen({ navigation }) {
   );
 }
 
-function StatCard({ label, value }) {
+function StatCard({ label, value }: any) {
   const theme = useTheme();
   return (
     <Card style={styles.card} mode="elevated">

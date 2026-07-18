@@ -15,7 +15,7 @@ import {
   DISCOVERY_MODE 
 } from '../utils/portDiscovery';
 
-export default function SettingsScreen({ navigation }) {
+export default function SettingsScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl, setBaseUrl, backupUrl, setBackupUrl, darkMode, setDarkMode, mapProvider, setMapProvider, amapKey, setAmapKey } = useContext(ApiContext);
   const [url, setUrl] = useState(baseUrl);
@@ -39,7 +39,7 @@ export default function SettingsScreen({ navigation }) {
     }, [])
   );
 
-  const cleanUrlString = (input) => {
+  const cleanUrlString = (input: any) => {
     let clean = input.trim();
     if (!clean) return '';
     if (clean.endsWith('/')) clean = clean.slice(0, -1);
@@ -60,7 +60,7 @@ export default function SettingsScreen({ navigation }) {
         mode: discoveryMode,
         ip: cleanIpAddress(ipAddress) || undefined,
         timeout: 5000,
-        onProgress: (progress) => {
+        onProgress: (progress: any) => {
           if (progress.step === 'mdns') {
             setDiscoveryStatus(progress.status === 'scanning' ? '正在通过 mDNS 发现服务...' : `mDNS 发现完成`);
           } else if (progress.step === 'portscan') {
@@ -101,7 +101,7 @@ export default function SettingsScreen({ navigation }) {
   };
 
   // 选择已发现的服务
-  const selectService = (service) => {
+  const selectService = (service: any) => {
     setUrl(service.fullUrl);
     Alert.alert('已选择', `服务器地址已设为: ${service.fullUrl}`);
   };
@@ -132,13 +132,13 @@ export default function SettingsScreen({ navigation }) {
     Alert.alert('已保存', '地图设置已保存，重新进入地图页即可生效');
   };
 
-  const toggleDark = async (val) => {
+  const toggleDark = async (val: any) => {
     setIsDark(val);
     setDarkMode && setDarkMode(val);
     await AsyncStorage.setItem('theme_dark', val ? 'true' : 'false');
   };
 
-  const testConnection = async (targetUrl) => {
+  const testConnection = async (targetUrl: any) => {
     const clean = cleanUrlString(targetUrl);
     if (!clean) {
       alert('Please enter a URL');

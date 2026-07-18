@@ -18,7 +18,7 @@ function parseShotLog(raw: any): any[] {
     const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (!Array.isArray(data)) return [];
     return data
-      .map(entry => ({
+      .map((entry: any) => ({
         date: entry.date,
         shot_time: entry.shot_time || '',
         count: Number(entry.count || entry.shots || 0) || 0,
@@ -33,7 +33,7 @@ function parseShotLog(raw: any): any[] {
         longitude: entry.longitude ?? null,
         caption: entry.caption || ''
       }))
-      .filter(e => e.date && e.count > 0);
+      .filter((e: any) => e.date && e.count > 0);
   } catch {
     return [];
   }
@@ -48,9 +48,9 @@ const FALLBACK_LENSES = [
   '70-200mm f/2.8'
 ];
 
-const dedupeAndSort = (list: any[]) => Array.from(new Set((list || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+const dedupeAndSort = (list: any[]) => Array.from(new Set((list || []).filter(Boolean))).sort((a: any, b: any) => a.localeCompare(b));
 
-export default function ShotLogScreen({ route, navigation }) {
+export default function ShotLogScreen({ route, navigation }: any) {
   const theme = useTheme();
   const { itemId, filmName, autoOpenShotMode } = route.params || {};
   const [loading, setLoading] = useState(true);
@@ -95,7 +95,7 @@ export default function ShotLogScreen({ route, navigation }) {
   const [adaptedLenses, setAdaptedLenses] = useState([]); // [{ id, displayName, mount, ... }]
 
   // Format lens for display
-  const formatLensDisplay = (lens) => {
+  const formatLensDisplay = (lens: any) => {
     const name = `${lens.brand || ''} ${lens.model || ''}`.trim();
     if (lens.focal_length_min) {
       const focalStr = lens.focal_length_min === lens.focal_length_max || !lens.focal_length_max
@@ -208,7 +208,7 @@ export default function ShotLogScreen({ route, navigation }) {
           // Fallback: fetch film definition to get ISO
           try {
             const films = await getFilms();
-            const film = films.find(f => f.id === base.film_id);
+            const film = films.find((f: any) => f.id === base.film_id);
             if (film && film.iso) {
               setFilmIso(Number(film.iso));
             }
@@ -248,21 +248,21 @@ export default function ShotLogScreen({ route, navigation }) {
               setFixedLensInfo(null);
               
               // Process native lenses
-              const native = (result.lenses || []).map(lens => ({
+              const native = (result.lenses || []).map((lens: any) => ({
                 ...lens,
                 displayName: formatLensDisplay(lens)
               }));
               setNativeLenses(native);
               
               // Process adapted lenses
-              const adapted = (result.adapted_lenses || []).map(lens => ({
+              const adapted = (result.adapted_lenses || []).map((lens: any) => ({
                 ...lens,
                 displayName: formatLensDisplay(lens)
               }));
               setAdaptedLenses(adapted);
               
               // Add all to flat lensOptions for backward compatibility
-              const allLensNames = [...native, ...adapted].map(l => l.displayName).filter(Boolean);
+              const allLensNames = [...native, ...adapted].map((l: any) => l.displayName).filter(Boolean);
               setLensOptions(prev => dedupeAndSort([...allLensNames, ...prev]));
             }
           } catch (e) {
@@ -288,7 +288,7 @@ export default function ShotLogScreen({ route, navigation }) {
     getLenses()
       .then((lenses) => {
         if (!mounted) return;
-        const formatted = (Array.isArray(lenses) ? lenses : []).map(l => formatLensDisplay(l));
+        const formatted = (Array.isArray(lenses) ? lenses : []).map((l: any) => formatLensDisplay(l));
         setLensOptions(prev => dedupeAndSort([...prev, ...formatted]));
       })
       .catch((err) => {
@@ -299,7 +299,7 @@ export default function ShotLogScreen({ route, navigation }) {
     return () => { mounted = false; };
   }, []);
 
-  const handleShotData = (data) => {
+  const handleShotData = (data: any) => {
     setShowShotMode(false);
     if (data.iso) setFilmIso(Number(data.iso));
     if (data.lens) setNewLens(data.lens);
@@ -354,20 +354,20 @@ export default function ShotLogScreen({ route, navigation }) {
   };
 
   useEffect(() => {
-    setLensOptions((prev) => dedupeAndSort([...prev, ...entries.map(e => e.lens).filter(Boolean)]));
+    setLensOptions((prev) => dedupeAndSort([...prev, ...entries.map((e: any) => e.lens).filter(Boolean)]));
   }, [entries]);
 
   useEffect(() => {
     getCountries()
       .then(rows => {
-        const sorted = (Array.isArray(rows) ? rows : []).sort((a, b) => (a.country_name || '').localeCompare(b.country_name || ''));
+        const sorted = (Array.isArray(rows) ? rows : []).sort((a: any, b: any) => (a.country_name || '').localeCompare(b.country_name || ''));
         setCountries(sorted);
       })
       .catch(() => setCountries([]));
   }, []);
 
   useEffect(() => {
-    const matched = countries.find(c => (c.country_name || '').toLowerCase() === newCountry.toLowerCase());
+    const matched = countries.find((c: any) => (c.country_name || '').toLowerCase() === newCountry.toLowerCase());
     const code = matched ? matched.country_code : '';
     setCountryCode(code);
     if (code) {
@@ -389,7 +389,7 @@ export default function ShotLogScreen({ route, navigation }) {
   }, [entries.length]);
 
   const totalShots = entries.reduce((sum, e) => sum + e.count, 0);
-  const daysLogged = new Set(entries.map(e => e.date)).size;
+  const daysLogged = new Set(entries.map((e: any) => e.date)).size;
 
   const upsertEntry = () => {
     if (!newDate) return;
@@ -416,7 +416,7 @@ export default function ShotLogScreen({ route, navigation }) {
         longitude: newLongitude,
         caption: newCaption
       }];
-      return next.sort((a, b) => a.date.localeCompare(b.date));
+      return next.sort((a: any, b: any) => a.date.localeCompare(b.date));
     });
     if (lensVal) setLensOptions(prev => dedupeAndSort([...prev, lensVal]));
     setNewShots('1');
@@ -437,7 +437,7 @@ export default function ShotLogScreen({ route, navigation }) {
     setShowCityOptions(false);
   };
 
-  const removeEntryAt = (idx) => {
+  const removeEntryAt = (idx: any) => {
     setEntries(prev => prev.filter((_, i) => i !== idx));
   };
 
@@ -447,8 +447,8 @@ export default function ShotLogScreen({ route, navigation }) {
     try {
       const payload = entries
         .slice()
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .map(e => ({
+        .sort((a: any, b: any) => a.date.localeCompare(b.date))
+        .map((e: any) => ({
           date: e.date,
           shot_time: e.shot_time || '',
           count: e.count,
@@ -492,7 +492,7 @@ export default function ShotLogScreen({ route, navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <FlatList
-        data={entries.map((entry, idx) => ({ ...entry, _idx: idx })).sort((a, b) => b.date.localeCompare(a.date) || b._idx - a._idx)}
+        data={entries.map((entry, idx) => ({ ...entry, _idx: idx })).sort((a: any, b: any) => b.date.localeCompare(a.date) || b._idx - a._idx)}
         keyExtractor={item => `${item.date}-${item._idx}`}
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xl * 2 }}
         ListHeaderComponent={() => (
@@ -690,7 +690,7 @@ export default function ShotLogScreen({ route, navigation }) {
                       📷 Native Lenses {cameraMount ? `(${cameraMount})` : ''}
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm }}>
-                      {nativeLenses.map(l => {
+                      {nativeLenses.map((l: any) => {
                         // Check if prime lens (focal_length_min === focal_length_max)
                         const isPrime = l.focal_length_min && (!l.focal_length_max || l.focal_length_min === l.focal_length_max);
                         // Use lens.name for storage (matches database), displayName for UI
@@ -725,7 +725,7 @@ export default function ShotLogScreen({ route, navigation }) {
                       🔄 Adapted Lenses
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm }}>
-                      {adaptedLenses.map(l => {
+                      {adaptedLenses.map((l: any) => {
                         // Check if prime lens (focal_length_min === focal_length_max)
                         const isPrime = l.focal_length_min && (!l.focal_length_max || l.focal_length_min === l.focal_length_max);
                         // Use lens.name for storage (matches database), displayName for UI
@@ -756,7 +756,7 @@ export default function ShotLogScreen({ route, navigation }) {
                 {/* Fallback: show flat options if no inventory lenses */}
                 {nativeLenses.length === 0 && adaptedLenses.length === 0 && lensOptions.length > 0 && (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm }}>
-                    {lensOptions.map(l => (
+                    {lensOptions.map((l: any) => (
                       <Button
                         key={l}
                         mode={newLens === l ? 'contained' : 'outlined'}
@@ -804,9 +804,9 @@ export default function ShotLogScreen({ route, navigation }) {
         {showCountryOptions ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.sm }}>
             {countries
-              .filter(c => !newCountry || (c.country_name || '').toLowerCase().includes(newCountry.toLowerCase()))
+              .filter((c: any) => !newCountry || (c.country_name || '').toLowerCase().includes(newCountry.toLowerCase()))
               .slice(0, 12)
-              .map(c => (
+              .map((c: any) => (
                 <Button
                   key={c.country_code || c.country_name}
                   mode={newCountry === c.country_name ? 'contained' : 'outlined'}
@@ -830,9 +830,9 @@ export default function ShotLogScreen({ route, navigation }) {
         {showCityOptions && (countryCode || newCountry) ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.sm }}>
             {cities
-              .filter(ct => !newCity || (ct.city_name || '').toLowerCase().includes(newCity.toLowerCase()))
+              .filter((ct: any) => !newCity || (ct.city_name || '').toLowerCase().includes(newCity.toLowerCase()))
               .slice(0, 12)
-              .map(ct => (
+              .map((ct: any) => (
                 <Button
                   key={ct.id}
                   mode={newCity === ct.city_name ? 'contained' : 'outlined'}

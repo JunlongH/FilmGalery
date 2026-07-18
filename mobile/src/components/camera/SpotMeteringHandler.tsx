@@ -11,7 +11,7 @@ import { Platform } from 'react-native';
  * @param {object} point - {x, y} normalized coordinates (0-1)
  * @returns {Promise<boolean>} - Success status
  */
-export async function focusAndMeter(cameraRef, point) {
+export async function focusAndMeter(cameraRef: any, point: any) {
   if (!cameraRef.current || !point) {
     return false;
   }
@@ -32,7 +32,7 @@ export async function focusAndMeter(cameraRef, point) {
  * @param {number} ev - Exposure compensation in EV
  * @returns {Promise<boolean>} - Success status
  */
-export async function setExposureCompensation(cameraRef, ev) {
+export async function setExposureCompensation(cameraRef: any, ev: any) {
   if (!cameraRef.current) {
     return false;
   }
@@ -57,7 +57,7 @@ export async function setExposureCompensation(cameraRef, ev) {
  * @param {number} viewHeight - Camera view height
  * @returns {object} - Normalized point {x, y}
  */
-export function getTapCoordinates(event, viewWidth, viewHeight) {
+export function getTapCoordinates(event: any, viewWidth: any, viewHeight: any) {
   const { locationX, locationY } = event.nativeEvent;
   
   return {
@@ -71,7 +71,7 @@ export function getTapCoordinates(event, viewWidth, viewHeight) {
  * @param {object} device - Camera device
  * @returns {boolean} - Support status
  */
-export function isSpotMeteringSupported(device) {
+export function isSpotMeteringSupported(device: any) {
   if (!device) return false;
   
   // Vision Camera devices typically support focus, which implies spot metering

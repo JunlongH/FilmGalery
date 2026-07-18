@@ -25,7 +25,7 @@ import CachedImage from '../components/CachedImage';
 import { Icon } from '../components/ui';
 import { buildUploadUrl } from '../utils/urlHelper';
 
-export default function EquipmentScreen({ navigation }) {
+export default function EquipmentScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
   const [tab, setTab] = useState('camera');
@@ -107,7 +107,7 @@ export default function EquipmentScreen({ navigation }) {
     if (!addBrand.trim() || !addModel.trim()) return;
     
     try {
-      let newItem;
+      let newItem: any;
       if (tab === 'camera') {
         newItem = await createCamera({ 
           name: `${addBrand.trim()} ${addModel.trim()}`,
@@ -175,7 +175,7 @@ export default function EquipmentScreen({ navigation }) {
         await deleteFlash(deleteTarget.id);
       }
       
-      setItems(prev => prev.filter(i => i.id !== deleteTarget.id));
+      setItems(prev => prev.filter((i: any) => i.id !== deleteTarget.id));
     } catch (err) {
       console.error('Failed to delete equipment:', err);
     }
@@ -184,12 +184,12 @@ export default function EquipmentScreen({ navigation }) {
   };
 
   // Filter items by search
-  const filteredItems = items.filter(item => {
+  const filteredItems = items.filter((item: any) => {
     const text = `${item.brand || ''} ${item.model || ''} ${item.name || ''}`.toLowerCase();
     return text.includes(search.toLowerCase());
   });
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item }: any) => {
     // Display title: films use name only (already contains full info), equipment uses brand+model
     const displayTitle = tab === 'film' 
       ? item.name || '' 

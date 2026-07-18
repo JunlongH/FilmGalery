@@ -22,7 +22,7 @@ const TOOL_LABELS = {
 };
 
 // ─── Message bubble ───
-function Bubble({ msg }) {
+function Bubble({ msg }: any) {
   const theme = useTheme();
   const isUser = msg.role === 'user';
   const [toolsExpanded, setToolsExpanded] = useState(false);
@@ -97,14 +97,14 @@ function Bubble({ msg }) {
           : [styles.bubbleAsst, { backgroundColor: theme.colors.surfaceVariant }],
       ]}>
         {/* Tool calls (collapsible) */}
-        {visibleTools.map(tc => (
+        {visibleTools.map((tc: any) => (
           <Chip
             key={tc.id}
             compact
             icon={tc.status === 'running' ? 'loading' : tc.status === 'done' ? 'check-circle' : 'close-circle'}
             style={{ marginBottom: 4, alignSelf: 'flex-start' }}
           >
-            {TOOL_LABELS[tc.name] || tc.name}
+            {(TOOL_LABELS as any)[tc.name] || tc.name}
           </Chip>
         ))}
         {shouldCollapse && (
@@ -150,7 +150,7 @@ function Bubble({ msg }) {
  * @param {Function} props.onClose
  * @param {Object}   [props.context]   — { route, entityType, entityId }
  */
-export default function AIChatSheet({ visible, onClose, context }) {
+export default function AIChatSheet({ visible, onClose, context }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
   const sheetRef = useRef(null);
@@ -173,7 +173,7 @@ export default function AIChatSheet({ visible, onClose, context }) {
 
   // ─── Helpers ───
 
-  const upsertMessage = useCallback((id, updater) => {
+  const upsertMessage = useCallback((id: any, updater: any) => {
     setMessages(prev => {
       const idx = prev.findIndex(m => m.id === id);
       if (idx === -1) return prev;
@@ -183,12 +183,12 @@ export default function AIChatSheet({ visible, onClose, context }) {
     });
   }, []);
 
-  const upsertToolCall = useCallback((msgId, toolCallId, updater) => {
+  const upsertToolCall = useCallback((msgId: any, toolCallId: any, updater: any) => {
     setMessages(prev => {
       const idx = prev.findIndex(m => m.id === msgId);
       if (idx === -1) return prev;
       const msg = prev[idx];
-      const tcIdx = msg.toolCalls.findIndex(tc => tc.id === toolCallId);
+      const tcIdx = msg.toolCalls.findIndex((tc: any) => tc.id === toolCallId);
       const newToolCalls = [...msg.toolCalls];
       if (tcIdx === -1) newToolCalls.push(updater(null));
       else newToolCalls[tcIdx] = updater(newToolCalls[tcIdx]);
@@ -228,24 +228,24 @@ export default function AIChatSheet({ visible, onClose, context }) {
               break;
             case 'tool_call':
               upsertToolCall(asstMsgId, event.tool_call_id, () => ({
-                id: event.tool_call_id, name: event.tool_name, status: 'running', result: null,
+                id: event.tool_call_id, name: event.tool_name, status: 'running', result: null as any,
               }));
               break;
             case 'tool_result':
-              upsertToolCall(asstMsgId, event.tool_call_id, tc => ({
+              upsertToolCall(asstMsgId, event.tool_call_id, (tc: any) => ({
                 ...(tc || { id: event.tool_call_id, name: event.tool_name }),
                 status: event.error ? 'error' : 'done',
               }));
               break;
             case 'text_delta':
-              upsertMessage(asstMsgId, msg => ({ ...msg, content: msg.content + (event.delta || '') }));
+              upsertMessage(asstMsgId, (msg: any) => ({ ...msg, content: msg.content + (event.delta || '') }));
               break;
             case 'done':
-              upsertMessage(asstMsgId, msg => ({ ...msg, isStreaming: false }));
+              upsertMessage(asstMsgId, (msg: any) => ({ ...msg, isStreaming: false }));
               setIsLoading(false);
               break;
             case 'error':
-              upsertMessage(asstMsgId, msg => ({ ...msg, isStreaming: false, error: event.message || '未知错误' }));
+              upsertMessage(asstMsgId, (msg: any) => ({ ...msg, isStreaming: false, error: event.message || '未知错误' }));
               setIsLoading(false);
               break;
           }
@@ -254,7 +254,7 @@ export default function AIChatSheet({ visible, onClose, context }) {
       );
     } catch (err) {
       if (err?.name !== 'AbortError') {
-        upsertMessage(asstMsgId, msg => ({ ...msg, isStreaming: false, error: err.message || '请求失败' }));
+        upsertMessage(asstMsgId, (msg: any) => ({ ...msg, isStreaming: false, error: err.message || '请求失败' }));
         setIsLoading(false);
       }
     }

@@ -10,3 +10,4 @@
 // @types/* package (declared in package.json devDependencies).
 
 declare module 'react-native-zeroconf';
+declare module 'expo-file-system/legacy';

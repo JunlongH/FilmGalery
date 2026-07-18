@@ -25,7 +25,7 @@ import { getFilmItems, getFilms } from '../../api/filmItems';
 
 const { height } = Dimensions.get('window');
 
-export default function QuickMeterSheet({ visible, onClose }) {
+export default function QuickMeterSheet({ visible, onClose }: any) {
   const theme = useTheme();
   const navigation = useNavigation();
   
@@ -79,7 +79,7 @@ export default function QuickMeterSheet({ visible, onClose }) {
         getFilms(),
       ]);
       const items = (itemsRes as any) && Array.isArray((itemsRes as any).items) ? (itemsRes as any).items : [];
-      console.log('[QuickMeter] Loaded film items:', items.length, items.map(i => ({ id: i.id, status: i.status, film_id: i.film_id })));
+      console.log('[QuickMeter] Loaded film items:', items.length, items.map((i: any) => ({ id: i.id, status: i.status, film_id: i.film_id })));
       setLoadedFilmItems(items);
       setFilms(Array.isArray(filmsRes) ? filmsRes : []);
     } catch (e) {
@@ -99,8 +99,8 @@ export default function QuickMeterSheet({ visible, onClose }) {
   }, [visible, loadData]);
 
   // Get film info
-  const getFilmInfo = useCallback((item) => {
-    const film = films.find(f => f.id === item.film_id);
+  const getFilmInfo = useCallback((item: any) => {
+    const film = films.find((f: any) => f.id === item.film_id);
     return {
       name: film?.name || item.film_name || item.film_type || `Film #${item.film_id || ''}`,
       iso: film?.iso || item.iso || 400,
@@ -109,7 +109,7 @@ export default function QuickMeterSheet({ visible, onClose }) {
   }, [films]);
 
   // Handle film selection
-  const handleSelect = useCallback((item) => {
+  const handleSelect = useCallback((item: any) => {
     const filmInfo = getFilmInfo(item);
     onClose();
     navigation.navigate('ShotLog', {

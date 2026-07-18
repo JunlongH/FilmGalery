@@ -10,7 +10,7 @@ import { getFilmItem, updateFilmItem, deleteFilmItem } from '../api/filmItems';
 import { FILM_ITEM_STATUSES, FILM_ITEM_STATUS_LABELS } from '../constants/filmItemStatus';
 import { spacing } from '../theme';
 
-export default function FilmItemDetailScreen({ route, navigation }) {
+export default function FilmItemDetailScreen({ route, navigation }: any) {
   const theme = useTheme();
   const { itemId, filmName } = route.params;
   const [loading, setLoading] = useState(true);
@@ -88,8 +88,8 @@ export default function FilmItemDetailScreen({ route, navigation }) {
     return () => { mounted = false; };
   }, [itemId]);
 
-  const updateField = (key, value) => {
-    setForm(prev => ({ ...prev, [key]: value }));
+  const updateField = (key: any, value: any) => {
+    setForm((prev: any) => ({ ...prev, [key]: value }));
   };
 
   const onSave = async () => {
@@ -170,7 +170,7 @@ export default function FilmItemDetailScreen({ route, navigation }) {
             {filmName || 'Film Item'} (#{item.id})
           </Text>
           <Text variant="bodySmall" numberOfLines={1}>
-            {FILM_ITEM_STATUS_LABELS[item.status] || item.status}
+            {(FILM_ITEM_STATUS_LABELS as any)[item.status] || item.status}
             {item.expiry_date ? ` • Exp ${item.expiry_date}` : ''}
           </Text>
         </View>
@@ -191,7 +191,7 @@ export default function FilmItemDetailScreen({ route, navigation }) {
             <EquipmentPicker cameraId={undefined}
               type="camera"
               value={loadCameraId}
-              onChange={(id, cam) => {
+              onChange={(id: any, cam: any) => {
                 setLoadCameraId(id);
                 setLoadCameraName(cam ? `${cam.brand} ${cam.model}` : '');
               }}
@@ -256,7 +256,7 @@ export default function FilmItemDetailScreen({ route, navigation }) {
       <TextInput
         label="Status"
         mode="outlined"
-        value={FILM_ITEM_STATUS_LABELS[form.status] || form.status}
+        value={(FILM_ITEM_STATUS_LABELS as any)[form.status] || form.status}
         right={<TextInput.Icon icon="chevron-down" />}
         onPressIn={() => {
           // Simple status cycle for now; can be replaced with proper picker

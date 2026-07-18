@@ -14,7 +14,7 @@ const screenWidth = Dimensions.get('window').width;
 // compute tile size accounting for horizontal padding and small gaps so items don't touch the right edge
 const tileSize = Math.floor((screenWidth - (spacing.md * 2) - (numColumns * 4)) / numColumns);
 
-export default function FavoritesScreen({ navigation }) {
+export default function FavoritesScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
   const [photos, setPhotos] = useState([]);
@@ -71,7 +71,7 @@ export default function FavoritesScreen({ navigation }) {
     });
   }, [navigation, baseUrl, theme]);
 
-  const renderItem = ({ item, index }) => {
+  const renderItem = ({ item, index }: any) => {
     const thumbUrl = getPhotoUrl(baseUrl, item, 'thumb');
     
     const showHeart = item.rating === 1;

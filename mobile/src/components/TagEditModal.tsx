@@ -50,7 +50,7 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagE
   useEffect(() => {
     const lower = input.toLowerCase().trim();
     let filtered = allTags.filter((t) => !currentTags.includes(t.name));
-    if (lower) filtered = filtered.filter((t) => t.name.toLowerCase().includes(lower));
+    if (lower) filtered = filtered.filter((t: any) => t.name.toLowerCase().includes(lower));
     setSuggestions(filtered);
   }, [input, allTags, currentTags]);
 

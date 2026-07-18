@@ -14,7 +14,7 @@ import { Icon } from '../components/ui';
 import { getRollsByEquipment } from '../api/equipment';
 import { format } from 'date-fns';
 
-export default function EquipmentRollsScreen({ route, navigation }) {
+export default function EquipmentRollsScreen({ route, navigation }: any) {
   const theme = useTheme();
   const { type, id, name } = route.params; // type: 'camera'|'lens'|'flash'|'film'
   const { baseUrl } = useContext(ApiContext);
@@ -72,7 +72,7 @@ export default function EquipmentRollsScreen({ route, navigation }) {
     }
   };
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item }: any) => {
     let coverUrl = null;
     if (item.coverPath) {
       coverUrl = `${baseUrl}${item.coverPath}`;

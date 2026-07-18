@@ -156,7 +156,7 @@ export default function AISettingsScreen() {
       />
       {models.length > 0 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-          {models.slice(0, 10).map(m => (
+          {models.slice(0, 10).map((m: any) => (
             <Chip key={m.id} compact onPress={() => setTextModel(m.id)}>{m.id}</Chip>
           ))}
         </View>
@@ -174,7 +174,7 @@ export default function AISettingsScreen() {
       />
       {models.length > 0 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-          {models.slice(0, 10).map(m => (
+          {models.slice(0, 10).map((m: any) => (
             <Chip key={m.id} compact onPress={() => setVisionModel(m.id)}>{m.id}</Chip>
           ))}
         </View>

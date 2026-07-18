@@ -10,7 +10,7 @@ import TouchScale from '../components/TouchScale';
 import { spacing, radius } from '../theme';
 import { Icon, Badge } from '../components/ui';
 
-export default function InventoryScreen({ navigation }) {
+export default function InventoryScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -65,7 +65,7 @@ export default function InventoryScreen({ navigation }) {
 
   const filmById = useMemo(() => {
     const map = new Map();
-    films.forEach(f => {
+    films.forEach((f: any) => {
       if (f && f.id != null) map.set(f.id, f);
     });
     return map;
@@ -73,10 +73,10 @@ export default function InventoryScreen({ navigation }) {
 
   const items = useMemo(() => {
     if (statusFilter === 'all') return allItems;
-    return allItems.filter(it => it.status === statusFilter);
+    return allItems.filter((it: any) => it.status === statusFilter);
   }, [allItems, statusFilter]);
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item }: any) => {
     const film = filmById.get(item.film_id) || null;
     // Film name already contains full information (brand + model)
     const filmName = film 
@@ -90,7 +90,7 @@ export default function InventoryScreen({ navigation }) {
     const statusLabel =
       item.status === 'loaded' && item.loaded_camera
         ? `Loaded on ${item.loaded_camera}`
-        : (FILM_ITEM_STATUS_LABELS[item.status] || item.status);
+        : ((FILM_ITEM_STATUS_LABELS as any)[item.status] || item.status);
     const expiry = item.expiry_date || null;
     const label = item.label || '';
     const rawThumb = film?.thumbPath || film?.thumbUrl || null;

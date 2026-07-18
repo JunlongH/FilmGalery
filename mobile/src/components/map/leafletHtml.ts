@@ -1,4 +1,4 @@
-export const getLeafletHtml = (initialRegion, mapProvider = 'osm', isDark = false) => {
+export const getLeafletHtml = (initialRegion: any, mapProvider = 'osm', isDark = false) => {
   const isAmapDark = mapProvider === 'amap' && isDark;
   const tileLayerConfig = mapProvider === 'amap'
     ? {
@@ -169,7 +169,7 @@ export const getLeafletHtml = (initialRegion, mapProvider = 'osm', isDark = fals
                      html += '</div>';
                 } else {
                      // 4 grid
-                     images.slice(0, 4).forEach(url => {
+                     images.slice(0, 4).forEach((url: any) => {
                         html += '<div class="mosaic-item"><img src="' + url + '" onerror="this.style.display=\\'none\\'"/></div>';
                      });
                 }
@@ -221,7 +221,7 @@ export const getLeafletHtml = (initialRegion, mapProvider = 'osm', isDark = fals
         function updateMarkers(photos) {
             markers.clearLayers();
             
-            const newMarkers = photos.map(photo => {
+            const newMarkers = photos.map((photo: any) => {
                 const lat = parseFloat(photo.latitude);
                 const lng = parseFloat(photo.longitude);
                 if (isNaN(lat) || isNaN(lng)) return null;
@@ -252,7 +252,7 @@ export const getLeafletHtml = (initialRegion, mapProvider = 'osm', isDark = fals
                 });
 
                 return marker;
-            }).filter(m => m !== null);
+            }).filter((m: any) => m !== null);
 
             markers.addLayers(newMarkers);
         }

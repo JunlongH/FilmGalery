@@ -4,15 +4,15 @@ import { WebView } from 'react-native-webview';
 import { getLeafletHtml } from './leafletHtml';
 import { ApiContext } from '../../context/ApiContext';
 
-const LeafletMap = ({ 
-  photos = [], 
+const LeafletMap = ({
+  photos = [],
   region,
   onMarkerPress,
-  onMapReady 
-}) => {
+  onMapReady
+}: any) => {
   const webViewRef = useRef(null);
   const [isMapReady, setIsMapReady] = useState(false);
-  const { mapProvider, darkMode } = useContext(ApiContext);
+  const { mapProvider, darkMode }: any = useContext(ApiContext);
 
   // Generate HTML with initial region and map provider
   const htmlContent = React.useMemo(
@@ -48,7 +48,7 @@ const LeafletMap = ({
     }
   }, [region, isMapReady]);
 
-  const handleMessage = (event) => {
+  const handleMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'MAP_READY') {

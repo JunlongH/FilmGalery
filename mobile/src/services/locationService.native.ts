@@ -27,15 +27,15 @@ const CONFIG = {
 // State
 // ============================================================================
 
-let cachedLocation = null;
-let diagnosticLog = [];
+let cachedLocation: any = null;
+let diagnosticLog: any[] = [];
 const MAX_LOG = 30;
 
 // ============================================================================
 // Logging
 // ============================================================================
 
-const log = (msg, level = 'info') => {
+const log = (msg: any, level = 'info') => {
   const ts = new Date().toISOString().slice(11, 23);
   const entry = `[${ts}] ${level.toUpperCase()}: ${msg}`;
   diagnosticLog.unshift(entry);
@@ -57,7 +57,7 @@ const log = (msg, level = 'info') => {
  * @param {number} longitude
  * @returns {Promise<{country: string, city: string, detail: string}>}
  */
-const reverseGeocode = async (latitude, longitude) => {
+const reverseGeocode = async (latitude: any, longitude: any) => {
   // Canonical GeocodeResult (@filmgallery/types). Empty strings on failure;
   // coordinates are still echoed.
   const empty = () => ({ displayName: '', country: '', city: '', state: '', latitude, longitude });
@@ -161,7 +161,7 @@ const getLocationNative = () => {
     }, CONFIG.TIMEOUT);
     
     Geolocation.getCurrentPosition(
-      (position) => {
+      (position: any) => {
         clearTimeout(timeout);
         log(`✓ Native success: (${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)})`);
         resolve({
@@ -171,7 +171,7 @@ const getLocationNative = () => {
           accuracy: position.coords.accuracy
         });
       },
-      (error) => {
+      (error: any) => {
         clearTimeout(timeout);
         log(`Native error: ${error.code} ${error.message}`, 'error');
         reject(error);
@@ -356,7 +356,7 @@ export const getLocation = async () => {
       return {
         success: false,
         error: 'PERMISSION_DENIED',
-        coords: null
+        coords: null as any
       };
     }
   }
@@ -410,7 +410,7 @@ export const getLocation = async () => {
     try {
       log('Final attempt: Expo watch');
       const coords: any = await new Promise<any>((resolve: any, reject: any) => {
-        let subscription = null;
+        let subscription: any = null;
         let resolved = false;
         
         const cleanup = () => {
@@ -470,7 +470,7 @@ export const getLocation = async () => {
       return {
         success: false,
         error: 'ALL_FAILED',
-        coords: null,
+        coords: null as any,
         errors: {
           native: nativeError.message,
           watch: watchError.message
@@ -522,7 +522,7 @@ export const openLocationSettings = () => {
 /**
  * Show guidance
  */
-export const showGuidance = (error) => {
+export const showGuidance = (error: any) => {
   Alert.alert(
     '定位失败',
     `无法获取位置。\n\n请检查：\n1. 位置服务已开启\n2. GPS信号良好\n3. 权限已授予\n\n错误: ${error}`,

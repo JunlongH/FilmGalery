@@ -10,7 +10,7 @@ import { Icon } from '../components/ui';
 import { api } from '../api/client';
 import { format } from 'date-fns';
 
-export default function FilmRollsScreen({ route, navigation }) {
+export default function FilmRollsScreen({ route, navigation }: any) {
   const theme = useTheme();
   const { filmId, filmName } = route.params;
   const { baseUrl } = useContext(ApiContext);
@@ -25,7 +25,7 @@ export default function FilmRollsScreen({ route, navigation }) {
     try {
       const res = await api.http.get('/api/rolls');
       // Filter by filmId
-      const filtered = res.filter(r => r.filmId === filmId);
+      const filtered = res.filter((r: any) => r.filmId === filmId);
       setRolls(filtered);
     } catch (err) {
       setError('Failed to connect to server.');
@@ -58,7 +58,7 @@ export default function FilmRollsScreen({ route, navigation }) {
     });
   }, [navigation, baseUrl, filmId, theme]);
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item }: any) => {
     let coverUrl = null;
     if (item.coverPath) {
       coverUrl = `${baseUrl}${item.coverPath}`;

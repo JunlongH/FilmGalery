@@ -11,7 +11,7 @@ const numColumns = 2;
 const screenWidth = Dimensions.get('window').width;
 const itemSize = Math.floor((screenWidth - 16*2 - 8) / numColumns); // padding 16, gap ~8
 
-export default function FilmsScreen({ navigation }) {
+export default function FilmsScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
   const [films, setFilms] = useState([]);
@@ -63,7 +63,7 @@ export default function FilmsScreen({ navigation }) {
     });
   }, [navigation, baseUrl]);
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item }: any) => {
     const coverUri = item.thumbPath ? `${baseUrl}${item.thumbPath}` : null;
     // Film name already contains full information (brand + model)
     const displayTitle = item.name || '';

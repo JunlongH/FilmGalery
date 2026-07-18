@@ -27,7 +27,7 @@ import * as FileSystem from 'expo-file-system/legacy';
  * @param {string} base64Data - Base64 encoded JPEG data
  * @returns {object|null} - Extracted EXIF data or null
  */
-function parseExifFromBase64(base64Data) {
+function parseExifFromBase64(base64Data: string) {
   try {
     // Decode base64 to binary
     const binaryString = atob(base64Data);
@@ -87,19 +87,19 @@ function parseExifFromBase64(base64Data) {
 /**
  * Parse TIFF header and extract EXIF tags
  */
-function parseTiffHeader(bytes, tiffOffset, maxLength) {
+function parseTiffHeader(bytes: Uint8Array, tiffOffset: number, maxLength: number) {
   try {
     // Check byte order (II = little endian, MM = big endian)
     const isLittleEndian = bytes[tiffOffset] === 0x49 && bytes[tiffOffset + 1] === 0x49;
     
-    const readUint16 = (offset) => {
+    const readUint16 = (offset: number) => {
       if (isLittleEndian) {
         return bytes[offset] | (bytes[offset + 1] << 8);
       }
       return (bytes[offset] << 8) | bytes[offset + 1];
     };
     
-    const readUint32 = (offset) => {
+    const readUint32 = (offset: number) => {
       if (isLittleEndian) {
         return bytes[offset] | (bytes[offset + 1] << 8) | 
                (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24);
@@ -108,7 +108,7 @@ function parseTiffHeader(bytes, tiffOffset, maxLength) {
              (bytes[offset + 2] << 8) | bytes[offset + 3];
     };
     
-    const readRational = (offset) => {
+    const readRational = (offset: number) => {
       const numerator = readUint32(offset);
       const denominator = readUint32(offset + 4);
       return denominator !== 0 ? numerator / denominator : 0;
@@ -196,7 +196,7 @@ function parseTiffHeader(bytes, tiffOffset, maxLength) {
  * @param {number} height - Frame height
  * @returns {number} - Average brightness (0-255)
  */
-function calculateAverageBrightness(buffer, width, height) {
+function calculateAverageBrightness(buffer: ArrayBuffer, width: number, height: number) {
   'worklet';
   
   const data = new Uint8Array(buffer);
@@ -228,7 +228,7 @@ function calculateAverageBrightness(buffer, width, height) {
  * @param {number} radiusRatio - Radius as ratio of min(width,height), default 0.1 (10%)
  * @returns {number} - Average brightness in region (0-255)
  */
-function calculateRegionBrightness(buffer, width, height, centerX, centerY, radiusRatio = 0.1) {
+function calculateRegionBrightness(buffer: ArrayBuffer, width: number, height: number, centerX: number, centerY: number, radiusRatio: number = 0.1) {
   'worklet';
   
   const data = new Uint8Array(buffer);
@@ -283,7 +283,7 @@ function calculateRegionBrightness(buffer, width, height, centerX, centerY, radi
  * @param {number} brightness - Average brightness (0-255)
  * @returns {number} - Estimated EV value (approximate)
  */
-function brightnessToEV(brightness) {
+function brightnessToEV(brightness: number) {
   'worklet';
   
   // Camera auto-exposure targets ~128 (middle gray)
@@ -329,7 +329,7 @@ const SPOT_METERING_RADIUS = 0.08; // Spot metering radius as ratio of screen (8
  * @param {object} spotPoint - Shared value {x, y} for spot metering (normalized 0-1), null for average metering
  * @returns {object} - { frameProcessor, exposureData, currentEV, triggerMeasurement, spotPointRef }
  */
-export function useExposureMonitor(onExposureUpdate, cameraRef, filmIso = 100, spotPoint = null) {
+export function useExposureMonitor(onExposureUpdate: (data: any) => void, cameraRef: any, filmIso: number = 100, spotPoint: any = null) {
   // JS state
   const [exposureData, setExposureData] = useState<any>(null);
   const [exifEV, setExifEV] = useState<any>(null);
@@ -503,7 +503,7 @@ export function useExposureMonitor(onExposureUpdate, cameraRef, filmIso = 100, s
 
   // JS function to receive brightness data from worklet
   // Receives both average and spot brightness for proper spot metering calculation
-  const onFrameAnalyzed = useCallback((frameNumber, avgBrightness, spotBrightness, spotPoint, approxEV) => {
+  const onFrameAnalyzed = useCallback((frameNumber: number, avgBrightness: number | null, spotBrightness: number | null, spotPoint: any, approxEV: number | null) => {
     // Store brightness data for spot metering calculations
     lastFrameDataRef.current = {
       avgBrightness,
@@ -516,7 +516,7 @@ export function useExposureMonitor(onExposureUpdate, cameraRef, filmIso = 100, s
     const isSpotMeasurement = spotBrightness !== null;
     
     // Only update brightness for visual feedback - don't change measured EV
-    setExposureData(prev => ({
+    setExposureData((prev: any) => ({
       ...prev,
       brightness: displayBrightness,
       avgBrightness,
@@ -600,14 +600,14 @@ export function useExposureMonitor(onExposureUpdate, cameraRef, filmIso = 100, s
     currentEV: exposureData?.ev ?? null,
     triggerMeasurement,
     spotPointRef,  // Expose so ShotModeModal can update it
-    setSpotPoint: (point) => { spotPointRef.value = point; }  // Convenience setter
+    setSpotPoint: (point: any) => { spotPointRef.value = point; }  // Convenience setter
   };
 }
 
 /**
  * Format exposure parameters for display
  */
-export function formatExposureParams(params) {
+export function formatExposureParams(params: any) {
   if (!params) return null;
 
   const { iso, shutterSpeed, aperture, ev, brightness } = params;

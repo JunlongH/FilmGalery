@@ -12,7 +12,7 @@ const numColumns = 3;
 const screenWidth = Dimensions.get('window').width;
 const tileSize = screenWidth / numColumns;
 
-export default function TagDetailScreen({ route, navigation }) {
+export default function TagDetailScreen({ route, navigation }: any) {
   const { tagId } = route.params;
   const { baseUrl } = useContext(ApiContext);
   const [photos, setPhotos] = useState([]);
@@ -35,7 +35,7 @@ export default function TagDetailScreen({ route, navigation }) {
     fetchPhotos();
   }, [baseUrl, tagId]);
 
-  const renderItem = ({ item, index }) => {
+  const renderItem = ({ item, index }: any) => {
     const thumbUrl = getPhotoUrl(baseUrl, item, 'thumb');
     
     return (

@@ -86,7 +86,7 @@ export default function MapScreen() {
       
       if (photoData.length > 0) {
         // Convert coordinates to numbers and fix thumbnail URLs
-        const processedPhotos = photoData.map(p => {
+        const processedPhotos = photoData.map((p: any) => {
           const thumbnailUrl = getPhotoUrl(baseUrl, p, 'thumb');
           const lat = parseFloat(p.latitude);
           const lng = parseFloat(p.longitude);
@@ -102,14 +102,14 @@ export default function MapScreen() {
             // Generate location name from available fields
             location_name: p.detail_location || p.city || p.country || null,
           };
-        }).filter(p => !isNaN(p.latitude) && !isNaN(p.longitude));
+        }).filter((p: any) => !isNaN(p.latitude) && !isNaN(p.longitude));
         
         console.log('[MapScreen] Processed photos with valid coords:', processedPhotos.length);
         setPhotos(processedPhotos);
         
         // Auto-fit map to show all photos
-        const lats = processedPhotos.map(p => p.latitude).filter(v => v != null && v !== 0);
-        const lngs = processedPhotos.map(p => p.longitude).filter(v => v != null && v !== 0);
+        const lats = processedPhotos.map((p: any) => p.latitude).filter((v: any) => v != null && v !== 0);
+        const lngs = processedPhotos.map((p: any) => p.longitude).filter((v: any) => v != null && v !== 0);
         
         console.log('[MapScreen] Valid coords:', lats.length, 'lats,', lngs.length, 'lngs');
         
@@ -144,7 +144,7 @@ export default function MapScreen() {
   }, [baseUrl, fetchPhotos]);
 
   // Handle marker press
-  const handleMarkerPress = useCallback((photo) => {
+  const handleMarkerPress = useCallback((photo: any) => {
     setSelectedPhoto(photo);
     // Animate card in
     Animated.spring(cardAnim, {
@@ -186,7 +186,7 @@ export default function MapScreen() {
 
   // Navigate to cluster location
   // Handle cluster press - zoom in to expand cluster, or show photo if single
-  const handleClusterPress = useCallback((cluster) => {
+  const handleClusterPress = useCallback((cluster: any) => {
     if (cluster.count === 1) {
       // Single photo - show details
       handleMarkerPress(cluster.representative);
@@ -224,7 +224,7 @@ export default function MapScreen() {
       clusterRadius = 0.001; // Street view - minimal clustering
     }
     
-    const result = [];
+    const result: any[] = [];
     const used = new Set();
 
     photos.forEach((photo, i) => {

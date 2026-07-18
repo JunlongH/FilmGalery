@@ -13,7 +13,7 @@ const numColumns = 2;
 const screenWidth = Dimensions.get('window').width;
 const cardWidth = (screenWidth - 32 - 12) / numColumns; // 32 padding, 12 gap
 
-export default function ThemesScreen({ navigation }) {
+export default function ThemesScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
   const [tags, setTags] = useState([]);
@@ -28,7 +28,7 @@ export default function ThemesScreen({ navigation }) {
     try {
       const res = await api.http.get('/api/tags');
       // Filter out tags with 0 photos
-      setTags(res.filter(t => t.photos_count > 0));
+      setTags(res.filter((t: any) => t.photos_count > 0));
     } catch (err) {
       console.error(err);
     } finally {
@@ -70,7 +70,7 @@ export default function ThemesScreen({ navigation }) {
     });
   }, [navigation, baseUrl, theme]);
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item }: any) => {
     let coverUrl = null;
     if (item.cover_thumb) {
       coverUrl = `${baseUrl}/uploads/${item.cover_thumb}`;

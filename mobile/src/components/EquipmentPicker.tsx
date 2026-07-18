@@ -8,15 +8,15 @@ import { Text, Searchbar, Button, TextInput, ActivityIndicator, useTheme } from 
 import { getCameras, getLenses, getFlashes, getCompatibleLenses, createCamera, createLens } from '../api/equipment';
 import { spacing } from '../theme';
 
-export default function EquipmentPicker({ 
-  type = 'camera', // 'camera' | 'lens' | 'flash'
-  value, // selected equipment id
-  cameraId, // for lens filtering by camera mount
-  onChange, // (id, item) => void
+export default function EquipmentPicker({
+  type = 'camera',
+  value,
+  cameraId,
+  onChange,
   disabled = false,
   placeholder = 'Select...',
   label
-}) {
+}: any) {
   const theme = useTheme();
   const [visible, setVisible] = useState(false);
   const [items, setItems] = useState([]);
@@ -35,7 +35,7 @@ export default function EquipmentPicker({
   // Load selected item on mount
   useEffect(() => {
     if (value && items.length > 0) {
-      const found = items.find(i => i.id === value);
+      const found = items.find((i: any) => i.id === value);
       if (found) setSelectedItem(found);
     }
   }, [value, items]);
@@ -92,7 +92,7 @@ export default function EquipmentPicker({
     fetchItems();
   };
 
-  const handleSelect = (item) => {
+  const handleSelect = (item: any) => {
     setSelectedItem(item);
     onChange?.(item.id, item);
     setVisible(false);
@@ -108,7 +108,7 @@ export default function EquipmentPicker({
     if (!quickAddBrand.trim() || !quickAddModel.trim()) return;
     
     try {
-      let newItem;
+      let newItem: any;
       if (type === 'camera') {
         newItem = await createCamera({ brand: quickAddBrand.trim(), model: quickAddModel.trim() });
       } else if (type === 'lens') {
@@ -129,7 +129,7 @@ export default function EquipmentPicker({
   };
 
   // Filter items by search
-  const filteredItems = items.filter(item => {
+  const filteredItems = items.filter((item: any) => {
     const text = `${item.brand || ''} ${item.model || ''}`.toLowerCase();
     return text.includes(search.toLowerCase());
   });

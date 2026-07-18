@@ -2,10 +2,15 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "types": ["jest"],
+    "noImplicitAny": true,
+    "baseUrl": ".",
+    "paths": {
+      "expo-file-system/legacy": ["./types/expo-file-system-legacy.d.ts"]
+    }
   },
   "include": [
     "src/**/*",
-    "App.js",
+    "App.tsx",
     "__tests__/**/*",
     "types/**/*.d.ts",
     "nativewind-env.d.ts"

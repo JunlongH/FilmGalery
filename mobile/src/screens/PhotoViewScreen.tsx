@@ -18,7 +18,7 @@ import { getPhotoUrl } from '../utils/urls';
 
 const { width, height } = Dimensions.get('window');
 
-export default function PhotoViewScreen({ route, navigation }) {
+export default function PhotoViewScreen({ route, navigation }: any) {
   const { photo: initialPhoto, photoId, rollId, viewMode: initialViewMode = 'positive', photos = [], initialIndex = 0 } = route.params || {};
   const { baseUrl } = useContext(ApiContext);
   const [photo, setPhoto] = useState(initialPhoto || null);
@@ -68,11 +68,11 @@ export default function PhotoViewScreen({ route, navigation }) {
 
   const fullUrl = getPhotoUrl(baseUrl, photo, viewMode === 'negative' ? 'negative' : 'full');
 
-  const handleTagsSaved = (newTags) => {
+  const handleTagsSaved = (newTags: any) => {
     setPhoto({ ...photo, tags: newTags });
   };
 
-  const handleNoteSaved = async (newNote) => {
+  const handleNoteSaved = async (newNote: any) => {
     try {
       await api.http.put(`/api/photos/${photo.id}`, { caption: newNote });
       setPhoto({ ...photo, caption: newNote });
@@ -85,7 +85,7 @@ export default function PhotoViewScreen({ route, navigation }) {
     const next = photo?.rating === 1 ? 0 : 1;
     try {
       await api.http.put(`/api/photos/${photo.id}`, { rating: next });
-      setPhoto(prev => ({ ...prev, rating: next }));
+      setPhoto((prev: any) => ({ ...prev, rating: next }));
     } catch (e) {
       console.error('Failed toggling like', e?.message || e);
     }
@@ -94,10 +94,10 @@ export default function PhotoViewScreen({ route, navigation }) {
   const isLiked = photo?.rating === 1;
 
   const images = (photos && photos.length > 0)
-    ? photos.map(p => ({ url: getPhotoUrl(baseUrl, p, viewMode === 'negative' && p.negative_rel_path ? 'negative' : 'full') }))
+    ? photos.map((p: any) => ({ url: getPhotoUrl(baseUrl, p, viewMode === 'negative' && p.negative_rel_path ? 'negative' : 'full') }))
     : [{ url: fullUrl }];
 
-  const anyNegatives = Array.isArray(photos) && photos.some(p => p.negative_rel_path);
+  const anyNegatives = Array.isArray(photos) && photos.some((p: any) => p.negative_rel_path);
 
   const requestPermissionsIfNeeded = async () => {
     if (Platform.OS === 'android' || Platform.OS === 'ios') {
@@ -167,7 +167,7 @@ export default function PhotoViewScreen({ route, navigation }) {
     }
   };
 
-  const renderFooter = (currentIndex) => (
+  const renderFooter = (currentIndex: any) => (
     <View style={styles.footerContainer} pointerEvents="box-none">
       {/* Note Overlay */}
       {photo?.caption ? (
@@ -182,7 +182,7 @@ export default function PhotoViewScreen({ route, navigation }) {
       {photo?.tags && photo.tags.length > 0 ? (
         <View style={styles.tagsOverlayBg}>
           <View style={styles.tagsOverlayInner}>
-            {photo.tags.map((t, i) => (
+            {photo.tags.map((t: any, i: any) => (
               <Chip key={i} style={styles.tagChip} textStyle={{ fontSize: 11 }}>
                 {typeof t === 'object' ? t.name : t}
               </Chip>
@@ -227,7 +227,7 @@ export default function PhotoViewScreen({ route, navigation }) {
         {anyNegatives && (
           <TouchableOpacity
             style={styles.modeBtn}
-            onPress={() => setViewMode(prev => (prev === 'negative' ? 'positive' : 'negative'))}
+            onPress={() => setViewMode((prev: any) => (prev === 'negative' ? 'positive' : 'negative'))}
           >
             <Icon 
               name={viewMode === 'negative' ? 'palette' : 'contrast'} 

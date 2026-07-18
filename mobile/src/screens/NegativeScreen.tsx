@@ -12,7 +12,7 @@ import { colors, spacing, radius } from '../theme';
 const { width } = Dimensions.get('window');
 const ITEM_SIZE = Math.floor((width - spacing.lg * 2 - spacing.sm * 3) / 4); // 4 columns
 
-export default function NegativeScreen({ navigation }) {
+export default function NegativeScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
   const [photos, setPhotos] = useState([]);
@@ -54,16 +54,16 @@ export default function NegativeScreen({ navigation }) {
   // Derive film list for filter chips
   const filmList = React.useMemo(() => {
     const map = new Map();
-    photos.forEach(p => {
+    photos.forEach((p: any) => {
       const filmName = p.film_name || p.film_type || 'Unknown';
       map.set(filmName, (map.get(filmName) || 0) + 1);
     });
     return Array.from(map.entries()).sort((a,b)=> b[1]-a[1]);
   }, [photos]);
 
-  const filtered = selectedFilm ? photos.filter(p => (p.film_name || p.film_type || 'Unknown') === selectedFilm) : photos;
+  const filtered = selectedFilm ? photos.filter((p: any) => (p.film_name || p.film_type || 'Unknown') === selectedFilm) : photos;
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item }: any) => {
     const basePath = item.negative_rel_path || item.full_rel_path || item.thumb_rel_path;
     const imgUrl = basePath ? `${baseUrl}/uploads/${basePath}` : null;
     return (
