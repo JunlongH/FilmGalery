@@ -12,7 +12,11 @@
     "./filmlab-core": "./filmlab-core.js",
     "./constants": "./filmLabConstants.js",
     "./constants/equipment": "./constants/equipment.js",
-    "./coordTransform": "./coordTransform.js",
+    "./coordTransform": {
+      "types": "./coordTransform.d.ts",
+      "require": "./coordTransform.js",
+      "default": "./coordTransform.js"
+    },
     "./portDiscovery": {
       "types": "./portDiscovery.d.ts",
       "require": "./portDiscovery.js",

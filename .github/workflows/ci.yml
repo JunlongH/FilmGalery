@@ -4,8 +4,9 @@
 # (regressions fail the build); lint reports (errors fail, warnings do not).
 #
 # Desktop packaging builds (build-desktop.yml) remain separate and are gated on
-# tags. Mobile/watch CI is intentionally deferred until those dependency trees
-# are stabilised (see docs/phase2-roadmap/phase-2a-foundation.md §2A.4).
+# tags. The `mobile` job below runs the TS migration gates (typecheck + jest)
+# established by phase 2A.4-T1 Wave 0. Watch-app CI remains deferred until its
+# dependency tree stabilises (see docs/phase2-roadmap/phase-2a-foundation.md §2A.4).
 
 name: CI
 
@@ -38,3 +39,38 @@ jobs:
 
       - name: Test (root jest — shared + server)
         run: npm test
+
+  mobile:
+    name: Mobile (typecheck + jest + metro bundle)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          # NOTE: mobile/package-lock.json is gitignored by repo convention, so
+          # we cannot key the npm cache off it. npm install resolves fresh each
+          # run. (Revisit if mobile ever commits its lockfile.)
+
+      # mobile is intentionally NOT in the root postinstall chain (root only
+      # bootstraps client + server), so install explicitly here. postinstall
+      # runs patch-package (react-native-zeroconf android build.gradle bump).
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Test (jest-expo)
+        run: npm test
+
+      # Layer E — the strongest automated runtime gate: produces the full
+      # Android Hermes bundle, proving all imports resolve (native deps +
+      # symlinked workspace packages), worklet plugins transform, and .native
+      # extension resolution works. Takes ~90s.
+      - name: Metro bundle (expo export)
+        run: npx expo export --platform android --output-dir /tmp/mobile-export

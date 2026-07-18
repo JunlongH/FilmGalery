@@ -1,8 +1,28 @@
 // Learn more https://docs.expo.dev/guides/customizing-metro/
+const path = require('path');
 const { getDefaultConfig } = require('expo/metro-config');
 const { withNativeWind } = require('nativewind/metro');
 
 const config = getDefaultConfig(__dirname);
+
+// Monorepo support: workspace packages (@filmgallery/shared, api-client, types)
+// are symlinked into node_modules but live OUTSIDE mobile/ (at the repo root's
+// packages/). Metro's default watchFolders only cover the project root, so it
+// cannot follow those symlinks. Add the workspace root as a watch folder and
+// teach the resolver to follow symlinks + read package `exports` conditions.
+// (Established for the 2A.4-T1 TS migration's Layer E metro-bundle gate.)
+const projectRoot = __dirname;
+const workspaceRoot = path.resolve(projectRoot, '..');
+config.watchFolders = [workspaceRoot];
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, 'node_modules'),
+  path.resolve(workspaceRoot, 'node_modules'),
+];
+config.resolver.unstable_enableSymlinks = true;
+config.resolver.unstable_enablePackageExports = true;
+// Condition names used when resolving package `exports` maps. `react-native`
+// first (RN-specific entry), then generic ones.
+config.resolver.conditionNames = ['react-native', 'browser', 'require', 'import', 'default'];
 
 // Enable Worklets support
 config.transformer = {
