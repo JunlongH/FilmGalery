@@ -21,7 +21,7 @@
 | 2A.3.5 reverse-geocode 接口 | ✅ | `GeocodeResult`/`ReverseGeocoder` 类型入 `@filmgallery/types`（统一 displayName/country/city/state/lat/lng，取代三端的 displayName/detail/detail_location 分叉）。**比选项 A 更进一步**：mobile+watch 重复的 BigDataCloud 逻辑抽成 `packages/shared/geocode.js`（+ `.d.ts` + barrel/subpath 导出 + jest 测试，**260 tests green**），三端 `reverseGeocode` 全部对齐为 `GeocodeResult`；client（Amap/Photon/Nominatim，browser-only，死代码）也规整。mobile/watch 消费者 `.detail(_location)`→`.displayName`。client 经 CRA 构建验证；mobile/watch 因无 metro/tsc 环境需终验 |
 | 2A.4 mobile TS / workspace | ✅ T1 全量完成（`strict: true`，67 文件，0 错误，33 测试） | T1 mobile TS 迁移：**全部 67 文件 .ts/.tsx（0 .js/.jsx）**，`strict: true` 全开，0 类型错误，0 `@ts-nocheck`。548 个类型错误（160 结构迁移 + 193 noImplicitAny + 195 strict）系统性全修。33 个 jest 测试（4 suites）。configureApi 时序竞争修复。RootStackParamList 全局声明。metro bundle 7.8M green。Layer D emulator 运行时环境全打通（app 连通测试 server 渲染真实数据）。6 个 commit（`9a8226a`→`434b83d`）。详见 `phase-2a-mobile-ts-migration.md`。T2 workspace 升级非必需 |
 
-**2A 出口（进入 2B 硬门槛）已达成**：① PR/push CI test+lint 硬门禁 ✅ ② build-desktop 去 continue-on-error ✅ ③ server path-security/shutdown/ensureStartDateColumn 复现用例固化 ✅（watch-app typecheck 因依赖树未稳定暂缓，不阻塞 2B）。
+**2A 出口（进入 2B 硬门槛）已达成**：① PR/push CI test+lint 硬门禁 ✅ ② build-desktop 去 continue-on-error ✅ ③ server path-security/shutdown/ensureStartDateColumn 复现用例固化 ✅（watch-app typecheck 因依赖树未稳定暂缓——2 个预先存在错误属 2C 范畴，不阻塞 2B）。
 
 **验证边界声明**（为何 deferred）：本环境无 client CRA 构建、无 mobile metro 构建、无 watch RN 依赖，故 client/mobile/watch 的「消费端迁移」类改动无法满足「逐条测试」要求 → 推迟到有对应构建环境时执行。已完成的 server/shared/packages 改动均经 `npm test` + `npm run lint` 验证。
 
