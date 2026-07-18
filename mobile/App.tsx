@@ -40,6 +40,7 @@ import AISettingsScreen from './src/screens/AISettingsScreen';
 import { ApiContext } from './src/context/ApiContext';
 import { configureApi } from './src/api/client';
 import appTheme, { appDarkTheme } from './src/theme';
+import type { MapProvider } from './src/context/ApiContext';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -137,15 +138,17 @@ function HomeTabs() {
 }
 
 export default function App() {
-  const [baseUrl, setBaseUrl] = useState('http://59.66.234.26:4000'); // Default: test server
-  const [backupUrl, setBackupUrl] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
-  const [mapProvider, setMapProvider] = useState('osm');
-  const [amapKey, setAmapKey] = useState('');
+  const [baseUrl, setBaseUrl] = useState<string>('');
+  const [backupUrl, setBackupUrl] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [darkMode, setDarkMode] = useState<boolean>(false);
+  const [mapProvider, setMapProvider] = useState<MapProvider>('osm');
+  const [amapKey, setAmapKey] = useState<string>('');
 
   useEffect(() => {
-    // Load saved API URL, theme, and map settings
+    // CRITICAL: configureApi must run BEFORE setLoading(false) so screens see
+    // the correct baseUrl on their first fetch (fixes timing race that caused
+    // "Network request failed" on initial load).
     Promise.all([
       AsyncStorage.getItem('api_base_url'),
       AsyncStorage.getItem('api_backup_url'),
@@ -153,16 +156,16 @@ export default function App() {
       AsyncStorage.getItem('map_provider'),
       AsyncStorage.getItem('amap_key'),
     ]).then(([url, backup, themeDark, savedProvider, savedAmapKey]) => {
+      configureApi(url || '', backup || '');
       if (url) setBaseUrl(url);
       if (backup) setBackupUrl(backup);
       if (themeDark === 'true') setDarkMode(true);
-      if (savedProvider) setMapProvider(savedProvider);
+      if (savedProvider === 'osm' || savedProvider === 'amap') setMapProvider(savedProvider);
       if (savedAmapKey) setAmapKey(savedAmapKey);
       setLoading(false);
     });
   }, []);
 
-  // Reconfigure axios whenever baseUrl changes after initial load
   useEffect(() => {
     if (!loading && baseUrl) {
       configureApi(baseUrl, backupUrl);
