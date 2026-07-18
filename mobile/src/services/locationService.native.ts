@@ -96,7 +96,7 @@ const reverseGeocode = async (latitude: any, longitude: any) => {
             }
           }
         } catch (amapErr) {
-          log(`Amap reverse geocode failed: ${amapErr.message}, falling back`, 'warn');
+          log(`Amap reverse geocode failed: ${(amapErr as Error).message}, falling back`, 'warn');
         }
       }
     }
@@ -110,7 +110,7 @@ const reverseGeocode = async (latitude: any, longitude: any) => {
       log(`✓ Geocoded: ${geocode.city}, ${geocode.country}`);
       return geocode;
     } catch (e) {
-      log(`BigDataCloud geocode failed: ${e.message}, falling back to Expo`, 'warn');
+      log(`BigDataCloud geocode failed: ${(e as Error).message}, falling back to Expo`, 'warn');
     }
 
     // Final fallback: Expo Location (on-device)
@@ -126,11 +126,11 @@ const reverseGeocode = async (latitude: any, longitude: any) => {
         longitude,
       };
     } catch (fallbackError) {
-      log(`Fallback geocode also failed: ${fallbackError.message}`, 'warn');
+      log(`Fallback geocode also failed: ${(fallbackError as Error).message}`, 'warn');
       return empty();
     }
   } catch (e) {
-    log(`reverseGeocode error: ${e.message}`, 'warn');
+    log(`reverseGeocode error: ${(e as Error).message}`, 'warn');
     return empty();
   }
 };
@@ -173,7 +173,7 @@ const getLocationNative = () => {
       },
       (error: any) => {
         clearTimeout(timeout);
-        log(`Native error: ${error.code} ${error.message}`, 'error');
+        log(`Native error: ${error.code} ${(error as Error).message}`, 'error');
         reject(error);
       },
       {
@@ -229,13 +229,13 @@ const requestAndroidPermissions = async () => {
           log('Background location denied (may still work)', 'warn');
         }
       } catch (e) {
-        log(`BG permission request failed: ${e.message}`, 'warn');
+        log(`BG permission request failed: ${(e as Error).message}`, 'warn');
       }
     }
     
     return true;
   } catch (e) {
-    log(`Permission request failed: ${e.message}`, 'error');
+    log(`Permission request failed: ${(e as Error).message}`, 'error');
     return false;
   }
 };
@@ -294,7 +294,7 @@ export const getDiagnostics = async () => {
     const providers = await Location.getProviderStatusAsync();
     diag.expo.providers = providers;
   } catch (e) {
-    diag.expo.error = e.message;
+    diag.expo.error = (e as Error).message;
   }
   
   // Native Android diagnostics
@@ -322,7 +322,7 @@ export const requestPermissions = async () => {
     const result = await Location.requestForegroundPermissionsAsync();
     return result.status === 'granted';
   } catch (e) {
-    log(`iOS permission failed: ${e.message}`, 'error');
+    log(`iOS permission failed: ${(e as Error).message}`, 'error');
     return false;
   }
 };
@@ -384,7 +384,7 @@ export const getLocation = async () => {
       };
     }
   } catch (e) {
-    log(`LastKnown failed: ${e.message}`, 'warn');
+    log(`LastKnown failed: ${(e as Error).message}`, 'warn');
   }
   
   // Strategy 2: Native Android Geolocation (PRIMARY for HyperOS)
@@ -404,7 +404,7 @@ export const getLocation = async () => {
       source: 'native'
     };
   } catch (nativeError) {
-    log(`Native failed: ${nativeError.message}`, 'error');
+    log(`Native failed: ${(nativeError as Error).message}`, 'error');
     
     // Strategy 3: Try Expo watch as last resort
     try {
@@ -463,7 +463,7 @@ export const getLocation = async () => {
         source: 'watch'
       };
     } catch (watchError) {
-      log(`Watch also failed: ${watchError.message}`, 'error');
+      log(`Watch also failed: ${(watchError as Error).message}`, 'error');
       
       // Complete failure
       log('═══ ALL METHODS FAILED ═══', 'error');
@@ -472,8 +472,8 @@ export const getLocation = async () => {
         error: 'ALL_FAILED',
         coords: null as any,
         errors: {
-          native: nativeError.message,
-          watch: watchError.message
+          native: (nativeError as Error).message,
+          watch: (watchError as Error).message
         }
       };
     }

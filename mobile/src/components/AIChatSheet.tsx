@@ -153,11 +153,11 @@ function Bubble({ msg }: any) {
 export default function AIChatSheet({ visible, onClose, context }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
-  const sheetRef = useRef(null);
-  const flatRef = useRef(null);
-  const abortRef = useRef(null);
+  const sheetRef = useRef<any>(null);
+  const flatRef = useRef<any>(null);
+  const abortRef = useRef<any>(null);
 
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [conversationId, setConversationId] = useState<any>(null);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -253,8 +253,8 @@ export default function AIChatSheet({ visible, onClose, context }: any) {
         abortRef.current,
       );
     } catch (err) {
-      if (err?.name !== 'AbortError') {
-        upsertMessage(asstMsgId, (msg: any) => ({ ...msg, isStreaming: false, error: err.message || '请求失败' }));
+      if ((err as Error)?.name !== 'AbortError') {
+        upsertMessage(asstMsgId, (msg: any) => ({ ...msg, isStreaming: false, error: (err as Error).message || '请求失败' }));
         setIsLoading(false);
       }
     }

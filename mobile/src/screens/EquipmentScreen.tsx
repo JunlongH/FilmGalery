@@ -29,7 +29,7 @@ export default function EquipmentScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
   const [tab, setTab] = useState('camera');
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
@@ -114,24 +114,24 @@ export default function EquipmentScreen({ navigation }: any) {
           brand: addBrand.trim(), 
           model: addModel.trim(),
           type: addType,
-          mount: addMount.trim() || null
+          mount: addMount.trim() || undefined
         });
       } else if (tab === 'lens') {
         const focalMin = parseFloat(addFocalMin) || null;
         const focalMax = parseFloat(addFocalMax) || focalMin; // Default to min if not specified
-        const maxAp = parseFloat(addMaxAperture) || null;
+        const maxAp = parseFloat(addMaxAperture) || undefined;
         const maxApTele = parseFloat(addMaxApertureTele) || null;
         
         newItem = await createLens({ 
           name: `${addBrand.trim()} ${addModel.trim()}`,
           brand: addBrand.trim(), 
           model: addModel.trim(),
-          mount: addMount.trim() || null,
+          mount: addMount.trim() || undefined,
           focal_length_min: focalMin,
           focal_length_max: focalMax,
           max_aperture: maxAp,
           max_aperture_tele: maxApTele,
-          filter_size: parseFloat(addFilterSize) || null,
+          filter_size: parseFloat(addFilterSize) || undefined,
           is_macro: addIsMacro ? 1 : 0
         });
       } else if (tab === 'flash') {

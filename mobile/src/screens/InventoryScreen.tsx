@@ -14,10 +14,10 @@ export default function InventoryScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
   const [statusFilter, setStatusFilter] = useState('all');
-  const [allItems, setAllItems] = useState([]);
+  const [allItems, setAllItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [films, setFilms] = useState([]);
+  const [films, setFilms] = useState<any[]>([]);
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;

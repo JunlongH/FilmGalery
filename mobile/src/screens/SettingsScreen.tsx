@@ -23,7 +23,7 @@ export default function SettingsScreen({ navigation }: any) {
   const [isDark, setIsDark] = useState(!!darkMode);
   const [ipAddress, setIpAddress] = useState(''); // For auto-discovery
   const [discovering, setDiscovering] = useState(false);
-  const [discoveredServices, setDiscoveredServices] = useState([]);
+  const [discoveredServices, setDiscoveredServices] = useState<any[]>([]);
   const [discoveryMode, setDiscoveryMode] = useState('auto');
   const [discoveryStatus, setDiscoveryStatus] = useState('');
   const [localMapProvider, setLocalMapProvider] = useState(mapProvider || 'osm');
@@ -94,7 +94,7 @@ export default function SettingsScreen({ navigation }: any) {
       }
     } catch (e) {
       setDiscoveryStatus('发现失败');
-      Alert.alert('错误', e.message || '发现过程出错');
+      Alert.alert('错误', (e as Error).message || '发现过程出错');
     } finally {
       setDiscovering(false);
     }
@@ -152,7 +152,7 @@ export default function SettingsScreen({ navigation }: any) {
         alert(`Connected to ${clean}, but server returned ${res.status}`);
       }
     } catch (e) {
-      alert(`Connection Failed to ${clean}: ${e.message}`);
+      alert(`Connection Failed to ${clean}: ${(e as Error).message}`);
     }
   };
 

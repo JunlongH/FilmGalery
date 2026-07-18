@@ -15,7 +15,7 @@ const tileSize = screenWidth / numColumns;
 export default function TagDetailScreen({ route, navigation }: any) {
   const { tagId } = route.params;
   const { baseUrl } = useContext(ApiContext);
-  const [photos, setPhotos] = useState([]);
+  const [photos, setPhotos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchPhotos = async () => {
@@ -43,7 +43,7 @@ export default function TagDetailScreen({ route, navigation }: any) {
         onPress={() => navigation.navigate('PhotoView', { photo: item, rollId: item.roll_id, photos, initialIndex: index, viewMode: 'positive' })}
       >
         <CachedImage
-          uri={thumbUrl}
+          uri={thumbUrl || ""}
           style={{ width: tileSize, height: tileSize, margin: 1 }}
           contentFit="cover"
         />

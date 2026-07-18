@@ -48,9 +48,9 @@ export default function LibraryScreen() {
     rolls: 0,
     photos: 0,
   });
-  const [recentFavorites, setRecentFavorites] = useState([]);
-  const [topThemes, setTopThemes] = useState([]);
-  const [topEquipment, setTopEquipment] = useState([]);
+  const [recentFavorites, setRecentFavorites] = useState<any[]>([]);
+  const [topThemes, setTopThemes] = useState<any[]>([]);
+  const [topEquipment, setTopEquipment] = useState<any[]>([]);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -138,7 +138,7 @@ export default function LibraryScreen() {
         photos: statsData.total_photos || 0,
       });
     } catch (error) {
-      console.log('Failed to fetch library data:', error.message);
+      console.log('Failed to fetch library data:', (error as Error).message);
     }
   }, [baseUrl]);
 

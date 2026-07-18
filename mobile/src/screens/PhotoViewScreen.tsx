@@ -39,7 +39,7 @@ export default function PhotoViewScreen({ route, navigation }: any) {
           setPhoto(res);
         })
         .catch(err => {
-          console.error('Failed to fetch photo:', err.message);
+          console.error('Failed to fetch photo:', (err as Error).message);
           setSnack({ visible: true, msg: 'Failed to load photo' });
         })
         .finally(() => setLoading(false));
@@ -77,7 +77,7 @@ export default function PhotoViewScreen({ route, navigation }: any) {
       await api.http.put(`/api/photos/${photo.id}`, { caption: newNote });
       setPhoto({ ...photo, caption: newNote });
     } catch (e) {
-      console.error('Failed saving note', e?.message || e);
+      console.error('Failed saving note', (e as Error)?.message || e);
     }
   };
 
@@ -87,7 +87,7 @@ export default function PhotoViewScreen({ route, navigation }: any) {
       await api.http.put(`/api/photos/${photo.id}`, { rating: next });
       setPhoto((prev: any) => ({ ...prev, rating: next }));
     } catch (e) {
-      console.error('Failed toggling like', e?.message || e);
+      console.error('Failed toggling like', (e as Error)?.message || e);
     }
   };
 
@@ -151,7 +151,7 @@ export default function PhotoViewScreen({ route, navigation }: any) {
           
           setSnack({ visible: true, msg: `Saved with metadata: ${fileName}` });
         } catch (saveErr) {
-          setSnack({ visible: true, msg: `Save failed: ${saveErr.message}` });
+          setSnack({ visible: true, msg: `Save failed: ${(saveErr as Error).message}` });
         } finally {
           setDownloading(false);
         }
@@ -162,7 +162,7 @@ export default function PhotoViewScreen({ route, navigation }: any) {
       };
       reader.readAsDataURL(blob);
     } catch (e) {
-      setSnack({ visible: true, msg: e.message || 'Download error' });
+      setSnack({ visible: true, msg: (e as Error).message || 'Download error' });
       setDownloading(false);
     }
   };
@@ -204,7 +204,7 @@ export default function PhotoViewScreen({ route, navigation }: any) {
             setPhoto(photos[i]);
           }
         }}
-        renderIndicator={() => null}
+        renderIndicator={() => null as any}
         enableSwipeDown={true}
         onSwipeDown={() => navigation.goBack()}
         renderFooter={renderFooter}

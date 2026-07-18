@@ -15,7 +15,7 @@ const ITEM_SIZE = Math.floor((width - spacing.lg * 2 - spacing.sm * 3) / 4); // 
 export default function NegativeScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
-  const [photos, setPhotos] = useState([]);
+  const [photos, setPhotos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
   const [selectedFilm, setSelectedFilm] = useState<any>(null); // film filter
@@ -69,7 +69,7 @@ export default function NegativeScreen({ navigation }: any) {
     return (
       <TouchScale onPress={() => navigation.navigate('PhotoView', { photo: item, rollId: item.roll_id })}>
         <View style={styles.gridItem}>
-          <CachedImage uri={imgUrl} style={styles.image} contentFit="cover" />
+          <CachedImage uri={imgUrl || ""} style={styles.image} contentFit="cover" />
           <View style={styles.metaOverlay}>
             <Text numberOfLines={1} style={styles.metaText}>{item.frame_number || item.id}</Text>
           </View>

@@ -31,8 +31,8 @@ export default function QuickMeterSheet({ visible, onClose }: any) {
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [loadedFilmItems, setLoadedFilmItems] = useState([]);
-  const [films, setFilms] = useState([]);
+  const [loadedFilmItems, setLoadedFilmItems] = useState<any[]>([]);
+  const [films, setFilms] = useState<any[]>([]);
   
   // Animation
   const slideAnim = useRef(new Animated.Value(height)).current;

@@ -56,7 +56,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [entries, setEntries] = useState([]);
+  const [entries, setEntries] = useState<any[]>([]);
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
   const [newTime, setNewTime] = useState(() => {
     const now = new Date();
@@ -72,9 +72,9 @@ export default function ShotLogScreen({ route, navigation }: any) {
   const [newDetail, setNewDetail] = useState('');
   const [newCaption, setNewCaption] = useState('');
   const [lensOptions, setLensOptions] = useState(FALLBACK_LENSES);
-  const [countries, setCountries] = useState([]);
+  const [countries, setCountries] = useState<any[]>([]);
   const [countryCode, setCountryCode] = useState('');
-  const [cities, setCities] = useState([]);
+  const [cities, setCities] = useState<any[]>([]);
   const [showLensOptions, setShowLensOptions] = useState(false);
   const [showCountryOptions, setShowCountryOptions] = useState(false);
   const [showCityOptions, setShowCityOptions] = useState(false);
@@ -91,8 +91,8 @@ export default function ShotLogScreen({ route, navigation }: any) {
   const [cameraName, setCameraName] = useState('');
   const [cameraMount, setCameraMount] = useState('');
   // Inventory lenses (native and adapted)
-  const [nativeLenses, setNativeLenses] = useState([]); // [{ id, displayName, ... }]
-  const [adaptedLenses, setAdaptedLenses] = useState([]); // [{ id, displayName, mount, ... }]
+  const [nativeLenses, setNativeLenses] = useState<any[]>([]); // [{ id, displayName, ... }]
+  const [adaptedLenses, setAdaptedLenses] = useState<any[]>([]); // [{ id, displayName, mount, ... }]
 
   // Format lens for display
   const formatLensDisplay = (lens: any) => {

@@ -2,7 +2,7 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "types": ["jest"],
-    "noImplicitAny": true,
+    "strict": true,
     "baseUrl": ".",
     "paths": {
       "expo-file-system/legacy": ["./types/expo-file-system-legacy.d.ts"]

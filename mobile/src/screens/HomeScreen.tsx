@@ -15,7 +15,7 @@ const { width } = Dimensions.get('window');
 export default function HomeScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
-  const [rolls, setRolls] = useState([]);
+  const [rolls, setRolls] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
   const [selectedYear, setSelectedYear] = useState<any>(null); // null = all years

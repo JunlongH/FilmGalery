@@ -73,7 +73,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
   const insets = useSafeAreaInsets();
   
   // Camera setup
-  const cameraRef = useRef(null);
+  const cameraRef = useRef<any>(null);
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('back');
   const formats = device?.formats || [];
@@ -183,7 +183,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
   const measuredSceneEV = liveExposure?.ev ?? exposureData?.ev ?? diagnosticInfo.ev ?? null;
   
   // Debug: Log EV sources only when source changes (reduce log spam)
-  const sourceRef = React.useRef(null);
+  const sourceRef = React.useRef<any>(null);
   if (exposureData?.source !== sourceRef.current) {
     sourceRef.current = exposureData?.source;
     __DEV__ && console.log('[ShotModeModal] EV source changed to:', exposureData?.source, 'EV:', measuredSceneEV);
@@ -255,7 +255,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
   }, [visible, minZoom, device, hasPermission]);
 
   // Reference to store location subscription for cleanup
-  const locationSubscriptionRef = useRef(null);
+  const locationSubscriptionRef = useRef<any>(null);
   
   // Location status for UI feedback
   const [locationStatus, setLocationStatus] = useState('idle'); // 'idle' | 'loading' | 'optimizing' | 'done' | 'failed'
@@ -441,7 +441,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
       }
     } catch (e) {
       __DEV__ && console.warn('Measure failed:', e);
-      Alert.alert('测光失败', e.message || '未知错误');
+      Alert.alert('测光失败', (e as Error).message || '未知错误');
     } finally {
       setMeasuring(false);
     }
@@ -590,7 +590,7 @@ export default function ShotModeModal({ visible, onClose, onUse, filmIso = 400, 
               __DEV__ && console.log('[Camera] Camera stopped');
             }}
             onError={(error) => {
-              console.error('[Camera] ❌ Error:', error.code, error.message);
+              console.error('[Camera] ❌ Error:', error.code, (error as Error).message);
             }}
           />
           

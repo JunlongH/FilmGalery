@@ -83,8 +83,8 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagE
       onDismiss();
     } catch (err: any) {
       console.error('[TagEditModal] Failed to save tags:', err);
-      console.error('[TagEditModal] Error details:', err.response?.data || err.message);
-      alert(`Failed to save tags: ${err.response?.data?.error || err.message}`);
+      console.error('[TagEditModal] Error details:', err.response?.data || (err as Error).message);
+      alert(`Failed to save tags: ${err.response?.data?.error || (err as Error).message}`);
     }
   };
 

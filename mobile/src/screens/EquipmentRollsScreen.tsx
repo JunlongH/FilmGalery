@@ -18,7 +18,7 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
   const theme = useTheme();
   const { type, id, name } = route.params; // type: 'camera'|'lens'|'flash'|'film'
   const { baseUrl } = useContext(ApiContext);
-  const [rolls, setRolls] = useState([]);
+  const [rolls, setRolls] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
 

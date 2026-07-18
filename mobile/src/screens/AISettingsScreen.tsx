@@ -13,7 +13,7 @@ export default function AISettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null); // null | 'ok' | 'fail'
-  const [models, setModels] = useState([]);
+  const [models, setModels] = useState<any[]>([]);
 
   // 本地编辑状态
   const [apiBaseUrl, setApiBaseUrl] = useState('');
@@ -30,7 +30,7 @@ export default function AISettingsScreen() {
       setVisionModel(data.vision_model || '');
       setApiKey(''); // 不回显
     } catch (err) {
-      Alert.alert('加载失败', err.message);
+      Alert.alert('加载失败', (err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -47,7 +47,7 @@ export default function AISettingsScreen() {
       Alert.alert('已保存', 'AI 配置已更新');
       setApiKey('');
     } catch (err) {
-      Alert.alert('保存失败', err.message);
+      Alert.alert('保存失败', (err as Error).message);
     } finally {
       setSaving(false);
     }
@@ -71,7 +71,7 @@ export default function AISettingsScreen() {
       const list = await getAIModels(baseUrl);
       setModels(Array.isArray(list?.models) ? list.models : []);
     } catch (err) {
-      Alert.alert('获取模型失败', err.message);
+      Alert.alert('获取模型失败', (err as Error).message);
     }
   }, [baseUrl]);
 

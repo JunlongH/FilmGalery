@@ -48,10 +48,10 @@ export default function MapScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
   const { baseUrl, mapProvider } = useContext(ApiContext);
-  const mapRef = useRef(null);
+  const mapRef = useRef<any>(null);
   
   const [loading, setLoading] = useState(true);
-  const [photos, setPhotos] = useState([]);
+  const [photos, setPhotos] = useState<any[]>([]);
   const [mapRegion, setMapRegion] = useState(INITIAL_REGION);
   const [selectedPhoto, setSelectedPhoto] = useState<any>(null);
   const [showList, setShowList] = useState(false);
@@ -130,7 +130,7 @@ export default function MapScreen() {
         setPhotos([]);
       }
     } catch (error) {
-      console.log('Failed to fetch photos with GPS:', error.message);
+      console.log('Failed to fetch photos with GPS:', (error as Error).message);
       setPhotos([]);
     } finally {
       setLoading(false);

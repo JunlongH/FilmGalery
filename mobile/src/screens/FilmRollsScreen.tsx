@@ -14,7 +14,7 @@ export default function FilmRollsScreen({ route, navigation }: any) {
   const theme = useTheme();
   const { filmId, filmName } = route.params;
   const { baseUrl } = useContext(ApiContext);
-  const [rolls, setRolls] = useState([]);
+  const [rolls, setRolls] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
 
@@ -110,7 +110,7 @@ export default function FilmRollsScreen({ route, navigation }: any) {
           refreshControl={
             <RefreshControl refreshing={loading} onRefresh={fetchRolls} colors={['#5a4632']} />
           }
-          ListEmptyComponent={!loading && <Text style={styles.empty}>No rolls found for this film.</Text>}
+          ListEmptyComponent={!loading ? <Text style={styles.empty}>No rolls found for this film.</Text> : null}
         />
       )}
     </View>

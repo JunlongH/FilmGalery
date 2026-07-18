@@ -19,7 +19,7 @@ export default function EquipmentPicker({
 }: any) {
   const theme = useTheme();
   const [visible, setVisible] = useState(false);
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedItem, setSelectedItem] = useState<any>(null);

@@ -15,7 +15,7 @@ export default function LocationDiagnosticScreen() {
   const [diagnostics, setDiagnostics] = useState<any>(null);
   const [locationResult, setLocationResult] = useState<any>(null);
   const [testing, setTesting] = useState(false);
-  const [log, setLog] = useState([]);
+  const [log, setLog] = useState<any[]>([]);
   
   // Animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -56,7 +56,7 @@ export default function LocationDiagnosticScreen() {
       // Get log
       setLog(locationService.getLog());
     } catch (e) {
-      setLocationResult({ success: false, error: e.message });
+      setLocationResult({ success: false, error: (e as Error).message });
     } finally {
       setTesting(false);
     }

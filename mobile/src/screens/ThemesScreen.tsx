@@ -16,7 +16,7 @@ const cardWidth = (screenWidth - 32 - 12) / numColumns; // 32 padding, 12 gap
 export default function ThemesScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
-  const [tags, setTags] = useState([]);
+  const [tags, setTags] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Animation

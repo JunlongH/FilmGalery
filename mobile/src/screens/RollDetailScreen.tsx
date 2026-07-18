@@ -18,7 +18,7 @@ export default function RollDetailScreen({ route, navigation }: any) {
   const theme = useTheme();
   const { rollId } = route.params;
   const { baseUrl } = useContext(ApiContext);
-  const [photos, setPhotos] = useState([]);
+  const [photos, setPhotos] = useState<any[]>([]);
   const [roll, setRoll] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -173,7 +173,7 @@ export default function RollDetailScreen({ route, navigation }: any) {
         activeOpacity={0.8}
       >
         <CachedImage
-          uri={uri}
+          uri={uri || ""}
           style={styles.thumbnail}
           contentFit="cover"
         />

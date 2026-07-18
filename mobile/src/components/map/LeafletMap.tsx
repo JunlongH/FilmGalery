@@ -10,7 +10,7 @@ const LeafletMap = ({
   onMarkerPress,
   onMapReady
 }: any) => {
-  const webViewRef = useRef(null);
+  const webViewRef = useRef<any>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const { mapProvider, darkMode }: any = useContext(ApiContext);
 

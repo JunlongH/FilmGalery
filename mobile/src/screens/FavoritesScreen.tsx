@@ -17,7 +17,7 @@ const tileSize = Math.floor((screenWidth - (spacing.md * 2) - (numColumns * 4)) 
 export default function FavoritesScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
-  const [photos, setPhotos] = useState([]);
+  const [photos, setPhotos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Animation
@@ -84,7 +84,7 @@ export default function FavoritesScreen({ navigation }: any) {
         >
           <View style={[styles.thumbInner, { width: tileSize, height: tileSize }]}>
             <CachedImage
-              uri={thumbUrl}
+              uri={thumbUrl || ""}
               style={styles.thumbImage}
               contentFit="cover"
             />

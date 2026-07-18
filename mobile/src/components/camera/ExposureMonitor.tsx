@@ -79,7 +79,7 @@ function parseExifFromBase64(base64Data: string) {
     
     return null;
   } catch (e) {
-    __DEV__ && console.warn('[EXIF] Parse error:', e.message);
+    __DEV__ && console.warn('[EXIF] Parse error:', (e as Error).message);
     return null;
   }
 }
@@ -182,7 +182,7 @@ function parseTiffHeader(bytes: Uint8Array, tiffOffset: number, maxLength: numbe
     
     return Object.keys(result).length > 0 ? result : null;
   } catch (e) {
-    __DEV__ && console.warn('[EXIF] TIFF parse error:', e.message);
+    __DEV__ && console.warn('[EXIF] TIFF parse error:', (e as Error).message);
     return null;
   }
 }
@@ -395,7 +395,7 @@ export function useExposureMonitor(onExposureUpdate: (data: any) => void, camera
           // Parse EXIF from base64 data
           exifData = parseExifFromBase64(base64);
         } catch (readErr) {
-          __DEV__ && console.warn('[ExposureMonitor] File read error:', readErr.message);
+          __DEV__ && console.warn('[ExposureMonitor] File read error:', (readErr as Error).message);
         }
         
         // Delete the temp file silently
@@ -449,7 +449,7 @@ export function useExposureMonitor(onExposureUpdate: (data: any) => void, camera
             
             console.log('[ExposureMonitor] SPOT adjustment:', {
               avgBrightness: avgBrightness.toFixed(0),
-              spotBrightness: spotBrightness.toFixed(0),
+              spotBrightness: (spotBrightness as any).toFixed(0),
               ratio: brightnessRatio.toFixed(2),
               evAdjust: evAdjustment.toFixed(1),
               sceneEV: targetEV.toFixed(1)
@@ -464,7 +464,7 @@ export function useExposureMonitor(onExposureUpdate: (data: any) => void, camera
         // Update calibration baseline for interpolation between EXIF samples
         const currentBrightness = exposureData?.brightness ?? 128;
         calibrationRef.current = {
-          baselineEV: targetEV,
+          baselineEV: targetEV as any,
           baselineBrightness: currentBrightness,
           lastUpdate: Date.now()
         };
@@ -490,7 +490,7 @@ export function useExposureMonitor(onExposureUpdate: (data: any) => void, camera
         return targetEV;
       }
     } catch (e) {
-      __DEV__ && console.log('[ExposureMonitor] EXIF measurement failed:', e.message);
+      __DEV__ && console.log('[ExposureMonitor] EXIF measurement failed:', (e as Error).message);
     } finally {
       measurementInProgress.current = false;
     }
@@ -506,9 +506,9 @@ export function useExposureMonitor(onExposureUpdate: (data: any) => void, camera
   const onFrameAnalyzed = useCallback((frameNumber: number, avgBrightness: number | null, spotBrightness: number | null, spotPoint: any, approxEV: number | null) => {
     // Store brightness data for spot metering calculations
     lastFrameDataRef.current = {
-      avgBrightness,
-      spotBrightness,
-      spotPoint
+      avgBrightness: avgBrightness as any,
+      spotBrightness: spotBrightness as any,
+      spotPoint: spotPoint as any,
     };
     
     // Use spot brightness for display if spot metering is active
@@ -519,7 +519,7 @@ export function useExposureMonitor(onExposureUpdate: (data: any) => void, camera
     setExposureData((prev: any) => ({
       ...prev,
       brightness: displayBrightness,
-      avgBrightness,
+      avgBrightness: avgBrightness as any,
       spotBrightness,
       frameNumber,
       fpActive: true,

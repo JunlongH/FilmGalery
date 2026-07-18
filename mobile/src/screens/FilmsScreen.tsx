@@ -14,7 +14,7 @@ const itemSize = Math.floor((screenWidth - 16*2 - 8) / numColumns); // padding 1
 export default function FilmsScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
-  const [films, setFilms] = useState([]);
+  const [films, setFilms] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchFilms = async () => {
