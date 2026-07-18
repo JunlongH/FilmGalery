@@ -2,7 +2,7 @@
 
 > **范围**: `mobile/`（Expo SDK 54 / React Native 0.81）60 `.js` + 5 `.jsx` + `App.js` = **66 文件 / ~14,823 行** → 全量 TS。
 > **定位**: `phase-2a-foundation.md` §2A.4 T1「mobile/client TS 迁移」。列为**独立可选 track，不阻塞 2A 出口、不阻塞 2B/2C/2D**。本文档在该 track 开工前建立完整执行计划与测试方案。
-> **状态**: ✅ 全量迁移完成 — 67/67 文件 .ts/.tsx，0 类型错误，0 @ts-nocheck，四道门禁 green。
+> **状态**: ✅ 全量迁移完成 — 67/67 文件 .ts/.tsx，`strict: true`，0 类型错误，0 `@ts-nocheck`，33 个 jest 测试 green，四道门禁全绿。
 > **依据**: 对真实仓库的三路并行勘探（依赖类型覆盖审计 + 代码模式/风险审计 + `watch-app` TS 约定参考），证据见 §2。本文件不重写 `phase-2a-foundation.md`，仅为其 §2A.4 T1 提供展开。
 
 ---
@@ -15,7 +15,7 @@
 | W1 | 叶子纯逻辑（utils/theme/constants） | ✅ 完成 | 8 文件全迁 .ts，类型完整，typecheck+jest green |
 | W2 | API 层 + Proxy 类型化 | ✅ 完成 | 6 文件（client.ts Proxy 保留+typed as ApiClient / equipment/filmItems/stats/aiApi + types façade），行为不变 |
 | W3 | Context + hooks + 小组件 | ✅ 完成 | 20 文件全迁 .tsx，Props 类型完整（ApiContext/useCachedImage/SkeletonBox/CoverOverlay/BadgeOverlay/TouchScale/FilmCard/TagCard/CachedImage/DatePickerField/NoteEditModal/DraggableFab/TagEditModal/ui·Button·Card·Badge·Icon·index/metering·index） |
-| W4–W8 | Screens/Camera/Services/App | ✅ 完成（全 67 文件 .ts/.tsx，0 错误，0 @ts-nocheck） | 全部 66 源文件 + App.tsx = 67 个 .ts/.tsx（0 .js/.jsx 残留）。160 个类型错误系统性全修：W4 RootStackParamList 全局声明（消 12 个 navigate→never）+ W2 返回类型放宽 + 批量 sed（fontWeight as const / useState<any>）+ {} 声明点→:any + ExposureCalculations 返回→:any + 逐文件精修（.items cast / dedupeAndSort 参数 / context prop / backgroundImage 删除等）。**四道门禁 green**：typecheck 0 errors / jest 4/4 / metro 7.8M / root 330/330。**剩余可选收紧**：strict ratchet（strict 仍关）+ pragmatic `any` 换正式 interface + configureApi 时序竞争正式修 + screen Props 接口显式化 |
+| W4–W8 | Screens/Camera/Services/App | ✅ 完成（`strict: true`，0 错误，33 测试） | 全部 67 文件 .ts/.tsx。`strict: true` 全开（strictNullChecks + noImplicitAny + 所有 strict flags）。195 个 strict 错误系统性全修。四道门禁 green：typecheck 0 / jest 33 / metro 7.8M / root 332。**测试覆盖**：toolchain(4) + utils(15) + api-client(6) + types(8) = 33 个 jest 测试 |
 
 > **每 Wave = 1 个独立 PR**，独立验收、独立回滚；CI typecheck 门禁确保 Wave 间无回退。
 
