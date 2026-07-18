@@ -2,7 +2,7 @@
   "expo": {
     "name": "FilmGallery",
     "slug": "film-gallery-mobile",
-    "version": "3.0.0",
+    "version": "3.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

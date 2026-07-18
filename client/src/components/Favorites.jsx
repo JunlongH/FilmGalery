@@ -11,7 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@heroui/react';
 import { getFavoritePhotos, updatePhoto } from '../api';
 import { getCacheStrategy } from '../lib';
-import ImageViewer from './ImageViewer';
+import ImageViewer from './common/LazyImageViewer';
 import { AnimatedContainer, HoverPhotoCard, ActionButton } from './ui';
 import { Heart } from 'lucide-react';
 
@@ -31,7 +31,7 @@ export default function Favorites() {
 
   const updatePhotoMutation = useMutation({
     mutationFn: ({ photoId, data }) => updatePhoto(photoId, data),
-    onSuccess: () => queryClient.invalidateQueries(['favorites'])
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['favorites'] })
   });
 
   async function onUnlike(photoId) {

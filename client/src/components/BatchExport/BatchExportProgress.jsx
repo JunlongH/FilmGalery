@@ -5,7 +5,7 @@
  * @description 显示批量渲染/下载任务的进度
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
  * 进度条组件
@@ -76,36 +76,45 @@ export default function BatchExportProgress({
     failedItems: []
   });
   
+  // 轮询 timer 引用：卸载时必须清理，避免组件销毁后继续轮询并对已卸载组件 setState
+  const pollTimerRef = useRef(null);
+
   // 轮询进度
   const pollProgress = useCallback(async () => {
     if (!jobId || !getProgress) return;
-    
+
     try {
       const data = await getProgress(jobId);
       setProgress(data);
-      
+
       if (onProgress) {
         onProgress(data);
       }
-      
+
       // 任务完成或终止 - 停止轮询，但不自动调用 onComplete
       // 让用户点击"完成"按钮来确认
       if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
         return; // 停止轮询
       }
-      
+
       // 继续轮询
-      setTimeout(pollProgress, 500);
+      pollTimerRef.current = setTimeout(pollProgress, 500);
     } catch (e) {
       console.error('[BatchExportProgress] Poll error:', e);
-      setTimeout(pollProgress, 2000);
+      pollTimerRef.current = setTimeout(pollProgress, 2000);
     }
   }, [jobId, getProgress, onProgress]);
-  
+
   useEffect(() => {
     if (jobId) {
       pollProgress();
     }
+    return () => {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
   }, [jobId, pollProgress]);
   
   const handleCancel = async () => {

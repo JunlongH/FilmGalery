@@ -1,0 +1,137 @@
+/**
+ * StatCard / ChartCard 样式
+ *
+ * CSS 变量驱动的双主题配色：亮色值定义在 .stat-card-<color>，
+ * 暗色覆写集中在 .dark 作用域下。替代原 JS 端 250 行双主题色表
+ * 与 setProperty(..., 'important') 命令式覆写。
+ *
+ * 注意：本文件不使用 @layer，非分层 CSS 优先级高于 Tailwind/HeroUI
+ * 的分层样式，确保卡片底色稳定生效。
+ */
+
+/* ============ StatCard ============ */
+
+.stat-card {
+  background: var(--stat-bg, none);
+}
+
+.stat-card .stat-icon {
+  background-color: var(--stat-icon-bg, transparent);
+  color: var(--stat-icon-color, currentColor);
+}
+
+/* --- 亮色主题（默认） --- */
+
+.stat-card-default {
+  --stat-bg: linear-gradient(135deg, rgba(243, 244, 246, 0.8) 0%, rgba(229, 231, 235, 0.9) 100%);
+  --stat-icon-bg: rgba(107, 114, 128, 0.15);
+  --stat-icon-color: #6b7280;
+}
+.stat-card-primary {
+  --stat-bg: linear-gradient(135deg, rgba(219, 234, 254, 0.7) 0%, rgba(191, 219, 254, 0.8) 100%);
+  --stat-icon-bg: rgba(59, 130, 246, 0.15);
+  --stat-icon-color: #2563eb;
+}
+.stat-card-success {
+  --stat-bg: linear-gradient(135deg, rgba(209, 250, 229, 0.7) 0%, rgba(167, 243, 208, 0.8) 100%);
+  --stat-icon-bg: rgba(16, 185, 129, 0.15);
+  --stat-icon-color: #059669;
+}
+.stat-card-warning {
+  --stat-bg: linear-gradient(135deg, rgba(254, 243, 199, 0.7) 0%, rgba(253, 230, 138, 0.8) 100%);
+  --stat-icon-bg: rgba(245, 158, 11, 0.15);
+  --stat-icon-color: #d97706;
+}
+.stat-card-danger {
+  --stat-bg: linear-gradient(135deg, rgba(254, 226, 226, 0.7) 0%, rgba(254, 202, 202, 0.8) 100%);
+  --stat-icon-bg: rgba(239, 68, 68, 0.15);
+  --stat-icon-color: #dc2626;
+}
+.stat-card-secondary {
+  --stat-bg: linear-gradient(135deg, rgba(237, 233, 254, 0.7) 0%, rgba(221, 214, 254, 0.8) 100%);
+  --stat-icon-bg: rgba(139, 92, 246, 0.15);
+  --stat-icon-color: #7c3aed;
+}
+.stat-card-info {
+  --stat-bg: linear-gradient(135deg, rgba(224, 242, 254, 0.7) 0%, rgba(186, 230, 253, 0.8) 100%);
+  --stat-icon-bg: rgba(14, 165, 233, 0.15);
+  --stat-icon-color: #0ea5e9;
+}
+.stat-card-rose {
+  --stat-bg: linear-gradient(135deg, rgba(255, 228, 230, 0.7) 0%, rgba(253, 164, 175, 0.8) 100%);
+  --stat-icon-bg: rgba(244, 63, 94, 0.15);
+  --stat-icon-color: #f43f5e;
+}
+.stat-card-indigo {
+  --stat-bg: linear-gradient(135deg, rgba(224, 231, 255, 0.7) 0%, rgba(199, 210, 254, 0.8) 100%);
+  --stat-icon-bg: rgba(99, 102, 241, 0.15);
+  --stat-icon-color: #6366f1;
+}
+.stat-card-teal {
+  --stat-bg: linear-gradient(135deg, rgba(204, 251, 241, 0.7) 0%, rgba(153, 246, 228, 0.8) 100%);
+  --stat-icon-bg: rgba(20, 184, 166, 0.15);
+  --stat-icon-color: #14b8a6;
+}
+
+/* --- 暗色主题 --- */
+
+.dark .stat-card-default {
+  --stat-bg: linear-gradient(135deg, rgba(63, 63, 70, 0.4) 0%, rgba(39, 39, 42, 0.5) 100%);
+  --stat-icon-bg: rgba(113, 113, 122, 0.3);
+  --stat-icon-color: #a1a1aa;
+}
+.dark .stat-card-primary {
+  --stat-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(37, 99, 235, 0.2) 100%);
+  --stat-icon-bg: rgba(59, 130, 246, 0.25);
+  --stat-icon-color: #60a5fa;
+}
+.dark .stat-card-success {
+  --stat-bg: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.2) 100%);
+  --stat-icon-bg: rgba(16, 185, 129, 0.25);
+  --stat-icon-color: #34d399;
+}
+.dark .stat-card-warning {
+  --stat-bg: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(217, 119, 6, 0.2) 100%);
+  --stat-icon-bg: rgba(245, 158, 11, 0.25);
+  --stat-icon-color: #fbbf24;
+}
+.dark .stat-card-danger {
+  --stat-bg: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(220, 38, 38, 0.2) 100%);
+  --stat-icon-bg: rgba(239, 68, 68, 0.25);
+  --stat-icon-color: #f87171;
+}
+.dark .stat-card-secondary {
+  --stat-bg: linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(124, 58, 237, 0.2) 100%);
+  --stat-icon-bg: rgba(139, 92, 246, 0.25);
+  --stat-icon-color: #a78bfa;
+}
+.dark .stat-card-info {
+  --stat-bg: linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(2, 132, 199, 0.2) 100%);
+  --stat-icon-bg: rgba(14, 165, 233, 0.25);
+  --stat-icon-color: #38bdf8;
+}
+.dark .stat-card-rose {
+  --stat-bg: linear-gradient(135deg, rgba(244, 63, 94, 0.12) 0%, rgba(225, 29, 72, 0.2) 100%);
+  --stat-icon-bg: rgba(244, 63, 94, 0.25);
+  --stat-icon-color: #fb7185;
+}
+.dark .stat-card-indigo {
+  --stat-bg: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(79, 70, 229, 0.2) 100%);
+  --stat-icon-bg: rgba(99, 102, 241, 0.25);
+  --stat-icon-color: #818cf8;
+}
+.dark .stat-card-teal {
+  --stat-bg: linear-gradient(135deg, rgba(20, 184, 166, 0.12) 0%, rgba(13, 148, 136, 0.2) 100%);
+  --stat-icon-bg: rgba(20, 184, 166, 0.25);
+  --stat-icon-color: #2dd4bf;
+}
+
+/* ============ ChartCard ============ */
+
+.chart-card {
+  background-color: #ffffff;
+}
+
+.dark .chart-card {
+  background-color: rgba(39, 39, 42, 0.5);
+}

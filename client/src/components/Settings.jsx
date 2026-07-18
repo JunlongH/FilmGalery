@@ -121,7 +121,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 animate-in fade-in duration-300">
+    <div className="flex flex-col h-full bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 animate-fade-in">
       <div className="p-6 md:p-8 max-w-7xl mx-auto w-full">
         <h2 className="text-3xl font-bold mb-8 tracking-tight">Settings</h2>
         

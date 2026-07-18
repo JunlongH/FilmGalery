@@ -5,7 +5,7 @@
  * @description 从外部软件导入处理好的正片并与底片匹配
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import MatchPreviewTable from './MatchPreviewTable';
 import ManualMatchPanel from './ManualMatchPanel';
 import {
@@ -14,6 +14,7 @@ import {
   executeImport,
   getImportProgress
 } from '../../api';
+import useIsDarkMode from '../../hooks/useIsDarkMode';
 
 // ============================================================================
 // 常量
@@ -47,6 +48,7 @@ export default function ImportPositiveModal({
   rollName = '',
   onComplete
 }) {
+  const isDark = useIsDarkMode();
   // 步骤状态
   const [step, setStep] = useState('select'); // 'select' | 'preview' | 'importing' | 'done'
   
@@ -245,6 +247,9 @@ export default function ImportPositiveModal({
     }
   };
   
+  // 轮询 timer 引用：卸载时清理，避免弹窗关闭后轮询继续
+  const pollTimerRef = useRef(null);
+
   // 轮询进度
   const pollProgress = useCallback(async (jid) => {
     try {
@@ -256,7 +261,7 @@ export default function ImportPositiveModal({
         failed: p.failed,
         skipped: p.skipped
       });
-      
+
       if (p.status === 'completed' || p.status === 'failed' || p.status === 'cancelled') {
         setStep('done');
         setImportResult(p);
@@ -264,13 +269,23 @@ export default function ImportPositiveModal({
           onComplete(p);
         }
       } else {
-        setTimeout(() => pollProgress(jid), 500);
+        pollTimerRef.current = setTimeout(() => pollProgress(jid), 500);
       }
     } catch (e) {
       console.error('Poll progress error:', e);
-      setTimeout(() => pollProgress(jid), 1000);
+      pollTimerRef.current = setTimeout(() => pollProgress(jid), 1000);
     }
   }, [onComplete]);
+
+  // 卸载时停止轮询
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, []);
   
   // 关闭
   const handleClose = () => {
@@ -283,10 +298,6 @@ export default function ImportPositiveModal({
   };
   
   if (!isOpen) return null;
-  
-  // Theme detection
-  const isDark = document.documentElement.classList.contains('dark') || 
-                 document.documentElement.getAttribute('data-theme') === 'dark';
   
   // Theme-aware colors
   const colors = {

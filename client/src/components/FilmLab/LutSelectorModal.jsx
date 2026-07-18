@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { listLuts, uploadLut, loadLutFromLibrary } from '../../api';
+import useIsDarkMode from '../../hooks/useIsDarkMode';
 
 // ============================================================================
 // 样式 - 支持亮色/暗色模式
@@ -231,8 +232,7 @@ export default function LutSelectorModal({ onClose, onSelect, currentLutName }) 
   const fileInputRef = useRef(null);
   
   // Theme detection
-  const isDark = document.documentElement.classList.contains('dark') || 
-                 document.documentElement.getAttribute('data-theme') === 'dark';
+  const isDark = useIsDarkMode();
   const styles = getStyles(isDark);
   
   // 加载 LUT 列表

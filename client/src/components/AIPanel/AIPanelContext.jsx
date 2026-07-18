@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 
 const AIPanelContext = createContext(null);
 
@@ -35,13 +35,21 @@ export function AIPanelProvider({ children }) {
     });
   }, []);
 
+  // value memo 化：避免 provider 重渲染时所有消费者被迫重渲染
+  const value = useMemo(() => ({
+    isOpen, togglePanel, openPanel, closePanel,
+    panelWidth, setPanelWidth,
+    conversationId, setConversationId,
+    overlayContext, pushOverlayContext, popOverlayContext, updateOverlayContext,
+  }), [
+    isOpen, togglePanel, openPanel, closePanel,
+    panelWidth,
+    conversationId,
+    overlayContext, pushOverlayContext, popOverlayContext, updateOverlayContext,
+  ]);
+
   return (
-    <AIPanelContext.Provider value={{
-      isOpen, togglePanel, openPanel, closePanel,
-      panelWidth, setPanelWidth,
-      conversationId, setConversationId,
-      overlayContext, pushOverlayContext, popOverlayContext, updateOverlayContext,
-    }}>
+    <AIPanelContext.Provider value={value}>
       {children}
     </AIPanelContext.Provider>
   );

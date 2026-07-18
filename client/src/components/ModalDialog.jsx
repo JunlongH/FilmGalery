@@ -1,11 +1,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
+import useIsDarkMode from '../hooks/useIsDarkMode';
 
 const ModalDialog = ({ isOpen, type = 'alert', title, message, onConfirm, onCancel, confirmText = 'OK', cancelText = 'Cancel' }) => {
-  if (!isOpen) return null;
+  const isDark = useIsDarkMode();
 
-  const isDark = document.documentElement.classList.contains('dark') || 
-                 document.documentElement.getAttribute('data-theme') === 'dark';
+  if (!isOpen) return null;
 
   return ReactDOM.createPortal(
     <div style={{

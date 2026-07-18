@@ -73,6 +73,7 @@ export const DATA_CACHE_MAP = {
   cameras: CACHE_STRATEGIES.STATIC,
   lenses: CACHE_STRATEGIES.STATIC,
   films: CACHE_STRATEGIES.STATIC,
+  filmItems: CACHE_STRATEGIES.STATIC,
   luts: CACHE_STRATEGIES.STATIC,
   
   // 半静态数据
@@ -150,88 +151,6 @@ export const queryClient = new QueryClient({
     },
   },
 });
-
-// ============================================================================
-// 缓存工具函数
-// ============================================================================
-
-export const cacheUtils = {
-  /**
-   * 清除特定模块的缓存
-   * @param {string|string[]} moduleKey - 模块键名
-   */
-  clearModule: (moduleKey) => {
-    const keys = Array.isArray(moduleKey) ? moduleKey : [moduleKey];
-    keys.forEach(key => {
-      queryClient.removeQueries({ queryKey: [key] });
-    });
-  },
-  
-  /**
-   * 预取数据
-   * @param {string[]} queryKey - 查询键
-   * @param {Function} queryFn - 查询函数
-   * @param {Object} options - 额外选项
-   */
-  prefetch: async (queryKey, queryFn, options = {}) => {
-    await queryClient.prefetchQuery({ 
-      queryKey, 
-      queryFn,
-      staleTime: 1000 * 60 * 5, // 默认5分钟
-      ...options 
-    });
-  },
-  
-  /**
-   * 手动设置缓存数据
-   * @param {string[]} queryKey - 查询键
-   * @param {any} data - 数据
-   */
-  setQueryData: (queryKey, data) => {
-    queryClient.setQueryData(queryKey, data);
-  },
-  
-  /**
-   * 获取缓存数据
-   * @param {string[]} queryKey - 查询键
-   * @returns {any} 缓存数据
-   */
-  getQueryData: (queryKey) => {
-    return queryClient.getQueryData(queryKey);
-  },
-  
-  /**
-   * 使缓存失效（标记为stale但保留数据）
-   * @param {string|string[]} queryKey - 查询键
-   */
-  invalidate: (queryKey) => {
-    const keys = Array.isArray(queryKey) ? queryKey : [queryKey];
-    queryClient.invalidateQueries({ queryKey: keys });
-  },
-  
-  /**
-   * 清除所有缓存
-   */
-  clearAll: () => {
-    queryClient.clear();
-  },
-  
-  /**
-   * 获取缓存统计
-   * @returns {Object} 缓存统计信息
-   */
-  getStats: () => {
-    const cache = queryClient.getQueryCache();
-    const queries = cache.getAll();
-    
-    return {
-      totalQueries: queries.length,
-      staleQueries: queries.filter(q => q.isStale()).length,
-      fetchingQueries: queries.filter(q => q.state.fetchStatus === 'fetching').length,
-      errorQueries: queries.filter(q => q.state.status === 'error').length,
-    };
-  },
-};
 
 // ============================================================================
 // 导出

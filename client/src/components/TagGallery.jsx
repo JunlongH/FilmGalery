@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@heroui/react';
-import ImageViewer from './ImageViewer';
+import ImageViewer from './common/LazyImageViewer';
 import { AnimatedContainer, HoverPhotoCard, ActionButton } from './ui';
 import { buildUploadUrl, getTagPhotos, getTags, updatePhoto } from '../api';
 import { getCacheStrategy } from '../lib';
@@ -42,8 +42,8 @@ export default function TagGallery() {
   const updatePhotoMutation = useMutation({
     mutationFn: ({ photoId, data }) => updatePhoto(photoId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['tagPhotos', params.tagId]);
-      queryClient.invalidateQueries(['tags']);
+      queryClient.invalidateQueries({ queryKey: ['tagPhotos', params.tagId] });
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
     }
   });
 

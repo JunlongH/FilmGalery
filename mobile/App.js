@@ -137,7 +137,7 @@ function HomeTabs() {
 }
 
 export default function App() {
-  const [baseUrl, setBaseUrl] = useState('http://192.168.1.x:4000'); // Default placeholder
+  const [baseUrl, setBaseUrl] = useState('http://59.66.234.26:4000'); // Default: test server
   const [backupUrl, setBackupUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(false);

@@ -9,10 +9,9 @@ import {
   Chip 
 } from '@heroui/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LazyLoadImage } from 'react-lazy-load-image-component';
+import LazyImage from '../common/LazyImage';
 import { X, Heart, MapPin } from 'lucide-react';
-import 'react-lazy-load-image-component/src/effects/opacity.css';
-import ImageViewer from '../ImageViewer';
+import ImageViewer from '../common/LazyImageViewer';
 import { useLifeLog } from './LifeLogContext';
 
 const photoVariants = {
@@ -83,12 +82,11 @@ export default function LifeLogDayModal() {
                         className="relative aspect-square rounded-xl overflow-hidden cursor-pointer group shadow-md"
                         onClick={() => setViewerIndex(idx)}
                       >
-                        <LazyLoadImage
+                        <LazyImage
                           src={getPhotoUrl(photo)}
                           alt=""
-                          effect="opacity"
-                          className="w-full h-full object-cover"
-                          wrapperClassName="w-full h-full"
+                          className="w-full h-full"
+                          objectFit="cover"
                         />
 
                         {/* Tags (top left) */}

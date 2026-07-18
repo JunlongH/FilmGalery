@@ -20,26 +20,6 @@
   --chip-bg: rgba(255,255,255,0.6);
   --chip-bg-active: var(--color-bg);
   --chip-border: var(--color-border);
-  
-  /* HeroUI Specific - Light mode defaults */
-  --heroui-background: 255 255 255;
-  --heroui-content1: 255 255 255;
-  --heroui-content2: 244 244 245;
-  --heroui-content3: 228 228 231;
-  --heroui-content4: 212 212 216;
-  --heroui-divider: 228 228 231;
-  --heroui-divider-opacity: 0.15;
-  --heroui-foreground: 17 24 28;
-  --heroui-default-50: 250 250 250;
-  --heroui-default-100: 244 244 245;
-  --heroui-default-200: 228 228 231;
-  --heroui-default-300: 212 212 216;
-  --heroui-default-400: 161 161 170;
-  --heroui-default-500: 113 113 122;
-  --heroui-default-600: 82 82 91;
-  --heroui-default-700: 63 63 70;
-  --heroui-default-800: 39 39 42;
-  --heroui-default-900: 24 24 27;
 }
 
 [data-theme="dark"] {
@@ -55,27 +35,6 @@
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  
-  /* HeroUI Specific overrides - Dark mode (RGB values for hsl()) */
-  /* Using zinc-900 as base for a cohesive, softer dark theme */
-  --heroui-background: 24 24 27; /* #18181b zinc-900 */
-  --heroui-content1: 39 39 42;   /* #27272a zinc-800 */
-  --heroui-content2: 63 63 70;   /* #3f3f46 zinc-700 */
-  --heroui-content3: 82 82 91;   /* #52525b zinc-600 */
-  --heroui-content4: 113 113 122;
-  --heroui-divider: 39 39 42;
-  --heroui-divider-opacity: 0.15;
-  --heroui-foreground: 236 237 238;
-  --heroui-default-50: 24 24 27;
-  --heroui-default-100: 39 39 42;
-  --heroui-default-200: 63 63 70;
-  --heroui-default-300: 82 82 91;
-  --heroui-default-400: 113 113 122;
-  --heroui-default-500: 113 113 122;
-  --heroui-default-600: 161 161 170;
-  --heroui-default-700: 212 212 216;
-  --heroui-default-800: 228 228 231;
-  --heroui-default-900: 250 250 250;
 }
 
 .fade-slide-enter {

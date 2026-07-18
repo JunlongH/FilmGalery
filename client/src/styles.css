@@ -160,7 +160,7 @@ body, html, #root {
   height: 100%;
   font-family: "Segoe UI", Arial, sans-serif;
   background: #ffffff; /* White - matches sidebar in light mode */
-  color: var(--heroui-foreground, #333);
+  color: hsl(var(--heroui-foreground) / 1);
 }
 
 /* Dark Mode Global Overrides */
@@ -168,7 +168,7 @@ html.dark body,
 html.dark #root,
 html.dark .app-shell {
   background-color: #18181b; /* Zinc 900 - matches sidebar in dark mode */
-  color: var(--heroui-foreground, #ECEDEE);
+  color: hsl(var(--heroui-foreground) / 1);
 }
 html.dark .title-bar {
   background-color: #18181b; /* Zinc 900 */
@@ -213,20 +213,20 @@ input, textarea, select, button {
 .title-bar {
   flex-shrink: 0;
   height: 32px;
-  background: var(--heroui-content1, #f5f0e6);
+  background: hsl(var(--heroui-content1) / 1);
   display: flex;
   justify-content: space-between;
   align-items: center;
   -webkit-app-region: drag; /* Allow dragging the window */
   user-select: none;
-  border-bottom: 1px solid var(--heroui-divider, #e0d8cc);
+  border-bottom: 1px solid hsl(var(--heroui-divider) / 1);
   padding-left: 12px;
   z-index: 100;
 }
 
 .title-bar-title {
   font-size: 12px;
-  color: var(--heroui-foreground, #5a4632);
+  color: hsl(var(--heroui-foreground) / 1);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -277,97 +277,6 @@ input, textarea, select, button {
   overflow: hidden; /* Prevent body scroll from affecting layout */
 }
 
-.sidebar {
-  width: 220px;
-  background: #f5f0e6;
-  border-right: 1px solid #ddd;
-  padding: 20px;
-  overflow-y: auto;
-}
-
-.sidebar h2 {
-  margin-top: 0;
-  font-size: 20px;
-  color: #5a4632;
-}
-
-.sidebar ul {
-  list-style: none;
-  padding: 0;
-}
-
-.sidebar li {
-  margin: 10px 0;
-}
-
-.sidebar a {
-  text-decoration: none;
-  color: #5a4632;
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sidebar a:hover {
-  color: #2f7d32;
-}
-
-.sidebar-section {
-  margin-top: 24px;
-}
-
-.sidebar-section-title {
-  font-size: 11px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: #9b8166;
-  margin-bottom: 8px;
-}
-
-.sidebar-tag-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sidebar-tag-link {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  text-decoration: none;
-  background: rgba(255, 255, 255, 0.4);
-  padding: 4px 8px;
-  border-radius: 4px;
-  color: #4f3c2b;
-  font-size: 13px;
-}
-
-.sidebar-tag-link:hover {
-  background: rgba(47, 125, 50, 0.12);
-  color: #2f7d32;
-}
-
-.sidebar-tag-count {
-  font-size: 12px;
-  color: #7a6755;
-}
-
-.sidebar-tag-empty {
-  font-size: 12px;
-  color: #9c8a7a;
-}
-
-.sidebar svg {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-  color: inherit;
-}
-
 .main {
   flex: 1;
   width: 100%;
@@ -394,30 +303,6 @@ html.dark .main {
   transform: translateY(-2px);
 }
 
-/* Tabs */
-.fg-tab {
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--heroui-divider, rgba(0,0,0,0.08));
-  background: var(--heroui-content1, rgba(255,255,255,0.8));
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--heroui-foreground, #3c4a3c);
-  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.fg-tab:hover {
-  background: var(--heroui-content2, #fff);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-
-.fg-tab-active {
-  background: #2f7d32;
-  color: #fff;
-  border-color: #2f7d32;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-}
-
 /* Film items inventory grid styles moved to FilmInventory.css */
 
 /* Lightweight modal shell for batch form */
@@ -432,7 +317,7 @@ html.dark .main {
 }
 
 .fg-modal-panel {
-  background: var(--heroui-content1, #f8f8f5);
+  background: hsl(var(--heroui-content1) / 1);
   border-radius: 10px;
   padding: 16px 18px 14px;
   width: min(880px, 100% - 40px);
@@ -495,127 +380,6 @@ form button:hover {
   border-radius: 4px;
   object-fit: cover;
 }
-
-/* Overview styles */
-.overview-root { padding: 6px 0; }
-.overview-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
-.overview-header h2 { margin:0; font-size:22px; }
-.overview-controls { display:flex; flex-direction:column; gap:8px; }
-.years, .months { display:flex; gap:8px; flex-wrap:wrap; }
-.year-btn, .month-btn { background:transparent; border:1px solid #ddd; padding:6px 10px; border-radius:4px; cursor:pointer; }
-.year-btn.active, .month-btn.active { background:#2f7d32; color:#fff; border-color:#2f7d32; }
-.overview-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:16px; margin-top: 14px; }
-.overview-thumb { background:#fff; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.06); overflow:hidden; display:flex; flex-direction:column; position: relative; aspect-ratio: 1 / 1; }
-.overview-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
-.thumb-title { 
-  position: absolute; 
-  bottom: 0; 
-  left: 0; 
-  width: 100%; 
-  background: rgba(0, 0, 0, 0.3); 
-  color: #ffffff !important; 
-  padding: 8px; 
-  font-size: 13px; 
-  font-weight: 500;
-  transform: translateY(100%); 
-  transition: transform 0.3s ease; 
-  box-sizing: border-box;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-}
-.overview-thumb:hover .thumb-title { transform: translateY(0); }
-.no-cover { width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#999; }
-
-
-/* Timeline container */
-.timeline-container { margin-top:10px; }
-.timeline {
-  --label-col: clamp(120px, 18vw, 240px);
-  background:#fff;
-  border-radius:6px;
-  padding:10px;
-  box-shadow:0 1px 4px rgba(0,0,0,0.06);
-  width: 100%;
-}
-
-/* Timeline Header & Rows */
-.timeline-header { display:grid; grid-template-columns: var(--label-col) 1fr; gap:12px; align-items:center; font-size:12px; color:#444; border-bottom:1px solid #dfeee0; padding-bottom:8px; margin-bottom:8px; }
-.timeline-row { display:grid; grid-template-columns: var(--label-col) 1fr; gap:12px; align-items:center; padding:4px 0; border-top:none; }
-.timeline-rows { margin-top:6px; max-height: min(52vh, 560px); overflow:auto; }
-
-/* Labels */
-.timeline-label { font-weight:600; white-space:nowrap; display:flex; align-items:center; justify-content:flex-start; padding-left: 6px; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-.timeline-row .timeline-label { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-
-/* Month Grid (Timeline Mode) */
-/* Month areas use CSS Grid; columns are set inline from JSX */
-.timeline-months { display:grid; gap:6px; overflow:visible; padding-bottom:0; align-items:center; width: 100%; }
-.timeline-header .timeline-months { width: 100%; }
-.timeline-row .timeline-months, .timeline-row .year-month-grid { width: 100%; }
-
-/* Month Cells */
-.month-cell { height:40px; background:#eef8ee; box-sizing:border-box; border-radius:6px; display:flex; align-items:center; justify-content:center; border:none; margin:0; min-width: 0; }
-.month-cell.big { height:40px; font-size:12px; display:flex; align-items:center; justify-content:center; color:#2f7d32; min-width: 0; }
-.month-cell.active { transition: background 0.18s ease; box-shadow:inset 0 -3px 6px rgba(0,0,0,0.08); }
-
-.month-btn { padding:0; margin:0; border:0; background:transparent; cursor:pointer; }
-.month-btn:hover { transform:translateY(-2px); }
-.month-btn:focus { outline:2px solid #cfe9d1; }
-
-/* Month label two-line style */
-.month-label { display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1; }
-.month-year { font-size:10px; color:#3b6b3e; }
-.month-month { font-size:12px; font-weight:700; color:#1f4f1a; }
-
-/* Year-Month Grid (Selected Year) */
-/* Year-Month Grid (Selected Year) */
-.year-month-grid { display:grid; gap:6px; padding:0; align-items:center; justify-content:flex-start; width: 100%; }
-.year-month-grid .month-cell { height:40px; display:flex; align-items:center; justify-content:center; border-radius:6px; margin:0; min-width: 0; }
-
-/* Calendar (Day Mode) */
-.calendar-header { display:flex; flex-direction:column; gap:6px; align-items:center; width: 100%; }
-.weekday-row { display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; padding:0; width: 100%; margin-bottom:6px; }
-.weekday-cell { width:auto; height:22px; display:flex; align-items:center; justify-content:center; font-size:13px; color:#2f7d32; }
-
-.calendar-weeks { display:flex; flex-direction:column; gap:8px; align-items:center; width: 100%; }
-.calendar-week-block { display:flex; flex-direction:column; gap:6px; width: 100%; }
-.calendar-week { display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; width: 100%; }
-
-.day-column { display:flex; flex-direction:column; align-items:center; width: 100%; }
-.day-cell { width:100%; aspect-ratio: 1; height:auto; border-radius:6px; background:#eaf6ea; display:flex; align-items:center; justify-content:center; border:none; padding:0; }
-.day-cell .day-num { font-size:15px; font-weight:700; color:#234b26; }
-.day-cell.active { box-shadow: inset 0 -3px 6px rgba(0,0,0,0.06); background: #eaf6ea !important; }
-.day-cell.out-of-month .day-num { color:#9aa0a6 !important; font-weight:500; }
-
-.indicators { display:flex; flex-direction:column; gap:4px; margin-top:6px; align-items:center; width: 100%; }
-.indicator-seg { width:100%; height:6px; border-radius:3px; cursor:pointer; }
-
-/* Ensure date squares stay light green even when 'active' */
-.day-column .day-cell { background: #eef8ee !important; }
-
-/* Roll-lines: one horizontal thin color line per roll, aligned under calendar */
-.roll-lines { display:inline-block; flex-direction:column; gap:8px; margin-top:8px; }
-.roll-line { display:flex; gap:8px; align-items:center; cursor:pointer; padding:2px 6px; }
-.roll-line:hover { filter:brightness(0.98); }
-.roll-week { display:flex; gap:8px; }
-.roll-cell { width:44px; height:8px; border-radius:4px; background:transparent; }
-.roll-cell.active { box-shadow: none; }
-
-/* Row calendar alignment: ensure timeline rows use same spacing */
-.timeline .calendar-week, .timeline .day-cell { gap:8px; }
-
-/* Swap year/month font sizes when in day (month) view: month should be larger */
-.timeline.days .header-year { font-size:13px; font-weight:600; }
-.timeline.days .header-month { font-size:18px; font-weight:800; margin-top:0; }
-
-/* Make header label size match roll name */
-.timeline .timeline-label, .timeline-row .timeline-label { font-size:16px; }
-.header-ym { display:flex; flex-direction:column; }
-.header-year, .header-year-only { font-size:16px; font-weight:700; color:#243b22; }
-.header-month { font-size:13px; color:#3b6b3e; margin-top:2px; }
-
-/* Remove the thin divider under the timeline header and hide any hr inside timeline */
-.timeline-header { border-bottom: none !important; }
-.timeline hr { display: none !important; }
 
 /* Image Viewer */
 .iv-overlay {
@@ -1014,7 +778,6 @@ form button:hover {
 
 /* Fix for LazyLoadImage wrapper span to ensure it fills the container */
 .card-cover > span,
-.overview-thumb > span,
 .photo-thumb > span {
   width: 100% !important;
   height: 100% !important;
@@ -1081,161 +844,6 @@ form button:hover {
 @media (max-width: 720px) {
   /* .card-cover { height:140px; } */ /* Remove fixed height on mobile to respect aspect-ratio */
   .card-grid { gap:12px; }
-}
-
-/* Tag Cloud Styles */
-.tag-cloud-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 20px 0;
-}
-
-.tag-cloud-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  padding: 10px 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 120px;
-  text-decoration: none;
-  color: inherit;
-}
-
-.tag-cloud-item:hover {
-  border-color: #2f7d32;
-  background: #f3faf3;
-  transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(47, 125, 50, 0.1);
-}
-
-.tag-cloud-name {
-  font-size: 15px;
-  font-weight: 500;
-  color: #333;
-}
-
-.tag-cloud-count {
-  font-size: 13px;
-  color: #888;
-  background: #f5f5f5;
-  padding: 2px 8px;
-  border-radius: 12px;
-}
-
-.tag-cloud-item:hover .tag-cloud-name {
-  color: #2f7d32;
-}
-
-.tag-cloud-item:hover .tag-cloud-count {
-  background: #e0f0e0;
-  color: #2f7d32;
-}
-
-.btn-back {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #555;
-  transition: background 0.2s;
-}
-
-.btn-back:hover {
-  background: #eee;
-  color: #000;
-}
-
-/* Roll Detail Styles */
-.roll-detail-header {
-  background: #fff;
-  border-radius: 16px;
-  padding: 32px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
-  margin-bottom: 32px;
-  display: flex;
-  gap: 32px;
-  align-items: flex-start;
-  border: 1px solid #f0f0f0;
-  min-height: 220px;
-}
-
-.roll-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.roll-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 32px;
-}
-
-.roll-title {
-  font-size: 36px;
-  font-weight: 800;
-  color: #1a1a1a;
-  margin: 0;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-}
-
-.roll-edit-btn {
-  background: transparent;
-  border: 1px solid #e0e0e0;
-  color: #666;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.roll-edit-btn:hover {
-  border-color: #ccc;
-  color: #333;
-  background: #f9f9f9;
-}
-
-.roll-meta-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 24px 32px;
-  margin-bottom: 16px;
-}
-
-.roll-meta-item {
-  display: flex;
-  flex-direction: column;
-}
-
-.roll-meta-label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: #999;
-  margin-bottom: 8px;
-  font-weight: 700;
-}
-
-.roll-meta-value {
-  font-size: 16px;
-  color: #222;
-  font-weight: 500;
-  line-height: 1.5;
 }
 
 /* ========================================
@@ -1379,40 +987,6 @@ form button:hover {
   border-radius: 6px;
 }
 
-.roll-actions-bar {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding-top: 24px;
-  border-top: 1px solid #f5f5f5;
-  margin-top: auto;
-}
-
-.segmented-control {
-  display: inline-flex;
-  background: #f2f2f2;
-  padding: 5px;
-  border-radius: 10px;
-}
-
-.segment-btn {
-  padding: 10px 26px;
-  border: none;
-  background: transparent;
-  font-size: 15px;
-  font-weight: 600;
-  color: #555;
-  cursor: pointer;
-  border-radius: 10px;
-  transition: all 0.2s;
-}
-
-.segment-btn.active {
-  background: #fff;
-  color: #000;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-}
-
 .primary-btn {
   background: #222;
   color: #fff;
@@ -1430,22 +1004,6 @@ form button:hover {
 
 .primary-btn:hover {
   background: #000;
-}
-
-.roll-cover-wrapper {
-  flex-shrink: 0;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-}
-
-.roll-cover-image {
-  width: 220px;
-  height: 220px;
-  object-fit: cover;
-  border-radius: 16px;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.12);
-  border: 1px solid rgba(0,0,0,0.05);
 }
 
 /* Photo Grid Improvements */
@@ -1510,70 +1068,22 @@ form button:hover {
 }
 
 /* ========================================
-   HeroUI Components - Electron Compatibility
-   Solid backgrounds to fix transparency issues in Electron
-   Theme-aware: only apply dark backgrounds in dark mode
+   Legacy Dark-Mode Adaptations
+   旧版遗留区块的暗色适配。集中维护，随对应区块
+   逐步迁移到 Tailwind 后删除。
    ======================================== */
 
-/* Dropdown Menu - Dark Mode Only */
-html.dark [data-slot="content"][data-open="true"],
-html.dark [role="listbox"],
-html.dark [role="menu"] {
-  background-color: #18181b !important;
-  border: 1px solid #27272a !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+/* --- RollGrid 卡片（.card 系列） --- */
+.dark .card {
+  background: #27272a;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
-
-/* Light Mode - Use white backgrounds */
-html:not(.dark) [data-slot="content"][data-open="true"],
-html:not(.dark) [role="listbox"],
-html:not(.dark) [role="menu"] {
-  background-color: #ffffff !important;
-  border: 1px solid #e4e4e7 !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+.dark .card:hover { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5); }
+.dark .card-cover { background: #18181b; }
+.dark .card-body .card-title { color: #e4e4e7; }
+.dark .card-overlay {
+  background: rgba(0, 0, 0, 0.45) !important;
+  color: #f4f4f5;
 }
-
-/* Popover / Tooltip - Dark Mode Only */
-html.dark [data-slot="base"][data-open="true"],
-html.dark .heroui-popover-content,
-html.dark [data-heroui-popover] {
-  background-color: #18181b !important;
-  border: 1px solid #27272a !important;
-}
-
-/* Popover / Tooltip - Light Mode */
-html:not(.dark) [data-slot="base"][data-open="true"],
-html:not(.dark) .heroui-popover-content,
-html:not(.dark) [data-heroui-popover] {
-  background-color: #ffffff !important;
-  border: 1px solid #e4e4e7 !important;
-}
-
-/* Autocomplete Listbox - Dark Mode Only */
-html.dark [data-slot="listbox"] {
-  background-color: #18181b !important;
-}
-
-html:not(.dark) [data-slot="listbox"] {
-  background-color: #ffffff !important;
-}
-
-/* Modal Content (backup for custom modals) - Dark Mode Only */
-html.dark [data-slot="wrapper"] [data-slot="base"] {
-  background-color: #18181b !important;
-}
-
-html:not(.dark) [data-slot="wrapper"] [data-slot="base"] {
-  background-color: #ffffff !important;
-}
-
-/* Select dropdown - Dark Mode Only */
-html.dark [data-slot="listboxWrapper"] {
-  background-color: #18181b !important;
-  border: 1px solid #27272a !important;
-}
-
-html:not(.dark) [data-slot="listboxWrapper"] {
-  background-color: #ffffff !important;
-  border: 1px solid #e4e4e7 !important;
-}
+.dark .card-overlay .card-title { color: #f4f4f5; }
+.dark .card-overlay .card-meta { color: rgba(244, 244, 245, 0.8); }

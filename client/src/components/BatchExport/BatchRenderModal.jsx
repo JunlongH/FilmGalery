@@ -5,7 +5,10 @@
  * @description 批量 FilmLab 渲染配置界面
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { listLuts } from '../../api/luts';
+import { getCacheStrategy } from '../../lib';
 import BatchExportProgress from './BatchExportProgress';
 import {
   createBatchRenderLibrary,
@@ -20,6 +23,7 @@ import {
 } from '../../api';
 import ComputeService from '../../services/ComputeService'; // Added for hybrid mode
 import RemoteFileBrowser from '../common/RemoteFileBrowser'; // Added for remote path selection
+import useIsDarkMode from '../../hooks/useIsDarkMode';
 
 // ============================================================================
 // 常量
@@ -55,6 +59,7 @@ export default function BatchRenderModal({
   onComplete,
   onOpenFilmLab // 可选: 打开 FilmLab 调参
 }) {
+  const isDark = useIsDarkMode();
   // 状态
   const [outputMode, setOutputMode] = useState(OUTPUT_MODE.LIBRARY);
   const [outputDir, setOutputDir] = useState('');
@@ -346,10 +351,6 @@ export default function BatchRenderModal({
   };
   
   if (!isOpen) return null;
-  
-  // Theme detection
-  const isDark = document.documentElement.classList.contains('dark') || 
-                 document.documentElement.getAttribute('data-theme') === 'dark';
   
   // Theme-aware colors
   const colors = {
@@ -722,30 +723,21 @@ function RadioGroup({ value, onChange, options, colors }) {
  * LUT 选择器组件
  */
 function LutSelector({ lutFileName, lutIntensity, onLutSelect, onIntensityChange, colors }) {
-  const [luts, setLuts] = useState([]);
-  // const [loading, setLoading] = useState(false); // unused
+  const queryClient = useQueryClient();
   const fileInputRef = React.useRef(null);
-  
-  // 加载已上传的 LUT 文件列表
-  useEffect(() => {
-    loadLuts();
-  }, []);
-  
-  const loadLuts = async () => {
-    // setLoading(true); // unused
-    try {
-      const apiBase = getApiBase();
-      const res = await fetch(`${apiBase}/api/luts`);
-      if (res.ok) {
-        const data = await res.json();
-        setLuts(data.luts || []);
-      }
-    } catch (e) {
-      console.error('Failed to load LUTs:', e);
-    } finally {
-      // setLoading(false);
-    }
-  };
+
+  // LUT 列表走 React Query（STATIC 策略）：弹窗反复打开不再重复请求
+  const { data: lutsData } = useQuery({
+    queryKey: ['luts'],
+    queryFn: listLuts,
+    ...getCacheStrategy('luts'),
+  });
+  const luts = useMemo(() => lutsData?.luts || [], [lutsData]);
+
+  const loadLuts = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['luts'] }),
+    [queryClient]
+  );
   
   // 上传新 LUT 文件
   const handleUpload = async (e) => {

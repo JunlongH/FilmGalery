@@ -92,7 +92,7 @@ export default function Statistics({ mode = 'stats' }) {
   const handleModeChange = (mode) => navigate(mode === 'spending' ? '/spending' : '/stats');
 
   return (
-    <div className="w-full min-h-full bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-6 lg:p-8 space-y-8 animate-in fade-in duration-500 pb-20">
+    <div className="w-full min-h-full bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-6 lg:p-8 space-y-8 animate-fade-in pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-700 pb-6">
         <div>
           <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">

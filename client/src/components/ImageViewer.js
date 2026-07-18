@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { buildUploadUrl, updatePositiveFromNegative, getSingleDownloadUrl } from '../api';
+import { addCacheKey } from '../utils/imageOptimization';
 import FilmLab from './FilmLab/FilmLab';
 import ModalDialog from './ModalDialog';
 import PhotoDetailsSidebar from './PhotoDetailsSidebar.jsx';
@@ -99,6 +100,24 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
     }
   }, [batchRenderCallback, img, availableSources]);
 
+  // 主图 URL：基于 updated_at 的稳定缓存键（文件未变则命中浏览器 immutable 缓存，
+  // 照片更新后 updated_at 变化自动获得新 URL）。避免在渲染体内拼 Date.now()
+  // 导致每次 zoom/pan 都重新下载原图。
+  const imgUrl = useMemo(() => {
+    if (!img) return '';
+    let rawCandidate = null;
+    if (viewMode === 'negative') {
+      if (img.negative_rel_path) rawCandidate = `/uploads/${img.negative_rel_path}`;
+      else if (img.full_rel_path) rawCandidate = `/uploads/${img.full_rel_path}`; // legacy fallback
+      else if (img.filename) rawCandidate = img.filename; else rawCandidate = img;
+    } else {
+      if (img.positive_rel_path) rawCandidate = `/uploads/${img.positive_rel_path}`;
+      else if (img.full_rel_path) rawCandidate = `/uploads/${img.full_rel_path}`; // legacy fallback
+      else if (img.filename) rawCandidate = img.filename; else rawCandidate = img;
+    }
+    return addCacheKey(buildUploadUrl(rawCandidate), img.updated_at);
+  }, [img, viewMode]);
+
   function onWheel(e) {
     e.preventDefault();
     const delta = e.deltaY;
@@ -153,22 +172,6 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
   };
 
   if (!images || images.length === 0) return null;
-  // img is already defined above for hook dependencies
-  let rawCandidate = null;
-
-  // Prefer new positive/negative paths with thumbs; fallback to legacy fields
-  if (viewMode === 'negative') {
-    if (img.negative_rel_path) rawCandidate = `/uploads/${img.negative_rel_path}`;
-    else if (img.full_rel_path) rawCandidate = `/uploads/${img.full_rel_path}`; // legacy fallback
-    else if (img.filename) rawCandidate = img.filename; else rawCandidate = img;
-  } else {
-    // Positive/main view
-    if (img.positive_rel_path) rawCandidate = `/uploads/${img.positive_rel_path}`;
-    else if (img.full_rel_path) rawCandidate = `/uploads/${img.full_rel_path}`; // legacy fallback
-    else if (img.filename) rawCandidate = img.filename; else rawCandidate = img;
-  }
-
-  const imgUrl = buildUploadUrl(rawCandidate) + `?t=${Date.now()}`;
 
   /**
    * 严格源路径选择 - 不允许跨类型回退
@@ -272,9 +275,10 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
       );
     }
 
-    // 添加时间戳防止缓存问题，并在 photoId 变化时强制重新加载
+    // 使用 updated_at 作为缓存键：重新导出/保存后 updated_at 变化 → 自动加载新文件；
+    // 未变化时命中浏览器 immutable 缓存，避免重复下载大图。
     const targetUrl = sourceResult.path 
-        ? buildUploadUrl(`/uploads/${sourceResult.path}`) + `?t=${Date.now()}&photoId=${img.id}`
+        ? addCacheKey(buildUploadUrl(`/uploads/${sourceResult.path}`), img.updated_at)
         : imgUrl;
     
     // 如果有警告但仍然有效，在控制台记录

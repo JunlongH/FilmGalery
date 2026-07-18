@@ -8,8 +8,8 @@ import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, 
   eachDayOfInterval, addMonths, subMonths, addYears, subYears, setMonth 
 } from 'date-fns';
-import { getApiBase, buildUploadUrl } from '../../api';
-import { addCacheKey } from '../../utils/imageOptimization';
+import { getApiBase } from '../../api';
+import { resolveThumbUrl } from '../../utils/thumbResolver';
 
 const LifeLogContext = createContext(null);
 
@@ -88,17 +88,9 @@ export function LifeLogProvider({ children }) {
     });
   }, []);
 
-  // Helper to get photo URL with cache key based on updated_at
+  // Helper to get photo URL（统一走 thumbResolver：回退链 + updated_at 缓存键）
   const getPhotoUrl = useCallback((photo) => {
-    if (!photo) return null;
-    let path = photo.positive_thumb_rel_path || photo.thumb_rel_path || 
-               photo.positive_rel_path || photo.full_rel_path;
-    if (!path) return null;
-    if (!path.startsWith('http') && !path.startsWith('/') && 
-        !path.startsWith('uploads') && !path.includes(':')) {
-      path = `uploads/${path}`;
-    }
-    return addCacheKey(buildUploadUrl(path), photo.updated_at);
+    return resolveThumbUrl(photo, 'positive');
   }, []);
 
   // Get days for current month view
@@ -114,7 +106,8 @@ export function LifeLogProvider({ children }) {
     return photosByDay.get(format(selectedDay, 'yyyy-MM-dd')) || [];
   }, [selectedDay, photosByDay]);
 
-  const value = {
+  // value memo 化：避免 provider 重渲染时所有消费者被迫重渲染
+  const value = useMemo(() => ({
     // State
     currentDate,
     viewMode,
@@ -138,7 +131,12 @@ export function LifeLogProvider({ children }) {
     error,
     // Utilities
     getPhotoUrl
-  };
+  }), [
+    currentDate, viewMode, selectedDay, year, month,
+    setViewMode, setSelectedDay, handlePrev, handleNext, switchToMonth, saveCoverPref,
+    photos, photosByDay, calendarDays, selectedPhotos, coverPrefs,
+    isLoading, error, getPhotoUrl,
+  ]);
 
   return (
     <LifeLogContext.Provider value={value}>

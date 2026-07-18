@@ -39,30 +39,13 @@ module.exports = {
         '.js', '.mjs', '.jsx', '.ts', '.tsx', '.json'
       ];
       
-      // Fix TDZ (Temporal Dead Zone) error in production build
-      // Terser's collapse_vars and reduce_vars can cause variable reference
-      // issues in scope-hoisted modules with destructured parameters
-      if (webpackConfig.optimization && webpackConfig.optimization.minimizer) {
-        webpackConfig.optimization.minimizer.forEach(plugin => {
-          if (plugin.constructor && plugin.constructor.name === 'TerserPlugin') {
-            const terserOpts = plugin.options?.minimizer?.options;
-            if (terserOpts && terserOpts.compress) {
-              terserOpts.compress = {
-                ...terserOpts.compress,
-                collapse_vars: false,
-                reduce_vars: false,
-              };
-            }
-          }
-        });
-      }
+      // TDZ workaround (历史遗留，见 git 历史)：
+      // 早期版本在开启 scope hoisting + collapse_vars 时遇到 TDZ 错误。
+      // 当前代码库经静态分析无循环依赖，已恢复默认优化；
+      // 若运行时再现 "Cannot access 'X' before initialization"，可回退以下两项：
+      //   terserOpts.compress.collapse_vars = false / reduce_vars = false
+      //   webpackConfig.optimization.concatenateModules = false
 
-      // Additional TDZ safety: disable scope hoisting (module concatenation)
-      // This avoids cross-module const/let ordering issues in complex render paths
-      if (webpackConfig.optimization) {
-        webpackConfig.optimization.concatenateModules = false;
-      }
-      
       return webpackConfig;
     },
   },

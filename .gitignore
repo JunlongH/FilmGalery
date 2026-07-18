@@ -1,18 +1,46 @@
+# Dependencies
 node_modules/
+
+# Build artifacts
 build/
 dist/
 dist_v*/
+*.zip
+
+# Runtime data
 uploads/
+tmp/
 temp_expo_orig/
+
+# Expo
 /.expo/
 /.expo-shared/
+
+# Logs
 *.log
+
+# OS
 .DS_Store
+
+# Env / secrets
 .env
+.env.*
+!docker/.env.example
+
+# SQLite databases
 film.db
 server/film.db
 server/film.db-wal
 server/film.db-shm
 *.db-wal
 *.db-shm
+
+# Native build output
+packages/@filmgallery/libraw-native/build/
+
+# Local tooling
+.opencode/
+.visual-test/
+
+# Signing
 *.keystore

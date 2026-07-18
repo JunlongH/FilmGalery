@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { uploadPhotoToRoll } from '../api';
+import useIsDarkMode from '../hooks/useIsDarkMode';
 import '../styles/forms.css';
 
 // Theme-aware styles generator
@@ -154,8 +155,7 @@ export default function UploadModal({ isOpen, onClose, rollId, onUploadComplete 
   const fileInputRef = useRef(null);
   
   // Theme detection
-  const isDark = document.documentElement.classList.contains('dark') || 
-                 document.documentElement.getAttribute('data-theme') === 'dark';
+  const isDark = useIsDarkMode();
   const styles = getStyles(isDark);
   
   // Stats

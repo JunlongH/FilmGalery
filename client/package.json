@@ -1,6 +1,6 @@
 {
   "name": "film-manager-client",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
   "homepage": "./",
   "engines": {
@@ -24,11 +24,9 @@
     "framer-motion": "^12.23.24",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",
-    "piexifjs": "^1.0.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-globe.gl": "^2.37.0",
-    "react-lazy-load-image-component": "^1.6.3",
     "react-leaflet": "^4.2.1",
     "react-leaflet-cluster": "^4.0.0",
     "react-markdown": "^10.1.0",
@@ -53,7 +51,7 @@
   },
   "scripts": {
     "start": "cross-env PORT=3000 REACT_APP_API_BASE=http://localhost:4000 craco start",
-    "build": "craco build"
+    "build": "cross-env GENERATE_SOURCEMAP=false craco build"
   },
   "browserslist": [
     "defaults"

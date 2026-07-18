@@ -8,7 +8,7 @@
  * - Results grid
  */
 import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { 
   Tabs, 
   Tab,
@@ -59,7 +59,7 @@ export default function BrowseSection() {
     queryFn: () => getRolls(stableFilters),
     enabled: mode === 'rolls',
     ...getCacheStrategy('rolls'),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 
   const photosQuery = useQuery({
@@ -67,7 +67,7 @@ export default function BrowseSection() {
     queryFn: () => searchPhotos(stableFilters),
     enabled: mode === 'photos',
     ...getCacheStrategy('photos'),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 
   const isLoading = mode === 'rolls' ? rollsQuery.isLoading : photosQuery.isLoading;

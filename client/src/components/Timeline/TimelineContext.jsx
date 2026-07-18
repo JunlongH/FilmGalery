@@ -2,7 +2,7 @@
  * TimelineContext - Shared state management for Timeline components
  * Manages year/month selection, computed timeline data, and palette
  */
-import React, { createContext, useContext, useState, useMemo } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getRolls } from '../../api';
 
@@ -119,20 +119,6 @@ export function TimelineProvider({ children }) {
     
     const yearNum = Number(selectedYear);
     
-    // Debug: log first few rolls to see their date structure
-    if (rolls.length > 0) {
-      console.log('[Timeline] Sample roll data:', {
-        id: rolls[0].id,
-        title: rolls[0].title,
-        start_date: rolls[0].start_date,
-        startDate: rolls[0].startDate,
-        end_date: rolls[0].end_date,
-        endDate: rolls[0].endDate,
-        shot_date: rolls[0].shot_date,
-        date: rolls[0].date
-      });
-    }
-    
     // Filter rolls that overlap with the selected year (and optionally month)
     const filtered = rolls.filter(roll => {
       // Only use actual shooting dates, not created_at (which is system timestamp)
@@ -175,7 +161,14 @@ export function TimelineProvider({ children }) {
     return filtered;
   }, [rolls, selectedYear, selectedMonth]);
 
-  const value = {
+  // getRollColor 稳定化（模块级纯函数，不随渲染重建）
+  const getRollColor = useCallback(
+    (rollId) => PALETTE[(Number(rollId) || 0) % PALETTE.length],
+    []
+  );
+
+  // value memo 化：避免 provider 重渲染时所有消费者被迫重渲染
+  const value = useMemo(() => ({
     // State
     selectedYear,
     selectedMonth,
@@ -192,8 +185,12 @@ export function TimelineProvider({ children }) {
     error,
     // Utils
     palette: PALETTE,
-    getRollColor: (rollId) => PALETTE[(Number(rollId) || 0) % PALETTE.length]
-  };
+    getRollColor,
+  }), [
+    selectedYear, selectedMonth,
+    rolls, grouped, years, monthsForYear, counts, selectedRolls,
+    isLoading, error, getRollColor,
+  ]);
 
   return (
     <TimelineContext.Provider value={value}>

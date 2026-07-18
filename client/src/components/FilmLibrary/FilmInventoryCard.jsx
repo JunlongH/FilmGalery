@@ -23,6 +23,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import { buildUploadUrl } from '../../api';
+import useIsDarkMode from '../../hooks/useIsDarkMode';
 
 // 状态和颜色配置
 const STATUS_CONFIG = {
@@ -68,8 +69,7 @@ export default function FilmInventoryCard({
   const format = film?.format || '135';
 
   // Detect theme for action panel
-  const isDark = document.documentElement.classList.contains('dark') || 
-                 document.documentElement.getAttribute('data-theme') === 'dark';
+  const isDark = useIsDarkMode();
 
   // 状态显示逻辑
   const statusLabel = item.status === 'loaded' && item.loaded_camera

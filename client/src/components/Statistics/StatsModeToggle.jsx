@@ -4,31 +4,15 @@
  * 使用 HeroUI Tabs 实现 Overview/Spending 模式切换
  */
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { BarChart3, Wallet } from 'lucide-react';
-
-// 响应式暗色模式检测
-function useDarkMode() {
-  const [isDark, setIsDark] = useState(false);
-  
-  useEffect(() => {
-    const checkDark = () => {
-      setIsDark(document.documentElement.classList.contains('dark'));
-    };
-    checkDark();
-    const observer = new MutationObserver(checkDark);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
-  
-  return isDark;
-}
+import useIsDarkMode from '../../hooks/useIsDarkMode';
 
 export default function StatsModeToggle({
   mode = 'stats', // 'stats' | 'spending'
   onModeChange
 }) {
-  const isDark = useDarkMode();
+  const isDark = useIsDarkMode();
   
   const containerStyle = {
     display: 'flex',

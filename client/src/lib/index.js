@@ -1,12 +1,11 @@
 /**
  * 库模块统一导出
  * 
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 export { 
   queryClient, 
-  cacheUtils, 
   CACHE_STRATEGIES,
   DATA_CACHE_MAP,
   getCacheStrategy,
@@ -16,7 +15,5 @@ export {
 
 export {
   prefetchManager,
-  prefetchOverviewData,
-  prefetchRollDetailData,
   prefetchCommonData
 } from './dataPrefetch';

@@ -13,6 +13,7 @@ import {
   cancelBatchDownload,
   checkDownloadAvailability
 } from '../../api';
+import useIsDarkMode from '../../hooks/useIsDarkMode';
 
 // ============================================================================
 // 常量
@@ -49,6 +50,7 @@ export default function BatchDownloadModal({
   allPhotos = [],
   onComplete
 }) {
+  const isDark = useIsDarkMode();
   // 状态
   const [downloadType, setDownloadType] = useState(DOWNLOAD_TYPE.POSITIVE);
   const [outputDir, setOutputDir] = useState('');
@@ -182,10 +184,6 @@ export default function BatchDownloadModal({
   };
   
   if (!isOpen) return null;
-  
-  // Theme detection
-  const isDark = document.documentElement.classList.contains('dark') || 
-                 document.documentElement.getAttribute('data-theme') === 'dark';
   
   // Theme-aware colors
   const colors = {

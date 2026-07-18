@@ -214,7 +214,7 @@ export default function ServerSettings() {
   );
 
   return (
-    <div className="space-y-8 w-full max-w-6xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-8 w-full max-w-6xl mx-auto pb-12 animate-fade-in-up">
       
       <div className="flex items-center gap-3 mb-6">
         <div className="p-2 bg-primary/10 rounded-lg">
@@ -248,7 +248,7 @@ export default function ServerSettings() {
       </div>
 
       {serverMode !== 'local' && (
-        <Card className="animate-in fade-in zoom-in-95 w-full">
+        <Card className="animate-scale-in w-full">
           <CardBody className="p-6 space-y-4">
             <label className="block text-sm font-medium mb-2">Remote Server URL</label>
             <div className="flex flex-col sm:flex-row gap-2 w-full">

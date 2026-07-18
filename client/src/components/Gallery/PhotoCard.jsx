@@ -10,26 +10,7 @@ import { Card, Button, Tooltip } from '@heroui/react';
 import { motion } from 'framer-motion';
 import { Heart, Trash2, Tag, Eye, MoreHorizontal, Star } from 'lucide-react';
 import LazyImage from '../common/LazyImage';
-import { buildUploadUrl } from '../../api';
-
-// Get best available image URL for a photo
-const getPhotoUrl = (photo, preferThumb = true) => {
-  let candidate = null;
-  
-  if (preferThumb) {
-    if (photo.positive_thumb_rel_path) candidate = `/uploads/${photo.positive_thumb_rel_path}`;
-    else if (photo.thumb_rel_path) candidate = `/uploads/${photo.thumb_rel_path}`;
-  }
-  
-  if (!candidate) {
-    if (photo.positive_rel_path) candidate = `/uploads/${photo.positive_rel_path}`;
-    else if (photo.full_rel_path) candidate = `/uploads/${photo.full_rel_path}`;
-    else if (photo.filename) candidate = photo.filename;
-  }
-  
-  if (!candidate) return null;
-  return buildUploadUrl(candidate);
-};
+import { resolveThumbUrl } from '../../utils/thumbResolver';
 
 // 使用 memo 包装以避免不必要的重渲染
 const PhotoCard = memo(function PhotoCard({
@@ -46,7 +27,7 @@ const PhotoCard = memo(function PhotoCard({
   const [imageError, setImageError] = useState(false);
   
   const isFavorite = (photo.rating | 0) === 1;
-  const imageUrl = getPhotoUrl(photo, true);
+  const imageUrl = resolveThumbUrl(photo, 'positive');
 
   const sizeClasses = {
     sm: 'min-w-[120px]',

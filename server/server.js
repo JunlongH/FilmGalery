@@ -165,8 +165,11 @@ app.use('/uploads/tmp', express.static(localTmpDir));
 // Serve thumb directories with short-lived cache (thumbs are mutable — regenerated on re-export)
 // Must be mounted BEFORE the generic /uploads route so it takes priority.
 app.use('/uploads/rolls', (req, res, next) => {
-  // Match paths like /{rollId}/thumb/... 
-  if (/\/\d+\/thumb\//.test(req.path)) {
+  // Match any .../thumb/... path：
+  // - /{rollId}/thumb/...（正片缩略图）
+  // - /{folder}/negative/thumb/...（负片缩略图）
+  // - 非数字 folderName 的卷目录（deduceFolderName 允许自定义名）
+  if (/\/thumb\//.test(req.path)) {
     return express.static(rollsDir, thumbStaticOptions)(req, res, next);
   }
   next();

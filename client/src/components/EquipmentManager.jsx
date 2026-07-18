@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { getCacheStrategy } from '../lib';
 import {
   getCameras, createCamera, updateCamera, deleteCamera, uploadCameraImage,
   getLenses, createLens, updateLens, deleteLens, uploadLensImage,
@@ -26,11 +28,20 @@ const TABS = [
   { key: 'films', label: 'Films', icon: Film }
 ];
 
+// 各 tab 的数据获取函数（模块级，保持 queryFn 引用稳定）
+const EQUIPMENT_FETCHERS = {
+  cameras: () => getCameras({}),
+  lenses: () => getLenses({}),
+  flashes: () => getFlashes({}),
+  'film-backs': () => getFilmBacks({}),
+  scanners: () => getScanners({}),
+  films: () => getFilms(),
+};
+
 export default function EquipmentManager() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('cameras');
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const [editItem, setEditItem] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -39,34 +50,27 @@ export default function EquipmentManager() {
   const [relatedRolls, setRelatedRolls] = useState([]);
   const [loadingRolls, setLoadingRolls] = useState(false);
 
-  const loadItems = useCallback(async (noCache = false) => {
-    setLoading(true);
-    try {
-      let data;
-      switch (activeTab) {
-        case 'cameras': data = await getCameras({}, noCache); break;
-        case 'lenses': data = await getLenses({}, noCache); break;
-        case 'flashes': data = await getFlashes({}, noCache); break;
-        case 'film-backs': data = await getFilmBacks({}, noCache); break;
-        case 'scanners': data = await getScanners({}, noCache); break;
-        case 'films': data = await getFilms(noCache); break;
-        default: data = [];
-      }
-      setItems(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error(`Failed to load ${activeTab}:`, err);
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab]);
+  // 设备数据统一走 React Query（STATIC 策略：设备库极少变化）
+  const { data: itemsData, isLoading: loading } = useQuery({
+    queryKey: ['equipment', activeTab],
+    queryFn: EQUIPMENT_FETCHERS[activeTab],
+    ...getCacheStrategy('equipment'),
+    placeholderData: keepPreviousData,
+  });
+  const items = useMemo(() => (Array.isArray(itemsData) ? itemsData : []), [itemsData]);
 
+  // CRUD / 上传后刷新当前 tab 缓存
+  const invalidateItems = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['equipment', activeTab] }),
+    [queryClient, activeTab]
+  );
+
+  // Tab 切换时重置选择/搜索（数据加载由 useQuery 自动处理）
   useEffect(() => {
-    loadItems();
     setSelectedId(null);
     setEditItem(null);
-    setSearchQuery(''); // Reset search when tab changes
-  }, [loadItems]);
+    setSearchQuery('');
+  }, [activeTab]);
 
   // Filter items by search query
   const filteredItems = useMemo(() => {
@@ -141,7 +145,7 @@ export default function EquipmentManager() {
         case 'films': created = await createFilm(data); break;
         default: return;
       }
-      setItems(prev => [...prev, created]);
+      await invalidateItems();
       setShowAddModal(false);
       setSelectedId(created.id);
     } catch (err) {
@@ -164,8 +168,7 @@ export default function EquipmentManager() {
       }
       // Ensure updated item is valid and update local state
       if (updated && updated.id) {
-        const updatedId = updated.id;
-        setItems(prev => prev.map(i => i.id === updatedId ? updated : i));
+        await invalidateItems();
       }
       setEditItem(null);
     } catch (err) {
@@ -185,7 +188,7 @@ export default function EquipmentManager() {
         case 'films': await deleteFilm(id); break;
         default: return;
       }
-      setItems(prev => prev.filter(i => i.id !== id));
+      await invalidateItems();
       if (selectedId === id) setSelectedId(null);
       setConfirmDelete(null);
     } catch (err) {
@@ -205,7 +208,7 @@ export default function EquipmentManager() {
         case 'films': await uploadFilmImage(id, file); break;
         default: return;
       }
-      await loadItems(true);
+      await invalidateItems();
     } catch (err) {
       console.error('Image upload failed:', err);
       alert('Image upload failed');
@@ -213,7 +216,7 @@ export default function EquipmentManager() {
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 animate-in fade-in duration-500 overflow-hidden">
+    <div className="w-full h-full flex flex-col bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 animate-fade-in overflow-hidden">
       <div className="flex-1 flex flex-col p-6 lg:p-8 min-h-0 w-full overflow-hidden">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-700 pb-6 mb-6 flex-shrink-0">
           <div>
@@ -319,7 +322,7 @@ export default function EquipmentManager() {
           {/* Detail Panel - Takes remaining space */}
           <div className="flex-1 bg-zinc-50 dark:bg-zinc-800 rounded-xl shadow-none flex flex-col overflow-hidden" style={{ maxHeight: 'calc(100vh - 260px)' }}>
             {selectedItem ? (
-                <div className="p-6 lg:p-8 overflow-y-auto flex-1 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="p-6 lg:p-8 overflow-y-auto flex-1 animate-slide-in-right">
                    <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 mb-8">
                       <div className="w-32 h-32 rounded-2xl bg-zinc-100 dark:bg-zinc-800 overflow-hidden flex items-center justify-center shadow-lg relative group">
                         {(selectedItem.image_path || selectedItem.thumbPath) ? (

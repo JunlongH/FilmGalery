@@ -14,6 +14,9 @@
  * @module utils/thumbResolver
  */
 
+import { buildUploadUrl } from '../api';
+import { addCacheKey } from './imageOptimization';
+
 // ── Thumb path (relative, DB value) ────────────────────────────────────────
 
 /**
@@ -32,6 +35,8 @@ export function resolveThumbPath(photo, mode = 'positive') {
         photo.negative_thumb_rel_path ||
         photo.thumb_rel_path ||
         photo.negative_rel_path ||
+        photo.full_rel_path ||
+        photo.filename ||
         null
       );
 
@@ -43,6 +48,7 @@ export function resolveThumbPath(photo, mode = 'positive') {
         photo.positive_rel_path ||
         photo.full_rel_path ||
         photo.negative_rel_path ||
+        photo.filename ||
         null
       );
 
@@ -53,6 +59,7 @@ export function resolveThumbPath(photo, mode = 'positive') {
         photo.thumb_rel_path ||
         photo.positive_rel_path ||
         photo.full_rel_path ||
+        photo.filename ||
         null
       );
   }
@@ -72,18 +79,52 @@ export function resolveFullPath(photo, mode = 'positive') {
 
   switch (mode) {
     case 'negative':
-      return photo.negative_rel_path || photo.full_rel_path || null;
+      return photo.negative_rel_path || photo.full_rel_path || photo.filename || null;
 
     case 'auto':
       return (
         photo.positive_rel_path ||
         photo.full_rel_path ||
         photo.negative_rel_path ||
+        photo.filename ||
         null
       );
 
     case 'positive':
     default:
-      return photo.positive_rel_path || photo.full_rel_path || null;
+      return photo.positive_rel_path || photo.full_rel_path || photo.filename || null;
   }
+}
+
+// ── URL-level helpers（buildUploadUrl + updated_at 缓存键）────────────────
+//
+// 所有组件应使用这两个函数获得最终 <img src>，而不是自行拼接：
+// - 统一 `?v=updated_at` 缓存键（文件未变命中浏览器 immutable 缓存，
+//   更新后自动获得新 URL；无 updated_at 时不加参数）
+// - 避免手写回退链与 `+ '?v='` 双问号拼接 bug
+
+/**
+ * 缩略图最终 URL
+ * @param {Object} photo
+ * @param {'positive'|'negative'|'auto'} [mode='positive']
+ * @returns {string|null}
+ */
+export function resolveThumbUrl(photo, mode = 'positive') {
+  const path = resolveThumbPath(photo, mode);
+  if (!path) return null;
+  const candidate = path.startsWith('/') || path.startsWith('http') ? path : `/uploads/${path}`;
+  return addCacheKey(buildUploadUrl(candidate), photo?.updated_at);
+}
+
+/**
+ * 全尺寸图最终 URL
+ * @param {Object} photo
+ * @param {'positive'|'negative'|'auto'} [mode='positive']
+ * @returns {string|null}
+ */
+export function resolveFullUrl(photo, mode = 'positive') {
+  const path = resolveFullPath(photo, mode);
+  if (!path) return null;
+  const candidate = path.startsWith('/') || path.startsWith('http') ? path : `/uploads/${path}`;
+  return addCacheKey(buildUploadUrl(candidate), photo?.updated_at);
 }

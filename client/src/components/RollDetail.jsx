@@ -1,10 +1,10 @@
 // src/components/RollDetail.jsx
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getRoll, getPhotos, getTags, setRollCover, deletePhoto, updateRoll, updatePhoto, buildUploadUrl, getFilms, getMetadataOptions } from '../api';
 import { getCacheStrategy } from '../lib';
 import { useParams } from 'react-router-dom';
-import ImageViewer from './ImageViewer';
+import ImageViewer from './common/LazyImageViewer';
 import RollHeader from './RollDetail/RollHeader';
 import RollToolbar from './RollDetail/RollToolbar';
 import PhotoItem from './PhotoItem';
@@ -12,15 +12,19 @@ import TagEditModal from './TagEditModal';
 import ModalDialog from './ModalDialog';
 import LocationSelect from './LocationSelect.jsx';
 import PhotoDetailsSidebar from './PhotoDetailsSidebar.jsx';
-import ContactSheetModal from './ContactSheetModal.jsx';
 import EquipmentSelector from './EquipmentSelector';
 import UploadModal from './UploadModal';
-import { BatchRenderModal, BatchDownloadModal } from './BatchExport';
-import { ImportPositiveModal } from './ImportPositive';
-import { RawImportWizard } from './RawImport';
+import { lazyModal } from './common/lazyModal';
 import '../styles/sidebar.css';
 import '../styles/forms.css';
 import '../styles/roll-detail-card.css';
+
+// 低频重型模态框：首次打开时才加载对应 chunk
+const ContactSheetModal = lazyModal(() => import('./ContactSheetModal.jsx'));
+const BatchRenderModal = lazyModal(() => import('./BatchExport').then(m => ({ default: m.BatchRenderModal })));
+const BatchDownloadModal = lazyModal(() => import('./BatchExport').then(m => ({ default: m.BatchDownloadModal })));
+const ImportPositiveModal = lazyModal(() => import('./ImportPositive').then(m => ({ default: m.ImportPositiveModal })));
+const RawImportWizard = lazyModal(() => import('./RawImport').then(m => ({ default: m.RawImportWizard })));
 
 export default function RollDetail() {
   const { id } = useParams();
@@ -50,23 +54,23 @@ export default function RollDetail() {
   // Batch Render Callback State
   const [batchRenderCallback, setBatchRenderCallback] = useState(null);
 
-  const showAlert = (title, message) => {
+  const showAlert = useCallback((title, message) => {
     setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: () => setDialog(prev => ({ ...prev, isOpen: false })) });
-  };
+  }, []);
 
-  const showConfirm = (title, message, onConfirm) => {
-    setDialog({ 
-      isOpen: true, 
-      type: 'confirm', 
-      title, 
-      message, 
+  const showConfirm = useCallback((title, message, onConfirm) => {
+    setDialog({
+      isOpen: true,
+      type: 'confirm',
+      title,
+      message,
       onConfirm: () => {
         onConfirm();
         setDialog(prev => ({ ...prev, isOpen: false }));
       },
       onCancel: () => setDialog(prev => ({ ...prev, isOpen: false }))
     });
-  };
+  }, []);
 
   const { data: roll } = useQuery({
     queryKey: ['roll', id],
@@ -93,24 +97,24 @@ export default function RollDetail() {
   const deletePhotoMutation = useMutation({
     mutationFn: deletePhoto,
     onSuccess: () => {
-      queryClient.invalidateQueries(['rollPhotos', id]);
-      queryClient.invalidateQueries(['roll', id]);
+      queryClient.invalidateQueries({ queryKey: ['rollPhotos', id] });
+      queryClient.invalidateQueries({ queryKey: ['roll', id] });
     }
   });
 
   const setCoverMutation = useMutation({
     mutationFn: ({ rollId, photoId }) => setRollCover(rollId, { photoId }),
-    onSuccess: () => queryClient.invalidateQueries(['roll', id])
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roll', id] })
   });
 
   const updateRollMutation = useMutation({
     mutationFn: ({ rollId, data }) => updateRoll(rollId, data),
-    onSuccess: () => queryClient.invalidateQueries(['roll', id])
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roll', id] })
   });
 
   const updatePhotoMutation = useMutation({
     mutationFn: ({ photoId, data }) => updatePhoto(photoId, data),
-    onSuccess: () => queryClient.invalidateQueries(['rollPhotos', id])
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rollPhotos', id] })
   });
 
   function resolveFilmName(rollObj) {
@@ -124,8 +128,8 @@ export default function RollDetail() {
   const filmName = resolveFilmName(roll);
 
   function handleUploadComplete() {
-    queryClient.invalidateQueries(['rollPhotos', id]);
-    queryClient.invalidateQueries(['roll', id]);
+    queryClient.invalidateQueries({ queryKey: ['rollPhotos', id] });
+    queryClient.invalidateQueries({ queryKey: ['roll', id] });
   }
 
   /* Old inline upload logic removed */
@@ -141,6 +145,46 @@ export default function RollDetail() {
       }
     });
   }
+
+  // 派生数据 memo 化：避免每次渲染重算
+  const positiveCount = useMemo(
+    () => photos.filter(p => !!p.full_rel_path || !!p.positive_rel_path).length,
+    [photos]
+  );
+  const negativeCount = useMemo(
+    () => photos.filter(p => !!p.negative_rel_path).length,
+    [photos]
+  );
+  const filteredPhotos = useMemo(
+    () => photos.filter(p => {
+      if (viewMode === 'positive') return !!p.full_rel_path || !!p.positive_rel_path;
+      if (viewMode === 'negative') return !!p.negative_rel_path;
+      return true;
+    }),
+    [photos, viewMode]
+  );
+  // O(1) 选中查找（原 selectedPhotos.some(...) 为 O(n×m)）
+  const selectedPhotoIds = useMemo(
+    () => new Set(selectedPhotos.map(sp => sp.id)),
+    [selectedPhotos]
+  );
+
+  // 稳定回调：配合 PhotoItem 的 React.memo 生效
+  const handleToggleSelect = useCallback((photo) => {
+    setSelectedPhotos(prev =>
+      prev.some(sp => sp.id === photo.id)
+        ? prev.filter(sp => sp.id !== photo.id)
+        : [...prev, photo]
+    );
+  }, []);
+
+  const handleSelectPhoto = useCallback((idx) => {
+    setSelectedPhotoIndex(idx);
+  }, []);
+
+  const handleEditTags = useCallback((photo) => {
+    setEditingTagsPhoto(photo);
+  }, []);
 
   async function onSetCover(photoId) {
     showConfirm('Set Cover', 'Set this photo as roll cover?', async () => {
@@ -185,8 +229,8 @@ export default function RollDetail() {
 
   // 批量渲染/下载完成回调
   function handleBatchExportComplete(progress) {
-    queryClient.invalidateQueries(['rollPhotos', id]);
-    queryClient.invalidateQueries(['roll', id]);
+    queryClient.invalidateQueries({ queryKey: ['rollPhotos', id] });
+    queryClient.invalidateQueries({ queryKey: ['roll', id] });
     if (progress.status === 'completed') {
       showAlert('完成', `成功处理 ${progress.completed} / ${progress.total} 张照片`);
     }
@@ -367,17 +411,8 @@ export default function RollDetail() {
         )}
 
         {(() => {
-          const positiveCount = photos.filter(p => !!p.full_rel_path || !!p.positive_rel_path).length;
-          const negativeCount = photos.filter(p => !!p.negative_rel_path).length;
-
           // Auto-switch view mode if only negatives exist and we are in positive mode
           // Use a ref or effect to avoid infinite render loop, or just show a helpful message
-          
-          const filteredPhotos = photos.filter(p => {
-            if (viewMode === 'positive') return !!p.full_rel_path || !!p.positive_rel_path;
-            if (viewMode === 'negative') return !!p.negative_rel_path;
-            return true;
-          });
 
           if (filteredPhotos.length === 0) {
             if (viewMode === 'positive' && negativeCount > 0) {
@@ -391,19 +426,18 @@ export default function RollDetail() {
                );
             }
             return (
-              <div style={{ 
-                padding: '60px 0', 
-                textAlign: 'center', 
-                color: '#999',
-                fontSize: '15px',
-                background: '#f9f9f9',
-                borderRadius: '12px',
-                border: '1px dashed #ddd',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '12px'
-              }}>
+              <div
+                className="bg-zinc-50 dark:bg-zinc-800/50 border border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400"
+                style={{
+                  padding: '60px 0',
+                  textAlign: 'center',
+                  fontSize: '15px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '12px'
+                }}>
                 <div>{viewMode === 'positive' ? 'No positive photos available.' : 'No negative photos available.'}</div>
                 
                 {viewMode === 'positive' && negativeCount > 0 && (
@@ -432,21 +466,20 @@ export default function RollDetail() {
           return (
             <div className="photo-grid">
               {filteredPhotos.map((p, idx) => (
-                <PhotoItem 
-                  key={p.id} 
-                  p={p} 
-                  filmName={filmName} 
+                <PhotoItem
+                  key={p.id}
+                  p={p}
+                  index={idx}
+                  filmName={filmName}
                   viewMode={viewMode}
-                  onSelect={() => setSelectedPhotoIndex(idx)} 
-                  onSetCover={onSetCover} 
-                  onDeletePhoto={onDeletePhoto} 
+                  onSelect={handleSelectPhoto}
+                  onSetCover={onSetCover}
+                  onDeletePhoto={onDeletePhoto}
                   onUpdatePhoto={onUpdatePhoto}
-                  onEditTags={(photo) => setEditingTagsPhoto(photo)}
+                  onEditTags={handleEditTags}
                   multiSelect={multiSelect}
-                  selected={selectedPhotos.some(sp => sp.id === p.id)}
-                  onToggleSelect={(photo)=>{
-                    setSelectedPhotos(prev => prev.some(sp => sp.id === photo.id) ? prev.filter(sp => sp.id !== photo.id) : [...prev, photo]);
-                  }}
+                  selected={selectedPhotoIds.has(p.id)}
+                  onToggleSelect={handleToggleSelect}
                 />
               ))}
             </div>
@@ -464,7 +497,7 @@ export default function RollDetail() {
                 await onUpdatePhoto(photoId, { tags: newTags });
                 console.log('[RollDetail] Tags saved successfully');
                 // Refresh tags query and notify sidebar
-                queryClient.invalidateQueries(['tags']);
+                queryClient.invalidateQueries({ queryKey: ['tags'] });
                 // Also dispatch event to refresh sidebar
                 window.dispatchEvent(new Event('refresh-tags'));
               } catch (err) {
@@ -493,8 +526,8 @@ export default function RollDetail() {
                }
             }}
             onPhotoUpdate={() => {
-               queryClient.invalidateQueries(['rollPhotos', id]);
-               queryClient.invalidateQueries(['roll', id]);
+               queryClient.invalidateQueries({ queryKey: ['rollPhotos', id] });
+               queryClient.invalidateQueries({ queryKey: ['roll', id] });
             }}
             roll={roll}
             batchRenderCallback={batchRenderCallback}
@@ -508,8 +541,8 @@ export default function RollDetail() {
             onClose={() => setShowBatchSidebar(false)}
             onSaved={() => {
               setShowBatchSidebar(false);
-              queryClient.invalidateQueries(['rollPhotos', id]);
-              queryClient.invalidateQueries(['roll', id]); // Refresh roll metadata
+              queryClient.invalidateQueries({ queryKey: ['rollPhotos', id] });
+              queryClient.invalidateQueries({ queryKey: ['roll', id] }); // Refresh roll metadata
             }}
           />
         )}

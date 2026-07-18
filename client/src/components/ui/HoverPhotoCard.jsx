@@ -10,21 +10,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { ImageIcon } from 'lucide-react';
-import { buildUploadUrl } from '../../api';
+import { resolveThumbUrl } from '../../utils/thumbResolver';
 
 /**
- * 获取照片的最佳缩略图 URL
+ * 获取照片的最佳缩略图 URL（统一走 thumbResolver：回退链 + updated_at 缓存键）
  */
 function getPhotoUrl(photo) {
-  let candidate = null;
-  if (photo.positive_thumb_rel_path) candidate = `/uploads/${photo.positive_thumb_rel_path}`;
-  else if (photo.negative_thumb_rel_path) candidate = `/uploads/${photo.negative_thumb_rel_path}`;
-  else if (photo.thumb_rel_path) candidate = `/uploads/${photo.thumb_rel_path}`;
-  else if (photo.positive_rel_path) candidate = `/uploads/${photo.positive_rel_path}`;
-  else if (photo.full_rel_path) candidate = `/uploads/${photo.full_rel_path}`;
-  else if (photo.filename) candidate = photo.filename;
-  if (!candidate) return null;
-  return buildUploadUrl(candidate);
+  return resolveThumbUrl(photo, 'auto');
 }
 
 /**

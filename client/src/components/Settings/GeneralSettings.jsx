@@ -60,7 +60,7 @@ export default function GeneralSettings({
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+    <div className="space-y-6 max-w-4xl mx-auto animate-fade-in">
       
       {/* Mobile/Watch Connection Info (Electron Only) */}
       {isElectron && (

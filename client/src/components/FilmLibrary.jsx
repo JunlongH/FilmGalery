@@ -15,10 +15,13 @@ import { LoadFilmModal, DevelopFilmModal, UnloadFilmModal, ArchiveFilmModal } fr
 import { getFilms, getFilmItems, createFilmItemsBatch, updateFilmItem, deleteFilmItem } from '../api';
 import { getCacheStrategy } from '../lib';
 import ModalDialog from './ModalDialog';
-import ShotLogModal from './ShotLogModal';
+import { lazyModal } from './common/lazyModal';
 import FilmStatusTabs from './FilmLibrary/FilmStatusTabs';
 import FilmInventoryCard from './FilmLibrary/FilmInventoryCard';
 import PurchaseBatchModal from './FilmLibrary/PurchaseBatchModal';
+
+// ShotLogModal 为 1600+ 行大组件，首次打开时才加载
+const ShotLogModal = lazyModal(() => import('./ShotLogModal'));
 
 export default function FilmLibrary() {
   const navigate = useNavigate();
@@ -145,7 +148,7 @@ export default function FilmLibrary() {
   const createFilmItemsBatchMutation = useMutation({
     mutationFn: createFilmItemsBatch,
     onSuccess: () => {
-      queryClient.invalidateQueries(['filmItems']);
+      queryClient.invalidateQueries({ queryKey: ['filmItems'] });
     }
   });
 
@@ -254,7 +257,7 @@ export default function FilmLibrary() {
                           try {
                             const res = await deleteFilmItem(item.id, true);
                             if (!res.ok) throw new Error(res.error || 'Delete failed');
-                            queryClient.invalidateQueries(['filmItems']);
+                            queryClient.invalidateQueries({ queryKey: ['filmItems'] });
                           } catch (err) {
                             console.error(err);
                             showAlert('Error', 'Failed to delete: ' + err.message);
@@ -264,7 +267,7 @@ export default function FilmLibrary() {
                       onViewRoll={(rollId) => navigate(`/rolls/${rollId}`)}
                       onToggleNegativeArchived={async () => {
                         await updateFilmItem(item.id, { negative_archived: item.negative_archived ? 0 : 1 });
-                        queryClient.invalidateQueries(['filmItems']);
+                        queryClient.invalidateQueries({ queryKey: ['filmItems'] });
                       }}
                     />
                   </div>
@@ -368,7 +371,7 @@ export default function FilmLibrary() {
               item={allFilmItems.find(i => i.id === shotLogModalItemId)}
               isOpen={!!shotLogModalItemId}
               onClose={() => setShotLogModalItemId(null)}
-              onUpdated={async () => { await queryClient.invalidateQueries(['filmItems']); }}
+              onUpdated={async () => { await queryClient.invalidateQueries({ queryKey: ['filmItems'] }); }}
             />
           )}
 
@@ -408,7 +411,7 @@ export default function FilmLibrary() {
               isOpen={!!editingItem}
               onClose={() => setEditingItem(null)}
               onUpdated={async () => {
-                await queryClient.invalidateQueries(['filmItems']);
+                await queryClient.invalidateQueries({ queryKey: ['filmItems'] });
               }}
             />
           )}

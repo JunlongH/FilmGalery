@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LazyImage from './common/LazyImage';
 import { buildUploadUrl } from '../api';
+import { addCacheKey } from '../utils/imageOptimization';
 import ModalDialog from './ModalDialog';
 import GlassModal from './ui/GlassModal';
 import { Button } from '@heroui/react';
@@ -78,33 +79,24 @@ function NoteEditModal({ initialValue, onSave, onClose }) {
   );
 }
 
-export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUpdatePhoto, filmName, onEditTags, viewMode = 'positive', multiSelect=false, selected=false, onToggleSelect }) {
+function PhotoItem({ p, index, onSelect, onSetCover, onDeletePhoto, onUpdatePhoto, filmName, onEditTags, viewMode = 'positive', multiSelect=false, selected=false, onToggleSelect }) {
   const navigate = useNavigate();
-  const [fullUrl, setFullUrl] = React.useState(null);
-  const [thumbUrl, setThumbUrl] = React.useState(null);
   const [liked, setLiked] = React.useState(p.rating === 1);
   const [editingNote, setEditingNote] = React.useState(false); // Add state for editing note
   const tags = Array.isArray(p.tags) ? p.tags : [];
   const [dialog, setDialog] = React.useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
 
-  const showConfirm = (title, message, onConfirm) => {
-    setDialog({ 
-      isOpen: true, 
-      type: 'confirm', 
-      title, 
-      message, 
-      onConfirm: () => {
-        onConfirm();
-        setDialog(prev => ({ ...prev, isOpen: false }));
-      },
-      onCancel: () => setDialog(prev => ({ ...prev, isOpen: false }))
-    });
-  };
-
+  // rating 外部变更时同步（如批量操作后）
   React.useEffect(() => {
+    setLiked(p.rating === 1);
+  }, [p.rating]);
+
+  // 缩略图/全尺寸 URL：纯派生数据，useMemo 计算（原 useState+useEffect 会多一轮渲染）
+  // 缓存键基于 updated_at：文件未变命中浏览器 immutable 缓存，更新后自动换 URL
+  const { fullUrl, thumbUrl } = useMemo(() => {
     let fullCandidate = null;
     let thumbCandidate = null;
-    
+
     if (viewMode === 'negative') {
       // Prefer new negative paths
       if (p.negative_rel_path) fullCandidate = `/uploads/${p.negative_rel_path}`;
@@ -148,28 +140,33 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
         thumbCandidate = fullCandidate;
       }
     }
-    
-    // 使用文件的 updated_at 作为缓存键，而不是 Date.now()
-    // 这样可以充分利用浏览器缓存，只有文件更新时才重新加载
-    const cacheKey = p.updated_at ? `?v=${new Date(p.updated_at).getTime()}` : '';
 
-    // If viewMode is positive but no positive image exists, show placeholder or handle gracefully
+    // If viewMode is positive but no positive image exists, show placeholder
     if (viewMode === 'positive' && !p.full_rel_path && !p.positive_rel_path) {
-        setFullUrl(null); // Or a placeholder URL
-        setThumbUrl(null);
-    } else {
-        setFullUrl(buildUploadUrl(fullCandidate) + cacheKey);
-        setThumbUrl(buildUploadUrl(thumbCandidate) + cacheKey);
+      return { fullUrl: null, thumbUrl: null };
     }
-    setLiked(p.rating === 1);
+    return {
+      fullUrl: addCacheKey(buildUploadUrl(fullCandidate), p.updated_at),
+      thumbUrl: addCacheKey(buildUploadUrl(thumbCandidate), p.updated_at),
+    };
   }, [p, viewMode]);
+
+  const showConfirm = (title, message, onConfirm) => {
+    setDialog({
+      isOpen: true,
+      type: 'confirm',
+      title,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setDialog(prev => ({ ...prev, isOpen: false }));
+      },
+      onCancel: () => setDialog(prev => ({ ...prev, isOpen: false }))
+    });
+  };
 
   const handleEditNote = (e) => {
     e.stopPropagation();
-    // Use IPC or a custom modal instead of prompt() in Electron
-    // For now, we can use a simple custom implementation or just rely on the fact that
-    // we are replacing prompt() with a non-blocking UI in the next step.
-    // But actually, let's just use a small overlay state here for simplicity.
     setEditingNote(true);
   };
 
@@ -208,7 +205,7 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
       onToggleSelect && onToggleSelect(p);
       return;
     }
-    onSelect && onSelect();
+    onSelect && onSelect(index);
   };
 
   return (
@@ -283,17 +280,17 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
             fadeInDuration={0.3}
           />
         ) : (
-          <div style={{ 
-            width: '100%', 
-            height: '100%', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            background: '#f0f0f0', 
-            color: '#999', 
-            fontSize: '12px',
-            flexDirection: 'column',
-            gap: '8px'
+          <div
+            className="bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500"
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '12px',
+              flexDirection: 'column',
+              gap: '8px'
           }}>
             <span>No Photo</span>
             {viewMode === 'positive' && p.negative_rel_path && (
@@ -309,7 +306,11 @@ export default function PhotoItem({ p, onSelect, onSetCover, onDeletePhoto, onUp
           onClose={() => setEditingNote(false)} 
         />
       )}
-      
+
     </div>
   );
 }
+
+// memo 化：大网格中仅当自身 props 变化时才重渲染
+// （依赖父组件传入稳定回调与原始 photo 对象，React Query structuralSharing 保证引用稳定）
+export default React.memo(PhotoItem);

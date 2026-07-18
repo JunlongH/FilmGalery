@@ -69,7 +69,7 @@
 .equip-clear {
   background: none;
   border: none;
-  color: var(--heroui-default-400, #9ca3af);
+  color: hsl(var(--heroui-default-400) / 1);
   font-size: 18px;
   cursor: pointer;
   padding: 0 4px;
@@ -193,7 +193,7 @@
   max-height: 32px;
   object-fit: cover;
   border-radius: 4px;
-  background: var(--heroui-default-100, #f3f4f6);
+  background: hsl(var(--heroui-default-100) / 1);
   flex-shrink: 0;
 }
 
@@ -216,7 +216,7 @@
 .equip-name {
   font-weight: 500;
   font-size: 14px;
-  color: var(--heroui-foreground, #1f2937);
+  color: hsl(var(--heroui-foreground) / 1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -224,7 +224,7 @@
 
 .equip-brand {
   font-size: 12px;
-  color: var(--heroui-default-500, #6b7280);
+  color: hsl(var(--heroui-default-500) / 1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -232,16 +232,16 @@
 
 .equip-spec {
   font-size: 11px;
-  color: var(--heroui-default-400, #9ca3af);
+  color: hsl(var(--heroui-default-400) / 1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .equip-add-section {
-  border-top: 1px solid var(--heroui-divider, #e5e7eb);
+  border-top: 1px solid hsl(var(--heroui-divider) / 1);
   padding: 8px 12px;
-  background: var(--heroui-default-100, #f9fafb);
+  background: hsl(var(--heroui-default-100) / 1);
   flex-shrink: 0;
 }
 
@@ -249,9 +249,9 @@
   width: 100%;
   padding: 8px;
   background: none;
-  border: 1px dashed var(--heroui-divider, #d1d5db);
+  border: 1px dashed hsl(var(--heroui-divider) / 1);
   border-radius: 4px;
-  color: var(--heroui-default-500, #6b7280);
+  color: hsl(var(--heroui-default-500) / 1);
   cursor: pointer;
   font-size: 13px;
   transition: all 0.15s;
@@ -270,12 +270,12 @@
 .equip-add-input {
   flex: 1;
   padding: 6px 10px;
-  border: 1px solid var(--heroui-divider, #d1d5db);
+  border: 1px solid hsl(var(--heroui-divider) / 1);
   border-radius: 4px;
   font-size: 13px;
   min-width: 0;
-  background: var(--heroui-content1, white);
-  color: var(--heroui-foreground, #1f2937);
+  background: hsl(var(--heroui-content1) / 1);
+  color: hsl(var(--heroui-foreground) / 1);
 }
 
 .equip-add-btn {
@@ -297,7 +297,7 @@
   padding: 6px 8px;
   background: none;
   border: none;
-  color: var(--heroui-default-400, #9ca3af);
+  color: hsl(var(--heroui-default-400) / 1);
   cursor: pointer;
   font-size: 16px;
   flex-shrink: 0;

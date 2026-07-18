@@ -4,7 +4,7 @@
  * 管理侧边栏的折叠状态和其他全局状态
  */
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
 const SidebarContext = createContext({
   isCollapsed: false,
@@ -38,8 +38,13 @@ export function SidebarProvider({ children, defaultCollapsed = false }) {
     setCollapsed(!isCollapsed);
   }, [isCollapsed, setCollapsed]);
 
+  const value = useMemo(
+    () => ({ isCollapsed, toggleCollapsed, setCollapsed }),
+    [isCollapsed, toggleCollapsed, setCollapsed]
+  );
+
   return (
-    <SidebarContext.Provider value={{ isCollapsed, toggleCollapsed, setCollapsed }}>
+    <SidebarContext.Provider value={value}>
       {children}
     </SidebarContext.Provider>
   );

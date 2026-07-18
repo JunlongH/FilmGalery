@@ -1,37 +1,48 @@
 // src/App.js
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
-import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { queryClient, prefetchCommonData } from './lib';
-import RollLibrary from './components/RollLibrary';
-import NewRollForm from './components/NewRollForm';
-import RollDetail from './components/RollDetail';
-import FilmLibrary from './components/FilmLibrary';
-import Overview from './components/Overview';
-import CalendarView from './components/CalendarView';
-import Statistics from './components/Statistics';
-import Favorites from './components/Favorites';
-import TagGallery from './components/TagGallery';
-import Settings from './components/Settings';
+import { QueryClientProvider, useQueryClient, useQuery } from '@tanstack/react-query';
+import { queryClient, prefetchCommonData, getCacheStrategy } from './lib';
 import TitleBar from './components/TitleBar';
 import ConflictBanner from './components/ConflictBanner';
-import EquipmentManager from './components/EquipmentManager';
-import LutLibrary from './components/Settings/LutLibrary';
-import MapPage from './pages/MapPage';
 import { getTags, bustImageCache } from './api';
 import FloatingRefreshButton from './components/FloatingRefreshButton';
+import PageLoading from './components/common/PageLoading';
 // HeroUI Provider for modern UI components
 import { HeroUIProvider } from './providers';
 // Modern Sidebar
 import { Sidebar, SidebarProvider } from './components/Sidebar';
-// AI Panel
+// AI Panel（Provider 同步加载，面板主体首次打开时才加载 chunk）
 import { AIPanelProvider, useAIPanel } from './components/AIPanel/AIPanelContext';
-import AIPanel from './components/AIPanel/AIPanel';
 
-// queryClient 已从 lib/queryClient.js 导入
+// ============================================================================
+// 路由级代码分割 —— 所有页面组件按需加载
+// 重型依赖（three/leaflet/recharts/markdown/exifr）随路由 chunk 隔离，
+// 不再进入主 bundle
+// ============================================================================
+const Overview = lazy(() => import('./components/Overview'));
+const CalendarView = lazy(() => import('./components/CalendarView'));
+const MapPage = lazy(() => import('./pages/MapPage'));
+const Statistics = lazy(() => import('./components/Statistics'));
+const RollLibrary = lazy(() => import('./components/RollLibrary'));
+const NewRollForm = lazy(() => import('./components/NewRollForm'));
+const RollDetail = lazy(() => import('./components/RollDetail'));
+const FilmLibrary = lazy(() => import('./components/FilmLibrary'));
+const Favorites = lazy(() => import('./components/Favorites'));
+const TagGallery = lazy(() => import('./components/TagGallery'));
+const EquipmentManager = lazy(() => import('./components/EquipmentManager'));
+const LutLibrary = lazy(() => import('./components/Settings/LutLibrary'));
+const Settings = lazy(() => import('./components/Settings'));
+const AIPanel = lazy(() => import('./components/AIPanel/AIPanel'));
 
 function LayoutInner({ tags, handleHardRefresh }) {
-  const { togglePanel } = useAIPanel();
+  const { togglePanel, isOpen: isAIPanelOpen } = useAIPanel();
+  // AIPanel 首次打开后才挂载（并从此保持挂载以保留会话状态与关闭动画），
+  // 以此延迟其数据请求与 react-markdown 依赖链的加载
+  const [aiPanelMounted, setAiPanelMounted] = useState(false);
+  useEffect(() => {
+    if (isAIPanelOpen) setAiPanelMounted(true);
+  }, [isAIPanelOpen]);
 
   // Ctrl+Shift+A 打开/关闭 AI 面板
   useEffect(() => {
@@ -57,27 +68,33 @@ function LayoutInner({ tags, handleHardRefresh }) {
 
             {/* Main Content */}
             <main className="main flex-1 min-w-0 min-h-0 overflow-auto bg-transparent">
-              <Routes>
-                <Route path="/" element={<Overview />} />
-                <Route path="/calendar" element={<CalendarView />} />
-                <Route path="/map" element={<MapPage />} />
-                <Route path="/stats" element={<Statistics />} />
-                <Route path="/spending" element={<Statistics mode="spending" />} />
-                <Route path="/rolls" element={<RollLibrary />} />
-                <Route path="/rolls/new" element={<NewRollForm />} />
-                <Route path="/rolls/:id" element={<RollDetail />} />
-                <Route path="/films" element={<FilmLibrary />} />
-                <Route path="/favorites" element={<Favorites />} />
-                <Route path="/themes" element={<TagGallery />} />
-                <Route path="/themes/:tagId" element={<TagGallery />} />
-                <Route path="/equipment" element={<EquipmentManager />} />
-                <Route path="/luts" element={<LutLibrary />} />
-                <Route path="/settings" element={<Settings />} />
-              </Routes>
+              <Suspense fallback={<PageLoading />}>
+                <Routes>
+                  <Route path="/" element={<Overview />} />
+                  <Route path="/calendar" element={<CalendarView />} />
+                  <Route path="/map" element={<MapPage />} />
+                  <Route path="/stats" element={<Statistics />} />
+                  <Route path="/spending" element={<Statistics mode="spending" />} />
+                  <Route path="/rolls" element={<RollLibrary />} />
+                  <Route path="/rolls/new" element={<NewRollForm />} />
+                  <Route path="/rolls/:id" element={<RollDetail />} />
+                  <Route path="/films" element={<FilmLibrary />} />
+                  <Route path="/favorites" element={<Favorites />} />
+                  <Route path="/themes" element={<TagGallery />} />
+                  <Route path="/themes/:tagId" element={<TagGallery />} />
+                  <Route path="/equipment" element={<EquipmentManager />} />
+                  <Route path="/luts" element={<LutLibrary />} />
+                  <Route path="/settings" element={<Settings />} />
+                </Routes>
+              </Suspense>
             </main>
 
-            {/* AI Panel — right side */}
-            <AIPanel />
+            {/* AI Panel — right side（首次打开时才加载） */}
+            {aiPanelMounted && (
+              <Suspense fallback={null}>
+                <AIPanel />
+              </Suspense>
+            )}
           </div>
         </div>
         <FloatingRefreshButton onRefresh={handleHardRefresh} />
@@ -87,23 +104,25 @@ function LayoutInner({ tags, handleHardRefresh }) {
 }
 
 function Layout() {
-  const [tags, setTags] = useState([]);
   const queryClient = useQueryClient();
 
-  const refreshTags = useCallback(async () => {
-    try {
-      const data = await getTags();
-      // Filter out tags with 0 photos
-      const validTags = (Array.isArray(data) ? data : []).filter(tag => tag.photos_count > 0);
-      setTags(validTags);
-    } catch (err) {
-      console.error('Failed to load tags', err);
-      setTags([]);
-    }
-  }, []);
+  // 侧边栏 tags 统一走 React Query（['tags'] key 与 RollDetail/TagGallery 的
+  // invalidate 对齐；'refresh-tags' 事件转为 invalidate 触发重取）
+  const { data: tagsData } = useQuery({
+    queryKey: ['tags'],
+    queryFn: getTags,
+    ...getCacheStrategy('tags'),
+  });
+  const tags = useMemo(
+    () => (Array.isArray(tagsData) ? tagsData : []).filter(tag => tag.photos_count > 0),
+    [tagsData]
+  );
+
+  const refreshTags = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['tags'] });
+  }, [queryClient]);
 
   useEffect(() => {
-    refreshTags();
     // 启动时预取常用数据
     prefetchCommonData();
     const handler = () => refreshTags();

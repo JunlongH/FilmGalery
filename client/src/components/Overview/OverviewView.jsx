@@ -11,7 +11,7 @@ import { motion } from 'framer-motion';
 import HeroCarousel from './HeroCarousel';
 import QuickStats from './QuickStats';
 import BrowseSection from './BrowseSection';
-import ImageViewer from '../ImageViewer';
+import ImageViewer from '../common/LazyImageViewer';
 
 export default function OverviewView() {
   const [viewerOpen, setViewerOpen] = useState(false);

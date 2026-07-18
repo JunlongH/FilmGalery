@@ -49,14 +49,8 @@ export function bustImageCache() {
   _cacheBusterVersion = Date.now();
   try { sessionStorage.setItem('__fg_cb', String(_cacheBusterVersion)); } catch {}
   // Dispatch a custom event so React components can re-render with new URLs
+  // （当前无监听者；保留作为未来非查询驱动组件的扩展点）
   window.dispatchEvent(new CustomEvent('fg-cache-bust', { detail: _cacheBusterVersion }));
-  return _cacheBusterVersion;
-}
-
-/**
- * Get CacheBusterVersion (0 = no busting).
- */
-export function getCacheBusterVersion() {
   return _cacheBusterVersion;
 }
 

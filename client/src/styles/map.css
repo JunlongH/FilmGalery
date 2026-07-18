@@ -724,53 +724,52 @@
 
 /* ===================================
    DARK MODE ADJUSTMENTS
+   与应用主题 Toggle 同步（.dark class），不再使用系统媒体查询
    =================================== */
 
-@media (prefers-color-scheme: dark) {
-  .map-filter-panel {
-    background: rgba(30, 30, 30, 0.95);
-    color: #fff;
-  }
+.dark .map-filter-panel {
+  background: rgba(30, 30, 30, 0.95);
+  color: #fff;
+}
 
-  .map-filter-header {
-    border-color: #444;
-  }
+.dark .map-filter-header {
+  border-color: #444;
+}
 
-  .map-filter-header h3 {
-    color: #fff;
-  }
+.dark .map-filter-header h3 {
+  color: #fff;
+}
 
-  .map-filter-section {
-    border-color: #333;
-  }
+.dark .map-filter-section {
+  border-color: #333;
+}
 
-  .map-filter-label {
-    color: #999;
-  }
+.dark .map-filter-label {
+  color: #999;
+}
 
-  .map-filter-input,
-  .map-filter-select {
-    background: #2a2a2a;
-    border-color: #444;
-    color: #fff;
-  }
+.dark .map-filter-input,
+.dark .map-filter-select {
+  background: #2a2a2a;
+  border-color: #444;
+  color: #fff;
+}
 
-  .map-filter-help {
-    background: #1a1a1a;
-    color: #888;
-  }
+.dark .map-filter-help {
+  background: #1a1a1a;
+  color: #888;
+}
 
-  .map-photo-preview {
-    background: #1e1e1e;
-  }
+.dark .map-photo-preview {
+  background: #1e1e1e;
+}
 
-  .map-preview-meta {
-    color: #ddd;
-  }
+.dark .map-preview-meta {
+  color: #ddd;
+}
 
-  .map-preview-coords {
-    color: #888;
-  }
+.dark .map-preview-coords {
+  color: #888;
 }
 
 /* ===================================

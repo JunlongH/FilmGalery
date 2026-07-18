@@ -12,46 +12,17 @@ import { Card, CardBody, CardFooter, Button, Checkbox, Chip, Skeleton } from '@h
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, Star, Trash2, Tag, FileText, Check } from 'lucide-react';
 import LazyImage from '../common/LazyImage';
-import { buildUploadUrl } from '../../api';
+import { resolveThumbUrl, resolveFullUrl } from '../../utils/thumbResolver';
 
 /**
- * Get thumbnail URL for a photo based on view mode
- * 使用文件的 updated_at 作为缓存键，而不是 Date.now()
- * 这样可以充分利用浏览器缓存，只有文件更新时才重新加载
+ * 缩略图/全尺寸 URL（统一走 thumbResolver：回退链 + updated_at 缓存键，
+ * 避免手写 `+ '?v='` 在 URL 已带查询参数时产生双问号 bug）
  */
 function getPhotoUrls(photo, viewMode) {
-  // 使用文件的 updated_at 作为缓存键，如果没有则不添加参数
-  const cacheKey = photo.updated_at ? `?v=${new Date(photo.updated_at).getTime()}` : '';
-  let thumbUrl = null;
-  let fullUrl = null;
-
-  if (viewMode === 'negative') {
-    if (photo.negative_rel_path) fullUrl = `/uploads/${photo.negative_rel_path}`;
-    else if (photo.full_rel_path) fullUrl = `/uploads/${photo.full_rel_path}`;
-    
-    if (photo.negative_thumb_rel_path) {
-      thumbUrl = `/uploads/${photo.negative_thumb_rel_path}`;
-    } else if (photo.thumb_rel_path) {
-      thumbUrl = `/uploads/${photo.thumb_rel_path}`;
-    } else {
-      thumbUrl = fullUrl;
-    }
-  } else {
-    if (photo.positive_rel_path) fullUrl = `/uploads/${photo.positive_rel_path}`;
-    else if (photo.full_rel_path) fullUrl = `/uploads/${photo.full_rel_path}`;
-    
-    if (photo.positive_thumb_rel_path) {
-      thumbUrl = `/uploads/${photo.positive_thumb_rel_path}`;
-    } else if (photo.thumb_rel_path) {
-      thumbUrl = `/uploads/${photo.thumb_rel_path}`;
-    } else {
-      thumbUrl = fullUrl;
-    }
-  }
-
+  const mode = viewMode === 'negative' ? 'negative' : 'positive';
   return {
-    thumb: thumbUrl ? buildUploadUrl(thumbUrl) + cacheKey : null,
-    full: fullUrl ? buildUploadUrl(fullUrl) + cacheKey : null
+    thumb: resolveThumbUrl(photo, mode),
+    full: resolveFullUrl(photo, mode)
   };
 }
 

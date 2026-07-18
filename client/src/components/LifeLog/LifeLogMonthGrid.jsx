@@ -8,9 +8,8 @@ import React, { useMemo } from 'react';
 import { format, isSameMonth, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { Card, CardBody } from '@heroui/react';
 import { motion } from 'framer-motion';
-import { LazyLoadImage } from 'react-lazy-load-image-component';
+import LazyImage from '../common/LazyImage';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import 'react-lazy-load-image-component/src/effects/opacity.css';
 import { useLifeLog } from './LifeLogContext';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -110,12 +109,11 @@ export default function LifeLogMonthGrid() {
                       {/* Photo Cover */}
                       {cover && isCurrentMonth && (
                         <div className="absolute inset-0 overflow-hidden">
-                          <LazyLoadImage
+                          <LazyImage
                             src={getPhotoUrl(cover)}
                             alt=""
-                            effect="opacity"
-                            className="w-full h-full object-cover"
-                            wrapperClassName="w-full h-full block"
+                            className="w-full h-full"
+                            objectFit="cover"
                           />
                           
                           {/* Gradient Overlay for text readability */}

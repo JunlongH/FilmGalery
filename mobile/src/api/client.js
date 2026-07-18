@@ -13,7 +13,7 @@
 import { createApiClient } from '@filmgallery/api-client';
 import { Alert } from 'react-native';
 
-let _client = createApiClient({ baseUrl: '', timeout: 5000 });
+let _client = createApiClient({ baseUrl: 'http://59.66.234.26:4000', timeout: 5000 });
 
 // Preserve the prior UX: the axios interceptor alerted on every request that
 // failed (network or HTTP). api-client's onError fires once per failed request

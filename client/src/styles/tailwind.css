@@ -8,6 +8,13 @@
 /* 导入 Tailwind CSS v4 */
 @import "tailwindcss";
 
+/* HeroUI 插件：生成 bg-primary / text-foreground / bg-content1 / border-divider
+   等语义类，以及 :root/.dark 下的 HeroUI CSS 变量（组件颜色随 .dark 自动切换） */
+@plugin "./hero.plugin.js";
+
+/* HeroUI 组件内部类名扫描（Tailwind v4 默认不扫描 node_modules） */
+@source "../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}";
+
 /**
  * 强制 Dark Mode 使用 CSS Class 策略
  * 默认 Tailwind v4 使用系统偏好 (media)，这会导致与 App 内的主题 Toggle 不同步。
@@ -169,6 +176,7 @@
 
 /**
  * 自定义工具类 - 使用 @utility 指令
+ * （仅保留有实际使用方的；glass 用于 ui/Card.jsx）
  */
 
 /* 玻璃态效果 */
@@ -176,21 +184,6 @@
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-@utility glass-dark {
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* 卡片悬浮效果 */
-@utility card-hover {
-  transition: all 200ms var(--ease-smooth);
-  &:hover {
-    box-shadow: var(--shadow-lg);
-    transform: translateY(-2px);
-  }
 }
 
 /* 隐藏滚动条 */
@@ -219,124 +212,6 @@
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background-color: rgba(255, 255, 255, 0.3);
-}
-
-/* 文字渐变 */
-@utility text-gradient {
-  background: linear-gradient(to right, var(--color-primary-600), #6366f1);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* 骨架屏效果 */
-@utility skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--color-border) 25%,
-    var(--color-bg-alt) 50%,
-    var(--color-border) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-}
-
-/* 照片网格 */
-@utility photo-grid {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  
-  @media (min-width: 640px) {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  @media (min-width: 768px) {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-  @media (min-width: 1024px) {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-  @media (min-width: 1280px) {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
-}
-
-/* 时间线容器 */
-@utility timeline-container {
-  position: relative;
-  padding-left: 1.5rem;
-  
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0.5rem;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: linear-gradient(to bottom, var(--color-primary-500), #6366f1);
-  }
-}
-
-/* 时间线项目 */
-@utility timeline-item {
-  position: relative;
-  margin-bottom: 1.5rem;
-  
-  &::before {
-    content: '';
-    position: absolute;
-    left: -1rem;
-    top: 0.5rem;
-    width: 0.75rem;
-    height: 0.75rem;
-    border-radius: 50%;
-    background: var(--color-primary-500);
-    box-shadow: 0 0 0 4px var(--color-primary-100);
-  }
-}
-
-/* 导航项 */
-@utility nav-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-lg);
-  color: var(--color-text-muted);
-  transition: all 150ms var(--ease-smooth);
-  
-  &:hover {
-    background: var(--color-bg);
-    color: var(--color-text);
-  }
-}
-
-@utility nav-item-active {
-  background: rgba(37, 99, 235, 0.1);
-  color: var(--color-primary-600);
-  font-weight: 500;
-}
-
-/* 动画延迟工具 */
-@utility animation-delay-100 {
-  animation-delay: 100ms;
-}
-
-@utility animation-delay-200 {
-  animation-delay: 200ms;
-}
-
-@utility animation-delay-300 {
-  animation-delay: 300ms;
-}
-
-@utility animation-delay-500 {
-  animation-delay: 500ms;
-}
-
-/* 安全区域（Electron 标题栏） */
-@utility safe-top {
-  padding-top: env(titlebar-area-height, 0px);
 }
 
 /**
@@ -379,124 +254,25 @@
 }
 
 /**
- * HeroUI 语义类暗色模式修复
- * 
- * 问题：HeroUI 的语义类 (text-default-*, text-foreground, bg-default-*, bg-background)
- * 使用 CSS 变量，但这些变量在 Tailwind v4 + .dark class 模式下不自动更新。
- * 
- * 解决方案：直接覆盖这些类在 .dark 模式下的颜色值。
+ * HeroUI Input/Select 组件背景定制
+ *
+ * HeroUI 插件已注册（见文件顶部 @plugin），语义类与暗色变量由插件提供，
+ * 此处仅保留项目定制的输入框底色（亮色半透白 / 暗色半透 zinc-800）。
+ * 注意：不再覆写 box-shadow，HeroUI 的 focus ring 保持可用。
  */
-@layer utilities {
-  /* text-foreground 暗色模式修复 */
-  .dark .text-foreground {
-    color: #f4f4f5 !important; /* zinc-100 */
-  }
-  
-  /* text-default-* 系列暗色模式修复 */
-  .dark .text-default-100 {
-    color: #f4f4f5 !important; /* zinc-100 */
-  }
-  .dark .text-default-200 {
-    color: #e4e4e7 !important; /* zinc-200 */
-  }
-  .dark .text-default-300 {
-    color: #71717a !important; /* zinc-500 - 暗色模式需要更亮的颜色 */
-  }
-  .dark .text-default-400 {
-    color: #a1a1aa !important; /* zinc-400 */
-  }
-  .dark .text-default-500 {
-    color: #a1a1aa !important; /* zinc-400 */
-  }
-  .dark .text-default-600 {
-    color: #d4d4d8 !important; /* zinc-300 */
-  }
-  .dark .text-default-700 {
-    color: #e4e4e7 !important; /* zinc-200 */
-  }
-  .dark .text-default-800 {
-    color: #f4f4f5 !important; /* zinc-100 */
-  }
-  .dark .text-default-900 {
-    color: #fafafa !important; /* zinc-50 */
-  }
-  
-  /* bg-default-* 系列暗色模式修复 */
-  .dark .bg-default-50 {
-    background-color: #27272a !important; /* zinc-800 */
-  }
-  .dark .bg-default-100 {
-    background-color: #27272a !important; /* zinc-800 */
-  }
-  .dark .bg-default-200 {
-    background-color: #3f3f46 !important; /* zinc-700 */
-  }
-  
-  /* bg-background 暗色模式修复 - 与 App shell 统一为 zinc-900 */
-  .dark .bg-background {
-    background-color: #18181b !important; /* zinc-900 */
-  }
-  
-  /* bg-content* 系列暗色模式修复 - 卡片用 zinc-800 保持对比度 */
-  .dark .bg-content1 {
-    background-color: #27272a !important; /* zinc-800 */
-  }
-  .dark .bg-content2 {
-    background-color: #3f3f46 !important; /* zinc-700 */
-  }
-  .dark .bg-content3 {
-    background-color: #52525b !important; /* zinc-600 */
-  }
-}
-
-/**
- * HeroUI Input/Select 组件背景修复
- * 
- * 问题：即使设置了 classNames 的 bg-transparent，HeroUI 的默认样式可能仍然覆盖
- * 解决方案：使用 [data-slot] 选择器强制设置合适的背景
- * 注意：inputWrapper 和 trigger 需要显式背景色以保证可读性
- */
-
-/* 全局 - 基础 slots 保持透明 */
-[data-slot="base"],
-[data-slot="mainWrapper"],
-[data-slot="main-wrapper"],
-[data-slot="innerWrapper"],
-[data-slot="inner-wrapper"],
-[data-slot="input"] {
-  background-color: transparent !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
 
 /* Input Wrapper 和 Trigger - 亮色模式使用白色背景 */
 [data-slot="inputWrapper"],
 [data-slot="input-wrapper"],
 [data-slot="trigger"] {
-  background-color: rgba(255, 255, 255, 0.85) !important;
-  background: rgba(255, 255, 255, 0.85) !important;
-  box-shadow: none !important;
-  border: 1px solid rgba(228, 228, 231, 0.5) !important;
-}
-
-/* 暗色模式 - 基础 slots 透明 */
-.dark [data-slot="base"],
-.dark [data-slot="mainWrapper"],
-.dark [data-slot="main-wrapper"],
-.dark [data-slot="innerWrapper"],
-.dark [data-slot="inner-wrapper"],
-.dark [data-slot="input"] {
-  background-color: transparent !important;
-  background: transparent !important;
-  box-shadow: none !important;
+  background-color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(228, 228, 231, 0.5);
 }
 
 /* 暗色模式 - Input Wrapper 和 Trigger 使用深色背景 */
 .dark [data-slot="inputWrapper"],
 .dark [data-slot="input-wrapper"],
 .dark [data-slot="trigger"] {
-  background-color: rgba(39, 39, 42, 0.6) !important;
-  background: rgba(39, 39, 42, 0.6) !important;
-  box-shadow: none !important;
-  border: 1px solid rgba(63, 63, 70, 0.5) !important;
+  background-color: rgba(39, 39, 42, 0.6);
+  border: 1px solid rgba(63, 63, 70, 0.5);
 }

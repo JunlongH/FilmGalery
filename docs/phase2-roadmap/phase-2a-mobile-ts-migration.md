@@ -2,7 +2,7 @@
 
 > **范围**: `mobile/`（Expo SDK 54 / React Native 0.81）60 `.js` + 5 `.jsx` + `App.js` = **66 文件 / ~14,823 行** → 全量 TS。
 > **定位**: `phase-2a-foundation.md` §2A.4 T1「mobile/client TS 迁移」。列为**独立可选 track，不阻塞 2A 出口、不阻塞 2B/2C/2D**。本文档在该 track 开工前建立完整执行计划与测试方案。
-> **状态**: 🟨 计划中（待用户确认 §9 决策项后进入 Wave 0）。
+> **状态**: 🟨 进行中 — **W0 完成（commit `9a8226a`，未 push）+ Layer D 运行时环境打通**；W1–W8 源码迁移待开工。
 > **依据**: 对真实仓库的三路并行勘探（依赖类型覆盖审计 + 代码模式/风险审计 + `watch-app` TS 约定参考），证据见 §2。本文件不重写 `phase-2a-foundation.md`，仅为其 §2A.4 T1 提供展开。
 
 ---
@@ -11,7 +11,7 @@
 
 | Wave | 名称 | 状态 | 产出 / 证据 |
 |---|---|---|---|
-| W0 | 工具链 bootstrap | ✅ 完成（Node 20 + 全自动门禁 green） | tsconfig/shims/jest.config/package.json/smoke test/coordTransform.d.ts/CI mobile job(+metro)/zeroconf patch 修复/metro.config.js monorepo 配置。**四道自动门禁实测 green（Node 20.20.1）**：typecheck exit 0 / jest 4/4 / metro bundle 8.09MB / root 273/273。仅余 emulator（Layer D）未覆盖 |
+| W0 | 工具链 bootstrap | ✅ 完成（commit `9a8226a`，未 push） | tsconfig/shims/jest.config/package.json/smoke test/coordTransform.d.ts/CI mobile job(+metro)/zeroconf patch 修复/metro.config.js monorepo 配置。**四道自动门禁实测 green（Node 20.20.1）**：typecheck exit 0 / jest 4/4 / metro bundle 8.09MB / root 273/273。**Layer D emulator 运行时环境亦已打通**（超 W0 原始范围）：Android SDK 全组件 + AVD test31 + 186M APK 编译装机 + JS 经 metro+adb reverse 加载 + 连通测试 server 渲染真实数据。运行时全流程经验已沉淀为 `.opencode/skills/mobile-android-build/SKILL.md` |
 | W1 | 叶子纯逻辑（utils/theme/constants） | ⬜ | 8 文件 |
 | W2 | API 层 + Proxy 类型化 | ⬜ | 5 文件（含 `client.js` Proxy→类型化 singleton） |
 | W3 | Context + hooks + 小组件 | ⬜ | ~16 文件 |

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { updateFilmItem, exportShotLogsCsv, getCountries, searchLocations, getCompatibleLenses, getLenses } from '../api';
 import { getCityCoordinates } from '../utils/geocoding';
 import GeoSearchInput from './GeoSearchInput.jsx';
+import useIsDarkMode from '../hooks/useIsDarkMode';
 
 const FALLBACK_LENSES = [
   '50mm f/1.8',
@@ -15,7 +16,7 @@ const FALLBACK_LENSES = [
 // Entry Edit Modal Component
 function EntryEditModal({ entry, index, onSave, onClose, countries, citiesByCountry, lensOptions, nativeLenses, adaptedLenses, fixedLensInfo, cameraMount }) {
   const [editData, setEditData] = useState({ ...entry });
-  const isDark = document.documentElement.classList.contains('dark');
+  const isDark = useIsDarkMode();
   
   const handleGeoSelect = (result) => {
     setEditData(prev => ({
@@ -276,7 +277,7 @@ function EntryEditModal({ entry, index, onSave, onClose, countries, citiesByCoun
 }
 
 export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
-  const isDark = document.documentElement.classList.contains('dark');
+  const isDark = useIsDarkMode();
   const [logs, setLogs] = useState([]);
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
   const [newTime, setNewTime] = useState('');

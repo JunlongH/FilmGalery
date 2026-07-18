@@ -1,7 +1,9 @@
 // src/components/NewRollForm.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { getFilms, getMetadataOptions, createRollUnified, updateRoll, getFilmItems } from '../api';
+import { getCacheStrategy } from '../lib';
 import LocationSelect from './LocationSelect.jsx';
 import '../styles/forms.css';
 import FilmSelector from './FilmSelector';
@@ -29,14 +31,11 @@ export default function NewRollForm({ onCreated }) {
   // const [previews, setPreviews] = useState([]); // Replaced by useFilePreviews
   const previews = useFilePreviews(files);
   const [uploadProgress, setUploadProgress] = useState(null);
-  const [films, setFilms] = useState([]);
   const [useTwoStep, setUseTwoStep] = useState(false); // default simplified pipeline
-  const [options, setOptions] = useState({ cameras: [], lenses: [], photographers: [] });
   const [dialog, setDialog] = useState({ isOpen: false, title: '', message: '' });
   const [rollLocations, setRollLocations] = useState([]);
   const PROCESS_PRESETS = ['C-41', 'E-6', 'BW', 'ECN-2'];
   const [develop, setDevelop] = useState({ develop_lab: '', develop_process: '', develop_date: '', develop_cost: '', develop_note: '' });
-  const [filmItems, setFilmItems] = useState([]);
   const [filmItemId, setFilmItemId] = useState(null);
   const [useInventory, setUseInventory] = useState(false);
   const [shotLogs, setShotLogs] = useState([]);
@@ -60,15 +59,35 @@ export default function NewRollForm({ onCreated }) {
     setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: () => setDialog(prev => ({ ...prev, isOpen: false })) });
   };
 
-  useEffect(() => { 
-    getFilms().then(f => setFilms(f || [])); 
-    getMetadataOptions().then(o => setOptions(o || { cameras: [], lenses: [], photographers: [] }));
+  // 静态数据统一走 React Query（胶片/元数据选项为 STATIC，库存条目变化较少）
+  const { data: filmsData } = useQuery({
+    queryKey: ['films'],
+    queryFn: getFilms,
+    ...getCacheStrategy('films'),
+  });
+  const films = useMemo(() => filmsData || [], [filmsData]);
+
+  const { data: optionsData } = useQuery({
+    queryKey: ['metadataOptions'],
+    queryFn: getMetadataOptions,
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 60 * 24,
+  });
+  const options = useMemo(
+    () => optionsData || { cameras: [], lenses: [], photographers: [] },
+    [optionsData]
+  );
+
+  const { data: filmItemsData } = useQuery({
     // Fetch all relevant statuses (excluding developed as per request)
-    getFilmItems({ status: 'in_stock,loaded,shot,sent_to_lab' }).then(data => {
-      const arr = data && Array.isArray(data.items) ? data.items : [];
-      setFilmItems(arr);
-    }).catch(() => setFilmItems([]));
-  }, []);
+    queryKey: ['filmItems', 'available'],
+    queryFn: () => getFilmItems({ status: 'in_stock,loaded,shot,sent_to_lab' }),
+    ...getCacheStrategy('filmItems'),
+  });
+  const filmItems = useMemo(() => {
+    const arr = filmItemsData && Array.isArray(filmItemsData.items) ? filmItemsData.items : [];
+    return arr;
+  }, [filmItemsData]);
 
   // Handle pre-selection from navigation state (Archive flow)
   useEffect(() => {
@@ -373,9 +392,9 @@ export default function NewRollForm({ onCreated }) {
               if (!it) return null;
               const f = films.find(x => x.id === it.film_id);
               return (
-                <div className="fg-card" style={{ marginTop: 12, padding: 16, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                <div className="fg-card bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700" style={{ marginTop: 12, padding: 16 }}>
                   <div style={{ fontWeight: 600, marginBottom: 8 }}>{f ? f.name : 'Unknown Film'}</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13, color: '#475569' }}>
+                  <div className="text-slate-600 dark:text-zinc-400" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
                     <div>Status: <span className="fg-pill">{it.status}</span></div>
                     <div>Expiry: {it.expiry_date || '—'}</div>
                     <div>Batch: {it.batch_number || '—'}</div>

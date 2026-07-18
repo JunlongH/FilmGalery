@@ -18,7 +18,6 @@ export {
   getApiBase,
   buildUploadUrl,
   bustImageCache,
-  getCacheBusterVersion,
   jsonFetch,
   postJson,
   putJson,

@@ -1,6 +1,6 @@
 // src/components/RollLibrary.jsx
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { getRolls } from '../api';
 import { useNavigate } from 'react-router-dom';
 import RollGrid from './RollGrid';
@@ -13,7 +13,7 @@ export default function RollLibrary() {
     queryKey: ['rolls'],
     queryFn: () => getRolls(),
     ...getCacheStrategy('rolls'),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 
   if (isLoading) return <div className="p-10 text-center text-zinc-500 dark:text-zinc-400">Loading rolls...</div>;

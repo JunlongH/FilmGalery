@@ -21,7 +21,7 @@ function RollGridInner({ rolls = [], horizontal = false }) {
     try {
       const res = await deleteRoll(id);
       if (res && (res.deleted || res.ok || res.success !== false)) {
-        queryClient.invalidateQueries(['rolls']);
+        queryClient.invalidateQueries({ queryKey: ['rolls'] });
       } else {
         alert('Delete failed');
       }
@@ -32,7 +32,7 @@ function RollGridInner({ rolls = [], horizontal = false }) {
   }
 
   if (!rolls || rolls.length === 0) {
-    return <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>No rolls found.</div>;
+    return <div className="text-zinc-400 dark:text-zinc-500" style={{ padding: '40px', textAlign: 'center' }}>No rolls found.</div>;
   }
 
   const content = (

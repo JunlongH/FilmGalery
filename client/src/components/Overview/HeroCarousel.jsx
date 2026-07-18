@@ -10,7 +10,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Card, CardBody, Button, Spinner } from '@heroui/react';
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
-import { buildUploadUrl, getApiBase } from '../../api';
+import { getApiBase } from '../../api';
+import { resolveFullUrl } from '../../utils/thumbResolver';
 
 
 export default function HeroCarousel({ onPhotoClick }) {
@@ -60,8 +61,9 @@ export default function HeroCarousel({ onPhotoClick }) {
   };
 
   const getPhotoUrl = (photo) => {
+    // 头图使用全尺寸正片（hero 展示需要清晰度），统一走 resolver 附带 updated_at 缓存键
     if (!photo) return '';
-    return buildUploadUrl(photo.positive_rel_path || photo.full_rel_path);
+    return resolveFullUrl(photo, 'positive') || '';
   };
 
   if (isLoading) {
