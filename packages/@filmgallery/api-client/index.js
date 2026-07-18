@@ -94,6 +94,11 @@ function createApiClient(config = {}) {
     backupUrl,
     setBaseUrl: http.setBaseUrl,
     http,
+    // Phase 2B #1 — auth convenience proxies (mobile/watch call these).
+    setAuthToken: http.setAuthToken,
+    getAuthToken: http.getAuthToken,
+    clearAuthToken: http.clearAuthToken,
+    setOnUnauthorized: http.setOnUnauthorized,
     equipment: createEquipmentApi(http),
     rolls: createRollsApi(http),
     photos: createPhotosApi(http),
@@ -109,6 +114,20 @@ function createHttpHelpers({ getBaseUrl, setBaseUrl, primaryBaseUrl, backupUrl, 
     if (onError) onError(error);
     throw error;
   };
+
+  // Phase 2B #1 — auth token injection.
+  // `authToken` is the plaintext bearer token issued by /api/pairing/verify.
+  // Stored in-memory only; mobile/watch persist it via platform secure storage
+  // (expo-secure-store / keychain) and feed it back through setAuthToken.
+  let authToken = null;
+  let onUnauthorized = null;
+
+  function withAuth(init) {
+    if (!authToken) return init;
+    const merged = init ? { ...init } : {};
+    merged.headers = { ...(merged.headers || {}), Authorization: `Bearer ${authToken}` };
+    return merged;
+  }
 
   const parseResponse = async (response) => {
     const text = await response.text();
@@ -134,9 +153,11 @@ function createHttpHelpers({ getBaseUrl, setBaseUrl, primaryBaseUrl, backupUrl, 
 
   // One fetch attempt + parse. Applies a per-request abort timeout (so a hung
   // server surfaces as an AbortError → network error → retried/failed-over).
-  // Respects a caller-supplied signal if present.
+  // Respects a caller-supplied signal if present. Injects Authorization header
+  // when an auth token is set.
   async function attempt(url, init) {
-    const signal = init && init.signal;
+    const authedInit = withAuth(init);
+    const signal = authedInit && authedInit.signal;
     let controller;
     let timer;
     if (timeout > 0 && !signal) {
@@ -144,7 +165,16 @@ function createHttpHelpers({ getBaseUrl, setBaseUrl, primaryBaseUrl, backupUrl, 
       timer = setTimeout(() => controller.abort(), timeout);
     }
     try {
-      const response = await fetchFn(url, controller ? { ...init, signal: controller.signal } : init);
+      const response = await fetchFn(
+        url,
+        controller ? { ...authedInit, signal: controller.signal } : authedInit
+      );
+      // 401 hook: lets mobile/watch navigate to the re-pair flow when the
+      // server has revoked the token. Fire-once-per-request; the response is
+      // still parsed below so the caller's normal error path also runs.
+      if (response.status === 401 && onUnauthorized) {
+        try { onUnauthorized(response); } catch { /* swallow */ }
+      }
       return await parseResponse(response);
     } finally {
       if (timer) clearTimeout(timer);
@@ -196,6 +226,16 @@ function createHttpHelpers({ getBaseUrl, setBaseUrl, primaryBaseUrl, backupUrl, 
     get baseUrl() { return getBaseUrl(); },
     setBaseUrl,
 
+    // Phase 2B #1 — auth token injection.
+    /** Set the bearer token used for all subsequent requests. Pass null/empty to clear. */
+    setAuthToken(token) { authToken = token || null; },
+    /** Current bearer token (or null). */
+    getAuthToken() { return authToken; },
+    /** Clear the bearer token (e.g. on user-initiated logout). */
+    clearAuthToken() { authToken = null; },
+    /** Register a callback fired once per 401 response (e.g. to navigate to re-pair UI). */
+    setOnUnauthorized(fn) { onUnauthorized = typeof fn === 'function' ? fn : null; },
+
     async get(path, params = {}) {
       return request(`${path}${buildQueryString(params)}`, { method: 'GET' });
     },
@@ -225,15 +265,20 @@ function createHttpHelpers({ getBaseUrl, setBaseUrl, primaryBaseUrl, backupUrl, 
      * rare and neither mobile nor watch uses this path today.
      */
     async postForm(path, formData, onProgress) {
+      const authedHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : undefined;
       if (typeof XMLHttpRequest !== 'undefined' && onProgress) {
         return new Promise((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open('POST', `${getBaseUrl()}${path}`);
+          if (authedHeaders) xhr.setRequestHeader('Authorization', authedHeaders.Authorization);
           xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
               try { resolve(JSON.parse(xhr.responseText)); }
               catch { resolve(xhr.responseText); }
             } else {
+              if (xhr.status === 401 && onUnauthorized) {
+                try { onUnauthorized({ status: 401 }); } catch { /* swallow */ }
+              }
               reject(new Error(xhr.statusText || 'Upload failed'));
             }
           };
@@ -247,7 +292,10 @@ function createHttpHelpers({ getBaseUrl, setBaseUrl, primaryBaseUrl, backupUrl, 
         });
       }
       try {
-        const response = await fetchFn(`${getBaseUrl()}${path}`, { method: 'POST', body: formData });
+        const response = await fetchFn(`${getBaseUrl()}${path}`, withAuth({ method: 'POST', body: formData }));
+        if (response.status === 401 && onUnauthorized) {
+          try { onUnauthorized(response); } catch { /* swallow */ }
+        }
         return await parseResponse(response);
       } catch (error) {
         return handleError(error);

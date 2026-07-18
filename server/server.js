@@ -182,6 +182,50 @@ app.use('/uploads/rolls', express.static(rollsDir, staticOptions));
 
 // --- Routes (mount after schema is ensured just before listen) ---
 const mountRoutes = () => {
+  // --- Phase 2B #1 auth ---
+  // Mount order (see docs/phase2-roadmap/phase-2b-security.md §1):
+  //   app.options('*') [preflight short-circuit, top-level]
+  //   → /uploads/* static [top-level, D5豁免]
+  //   → /api/shutdown [top-level, has own loopback gate]
+  //   → auth middleware (HERE)
+  //   → /api/pairing (whitelisted inside auth; /code is loopback-gated)
+  //   → /api/sessions (auth-gated)
+  //   → remaining /api/* routes
+  //   → /api/* 404 catch-all
+  //
+  // `/api/discover` + `/api/health*` are inside this function but are
+  // whitelisted inside the auth middleware (regex), so they remain reachable
+  // pre-pairing.
+  const { createSessionsStore } = require('./utils/sessions-store');
+  const { createAuthMiddleware } = require('./utils/auth');
+  const { createPairingRouter } = require('./routes/pairing');
+  const { createSessionsRouter } = require('./routes/sessions');
+  // `db` is lazy-loaded after migrations complete (see line ~506 in the IIFE);
+  // by the time mountRoutes() runs, the module cache is warm so this require
+  // returns the same connection the rest of the server uses.
+  const db = require('./db');
+  const sessionsStore = createSessionsStore(db);
+  const authSoftMode = process.env.AUTH_SOFT_MODE === '1';
+  const authMiddleware = createAuthMiddleware({ sessionsStore, softMode: authSoftMode });
+  app.use(authMiddleware);
+
+  // Pairing flow — open (the 6-digit code is the credential). /code defends
+  // itself with a loopback gate. Stricter rate limit than the global /api one.
+  const pairingLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { ok: false, error: 'Too many pairing attempts, please slow down.' },
+  });
+  app.use('/api/pairing', pairingLimiter, createPairingRouter({ sessionsStore }));
+  app.use('/api/sessions', createSessionsRouter({
+    sessionsStore,
+    // Cascade cache invalidation: a revoke must take effect on the next
+    // request, not after the 60s LRU TTL.
+    onRevoke: (id) => authMiddleware.invalidateBySessionId(id),
+  }));
+
   // short-lived response caching for relatively static endpoints
   app.use('/api/films', cacheSeconds(120), require('./routes/films'));
   app.use('/api/film-items', require('./routes/film-items')); // No server cache - let React Query handle it
@@ -521,21 +565,51 @@ const seedLocations = async () => {
 		
 		// Port range that mobile/watch apps will scan
 		const PORT_RANGE = [4000, 4001, 4002, 4003, 4004, 4005, 4010, 4020, 4100];
-		
+
+		// --- Phase 2B #7 TLS ---
+		// Per docs/phase2-roadmap/phase-2b-security.md §「server HTTPS」:
+		//   - If TLS credentials are available (env vars or autocert), start
+		//     HTTPS on the main port and an HTTP listener one port up bound to
+		//     loopback only (desktop single-box zero-friction, D7).
+		//   - Otherwise fall back to plain HTTP (testing / opt-out via
+		//     FG_TLS_DISABLE=1 / no openssl available).
+		// `tlsCreds` is null in the HTTP fallback.
+		const { loadTlsCredentials, getDaysUntilExpiry } = require('./utils/tls');
+		let tlsCreds = null;
+		try {
+			tlsCreds = loadTlsCredentials();
+		} catch (err) {
+			console.warn('[TLS] credential load failed; continuing with HTTP:', err.message);
+		}
+		if (tlsCreds && tlsCreds.certPath) {
+			const days = getDaysUntilExpiry(tlsCreds.certPath);
+			if (days != null && days <= 30) {
+				console.warn(`[TLS] certificate expires in ${days} days (regenerate or supply FG_TLS_CERT).`);
+			}
+		}
+		if (tlsCreds) {
+			console.log(`[TLS] HTTPS enabled (cert source: ${tlsCreds.source}).`);
+		} else {
+			console.log('[TLS] HTTPS disabled — running plain HTTP.');
+		}
+
 		/**
-		 * Try to listen on a port, returns a promise
+		 * Try to listen on a port, returns a promise.
+		 * If TLS is enabled, binds an https.Server; otherwise a plain http one.
+		 * (loopback-only is handled by the caller for the HTTP alt listener.)
 		 */
-		const tryListen = (port) => {
+		const tryListen = (port, host = '0.0.0.0') => {
 			return new Promise((resolve, reject) => {
-				const server = app.listen(port, '0.0.0.0');
+				let server;
+				if (tlsCreds) {
+					const https = require('https');
+					server = https.createServer({ cert: tlsCreds.cert, key: tlsCreds.key }, app);
+				} else {
+					server = app.listen(port, host);
+				}
 				server.once('listening', () => resolve(server));
-				server.once('error', (err) => {
-					if (err.code === 'EADDRINUSE') {
-						reject(err);
-					} else {
-						reject(err);
-					}
-				});
+				server.once('error', (err) => reject(err));
+				if (tlsCreds) server.listen(port, host);
 			});
 		};
 		
@@ -578,11 +652,34 @@ const seedLocations = async () => {
 		
 		// Store actual port globally for /api/discover endpoint
 		global.__actualServerPort = actualPort;
+
+		// When TLS is enabled, also start a loopback-only HTTP listener one
+		// port up. This keeps the desktop single-box UX zero-friction (Electron
+		// webview + dev tools can keep talking to http://127.0.0.1 without
+		// cert-error handling). Remote peers must use HTTPS.
+		let httpLoopbackPort = null;
+		if (tlsCreds) {
+			const httpAltPort = actualPort + 1;
+			try {
+				await new Promise((resolve, reject) => {
+					const alt = app.listen(httpAltPort, '127.0.0.1');
+					alt.once('listening', () => resolve(alt));
+					alt.once('error', reject);
+				});
+				httpLoopbackPort = httpAltPort;
+			} catch (e) {
+				console.warn(`[TLS] could not bind loopback HTTP on ${httpAltPort}: ${e.message}`);
+			}
+		}
 		
 		// Output special marker for electron-main.js to parse
 		// This MUST be the first line of output to ensure reliable parsing
 		console.log(`SERVER_PORT:${actualPort}`);
-		console.log(`Server running on http://0.0.0.0:${actualPort}`);
+		const scheme = tlsCreds ? 'https' : 'http';
+		console.log(`Server running on ${scheme}://0.0.0.0:${actualPort}`);
+		if (httpLoopbackPort) {
+			console.log(`Loopback HTTP mirror on http://127.0.0.1:${httpLoopbackPort}`);
+		}
 		console.log('[PREPARED STATEMENTS] Ready for lazy initialization');
 		scheduleProfilerLog();
 		

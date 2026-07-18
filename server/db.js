@@ -214,6 +214,28 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME
   )`);
+
+  // Phase 2B #1 — auth sessions (pairing tokens).
+  // See docs/phase2-roadmap/phase-2b-security.md §「sessions 表 schema」.
+  // Token is stored as sha256 hex hash; plaintext is returned exactly once at
+  // issuance. UNIQUE(device_fp, device_kind) makes re-pairing overwrite the
+  // previous session for the same device. issued_by chains watch tokens to
+  // their issuing mobile session for cascade revocation.
+  db.run(`CREATE TABLE IF NOT EXISTS sessions (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash    TEXT    NOT NULL UNIQUE,
+    device_name   TEXT    NOT NULL,
+    device_kind   TEXT    NOT NULL,
+    device_fp     TEXT    NOT NULL,
+    issued_at     INTEGER NOT NULL,
+    expires_at    INTEGER,
+    last_seen_at  INTEGER NOT NULL,
+    revoked_at    INTEGER,
+    issued_by     INTEGER,
+    UNIQUE(device_fp, device_kind)
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_device_fp ON sessions(device_fp, device_kind)`);
 });
 
 // [ONEDRIVE-SYNC] Periodic WAL checkpoint for OneDrive sync (only in WAL mode)

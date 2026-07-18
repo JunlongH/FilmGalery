@@ -35,6 +35,11 @@ export interface HttpHelpers {
   delete(path: string): Promise<any>;
   postForm(path: string, formData: FormData, onProgress?: (pct: number) => void): Promise<any>;
   buildUploadUrl(pathOrUrl?: string | null): string | null;
+  // Phase 2B #1 — bearer-token injection.
+  setAuthToken: (token: string | null) => void;
+  getAuthToken: () => string | null;
+  clearAuthToken: () => void;
+  setOnUnauthorized: (fn: ((response: any) => void) | null) => void;
 }
 
 export interface ApiClient {
@@ -43,6 +48,11 @@ export interface ApiClient {
   readonly backupUrl: string | null;
   setBaseUrl: (url: string) => void;
   http: HttpHelpers;
+  // Phase 2B #1 — auth convenience proxies.
+  setAuthToken: (token: string | null) => void;
+  getAuthToken: () => string | null;
+  clearAuthToken: () => void;
+  setOnUnauthorized: (fn: ((response: any) => void) | null) => void;
   equipment: any;
   rolls: any;
   photos: any;

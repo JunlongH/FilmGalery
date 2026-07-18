@@ -266,7 +266,8 @@ export default function EquipmentEditModal({
       setForm(initialData || {});
     }
     prevIsOpenRef.current = isOpen;
-  }, [isOpen]); // intentionally exclude initialData to avoid reference-trap resets
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: re-running on initialData identity changes would clobber user edits
+  }, [isOpen]);
 
   const typeInfo = TYPE_LABELS[type] || TYPE_LABELS.cameras;
   const TypeIcon = typeInfo.icon;

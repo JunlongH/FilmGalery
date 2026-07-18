@@ -165,7 +165,7 @@ export default function FilmItemEditModal({ item, isOpen, onClose, onUpdated }) 
     } else {
       setFormData(emptyForm);
     }
-    // Use item?.id (stable primitive) instead of item (unstable object reference)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: key on item?.id (stable primitive) so user edits aren't clobbered when the parent re-renders with a new `item` object reference
   }, [item?.id]);
 
   const handleChange = (key, value) => {

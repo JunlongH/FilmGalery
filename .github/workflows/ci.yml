@@ -31,8 +31,10 @@ jobs:
           cache: npm
 
       # Root install bootstraps client + server via the postinstall hook.
+      # --legacy-peer-deps matches build-linux.yml; without it, peer-dep
+      # conflicts in the React/Electron/canvas part of the tree fail the install.
       - name: Install dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Lint (errors fail, warnings report)
         run: npm run lint

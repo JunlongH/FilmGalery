@@ -169,7 +169,7 @@ export function useAIChat({ conversationId, onConversationCreated }) {
       setError(err.message || '请求失败');
       setIsLoading(false);
     }
-  }, [isLoading, conversationId, onConversationCreated, upsertMessage, upsertToolCall]);
+  }, [isLoading, conversationId, onConversationCreated, upsertMessage, upsertToolCall, pendingConfirmation?.toolCallId]);
 
   // ─── 确认写入操作 ───
 

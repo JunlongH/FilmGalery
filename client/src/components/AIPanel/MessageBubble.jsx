@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Chip, Spinner } from '@heroui/react';
+import React, { useState } from 'react';
+import { Spinner } from '@heroui/react';
 import { AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';

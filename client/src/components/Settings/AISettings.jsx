@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Input, Chip, Divider, Textarea, Switch, Tooltip } from '@heroui/react';
-import { Plus, Trash2, Pencil, Check, X, Star, Cpu } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Star, Cpu, Eye } from 'lucide-react';
 import SettingsRow from './SettingsRow';
 import {
   getAIConfig, updateAIConfig, testAIConnection, getAIModels,
@@ -779,6 +779,13 @@ export default function AISettings() {
                       className={m.is_default_text ? 'text-primary' : ''}
                       onPress={() => handleSetDefaultTextModel(m.id)}>
                       <Star className="w-3.5 h-3.5" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="设为默认视觉模型" size="sm">
+                    <Button size="sm" variant="light" isIconOnly
+                      className={m.is_default_vision ? 'text-secondary' : ''}
+                      onPress={() => handleSetDefaultVisionModel(m.id)}>
+                      <Eye className="w-3.5 h-3.5" />
                     </Button>
                   </Tooltip>
                   <Button size="sm" variant="light" isIconOnly

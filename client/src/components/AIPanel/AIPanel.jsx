@@ -25,9 +25,13 @@ const TEMPLATE_ICONS = {
 export default function AIPanel() {
   const { isOpen, closePanel, panelWidth, setPanelWidth, conversationId, setConversationId, overlayContext } = useAIPanel();
   const routeContext = useAIContext();
-  const aiContext = overlayContext
-    ? { ...routeContext, ...overlayContext }
-    : routeContext;
+  // Memoise so useCallback deps (handleSend, handleShortcut) don't change every
+  // render. Spreading without memoisation produced a new object identity each
+  // render and tripped react-hooks/exhaustive-deps in CI.
+  const aiContext = useMemo(
+    () => (overlayContext ? { ...routeContext, ...overlayContext } : routeContext),
+    [routeContext, overlayContext]
+  );
   const [inputText, setInputText] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [historyList, setHistoryList] = useState([]);
@@ -66,7 +70,7 @@ export default function AIPanel() {
     document.addEventListener('mouseup', onUp);
   }, [panelWidth, setPanelWidth]);
 
-  const { messages, isLoading, pendingConfirmation, sendMessage, confirmAction, clearMessages, loadConversationMessages } = useAIChat({
+  const { messages, isLoading, sendMessage, confirmAction, clearMessages, loadConversationMessages } = useAIChat({
     conversationId,
     onConversationCreated: setConversationId,
   });

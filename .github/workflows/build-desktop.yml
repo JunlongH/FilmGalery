@@ -39,12 +39,12 @@ jobs:
           node-version: 20
 
       - name: Install root dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Install client dependencies
         run: |
           cd client
-          npm install
+          npm install --legacy-peer-deps
 
       - name: Build client
         run: npm run build
@@ -92,17 +92,17 @@ jobs:
           node-version: 20
 
       - name: Install root dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Install client dependencies
         run: |
           cd client
-          npm install
+          npm install --legacy-peer-deps
 
       - name: Install server dependencies
         run: |
           cd server
-          npm install
+          npm install --legacy-peer-deps
 
       - name: Install Linux native build deps (libraw)
         if: matrix.platform == 'linux'
