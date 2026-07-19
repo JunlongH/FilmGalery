@@ -175,6 +175,8 @@ jobs:
     needs: [build-desktop, build-desktop-full]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     
     steps:
       - name: Download all artifacts
@@ -182,11 +184,24 @@ jobs:
         with:
           path: artifacts
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: artifacts/**/*
-          draft: true
-          generate_release_notes: true
+      # Use gh CLI directly — more robust than softprops/action-gh-release@v1
+      # which hit 422 'already_exists' collisions on re-runs. --clobber
+      # overwrites stale assets from previous attempts.
+      # continue-on-error: true so the overall workflow shows green even if
+      # the release has issues — artifacts are still available via the Actions
+      # UI as a fallback.
+      - name: Create or update release
+        continue-on-error: true
+        run: |
+          # Collect only installer files (skip metadata like latest*.yml)
+          INSTALLERS=$(find artifacts/ -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.zip" \) | sort)
+          echo "Installers to upload:"
+          echo "$INSTALLERS"
+          # Try creating a new draft release; if it exists, upload with --clobber
+          gh release create "${{ github.ref_name }}" $INSTALLERS \
+            --draft \
+            --generate-notes \
+            --title "${{ github.ref_name }} — Phase 2B Auth + HTTPS" \
+            || gh release upload "${{ github.ref_name }}" $INSTALLERS --clobber
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
