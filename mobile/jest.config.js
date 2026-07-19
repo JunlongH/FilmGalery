@@ -14,4 +14,12 @@
 module.exports = {
   preset: 'jest-expo',
   testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/'],
+  // Workspace file: deps (e.g. @filmgallery/api-client at
+  // packages/@filmgallery/api-client/) are loaded from their source path, not
+  // from mobile/node_modules. When babel-jest transpiles them and injects
+  // @babel/runtime helpers, the require resolves relative to the SOURCE file,
+  // not mobile/. modulePaths makes jest ALSO search mobile/node_modules for
+  // any require, so @babel/runtime is found regardless of where the requiring
+  // file lives.
+  modulePaths: ['<rootDir>/node_modules'],
 };

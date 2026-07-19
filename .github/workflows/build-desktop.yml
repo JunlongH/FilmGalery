@@ -96,6 +96,15 @@ jobs:
         with:
           node-version: 20
 
+      # node-gyp needs Python to compile native modules. The Windows runner
+      # image ships Python but node-gyp sometimes can't find it, which then
+      # breaks Visual Studio detection downstream ('Could not find any Visual
+      # Studio installation to use'). Pin Python explicitly.
+      - name: Setup Python (for node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Install Linux native build deps (libraw)
         if: matrix.platform == 'linux'
         run: sudo apt-get update && sudo apt-get install -y libraw-dev libvips-dev
