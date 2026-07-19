@@ -205,7 +205,11 @@ const mountRoutes = () => {
   // returns the same connection the rest of the server uses.
   const db = require('./db');
   const sessionsStore = createSessionsStore(db);
-  const authSoftMode = process.env.AUTH_SOFT_MODE === '1';
+  // Soft mode default ON: remote connections without a token are allowed
+  // (with X-Auth-Soft-Mode: warn header) until the pairing UI is implemented.
+  // Set AUTH_SOFT_MODE=0 to enforce hard 401 rejection of unauthenticated
+  // remote requests.
+  const authSoftMode = process.env.AUTH_SOFT_MODE !== '0';
   const authMiddleware = createAuthMiddleware({ sessionsStore, softMode: authSoftMode });
   app.use(authMiddleware);
 
