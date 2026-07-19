@@ -39,7 +39,7 @@ jobs:
           node-version: 20
 
       - name: Install root dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install --legacy-peer-deps --ignore-scripts
 
       - name: Install client dependencies
         run: |
@@ -91,8 +91,19 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install Linux native build deps (libraw)
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libraw-dev libvips-dev
+
+      - name: Install macOS native build deps (libraw)
+        if: matrix.platform == 'mac'
+        run: brew install libraw vips
+
+      # Skip postinstall on root (it spawns nested installs that fail without
+      # system deps on Win/Mac). Explicit sub-installs follow, mirroring ci.yml
+      # and build-linux.yml. --legacy-peer-deps is required project-wide.
       - name: Install root dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install --legacy-peer-deps --ignore-scripts
 
       - name: Install client dependencies
         run: |
@@ -103,10 +114,6 @@ jobs:
         run: |
           cd server
           npm install --legacy-peer-deps
-
-      - name: Install Linux native build deps (libraw)
-        if: matrix.platform == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y libraw-dev
 
       - name: Run tests (hard gate — fails the build on regression)
         run: npm test
