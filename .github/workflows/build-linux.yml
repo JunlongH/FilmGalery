@@ -44,8 +44,11 @@ jobs:
         run: npm run rebuild:electron
 
       # 打包 Linux 应用
+      # --publish never: defer to the explicit Create Release step below.
+      # Without this flag, electron-builder auto-publishes when GH_TOKEN is
+      # set + on a tag, which previously failed tag-triggered runs.
       - name: Build Linux App (AppImage & Deb)
-        run: npx electron-builder --linux
+        run: npx electron-builder --linux --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

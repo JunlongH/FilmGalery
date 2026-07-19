@@ -44,13 +44,13 @@ jobs:
       - name: Install client dependencies
         run: |
           cd client
-          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps --ignore-scripts
 
       - name: Build client
         run: npm run build
 
       - name: Build Electron app (Client-Only)
-        run: npx electron-builder --${{ matrix.platform }} --config electron-builder-client-only.json
+        run: npx electron-builder --${{ matrix.platform }} --config electron-builder-client-only.json --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -102,18 +102,21 @@ jobs:
       # Skip postinstall on root (it spawns nested installs that fail without
       # system deps on Win/Mac). Explicit sub-installs follow, mirroring ci.yml
       # and build-linux.yml. --legacy-peer-deps is required project-wide.
+      # --ignore-scripts also on client/server: the libraw-native `prepare`
+      # hook downloads + compiles, which fails on Win/Mac without system deps;
+      # we explicitly rebuild for the Electron ABI later via rebuild:electron.
       - name: Install root dependencies
         run: npm install --legacy-peer-deps --ignore-scripts
 
       - name: Install client dependencies
         run: |
           cd client
-          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps --ignore-scripts
 
       - name: Install server dependencies
         run: |
           cd server
-          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps --ignore-scripts
 
       - name: Build client
         run: npm run build
@@ -121,8 +124,11 @@ jobs:
       - name: Rebuild native modules for Electron ABI
         run: npm run rebuild:electron
 
+      # --publish never: electron-builder auto-publishes to GH releases when
+      # GH_TOKEN is set + on a tag. That collides with the explicit release
+      # step below (and previously failed tag builds on push triggers).
       - name: Build Electron app (Full Version)
-        run: npx electron-builder --${{ matrix.platform }}
+        run: npx electron-builder --${{ matrix.platform }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
