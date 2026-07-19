@@ -1,7 +1,18 @@
 import React from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTheme } from 'react-native-paper';
 import * as LucideIcons from 'lucide-react-native';
+
+const toPascalCase = (s: string): string =>
+  s
+    .split(/[-_]/)
+    .map((p) => (p ? p.charAt(0).toUpperCase() + p.slice(1) : ''))
+    .join('');
+
+const MATERIAL_FALLBACK_MAP: Record<string, string> = {
+  'bot': 'robot',
+};
 
 const LUCIDE_ICON_MAP: Record<string, string> = {
   'home': 'Home',
@@ -109,31 +120,34 @@ export interface IconProps {
 export default function Icon({
   name,
   size = 24,
-  color = '#5A4632',
+  color,
   variant = 'lucide',
   style,
   ...props
 }: IconProps) {
+  const theme = useTheme();
+  const resolvedColor = color ?? theme.colors.onSurface;
+
   if (variant === 'material') {
     return (
       <MaterialCommunityIcons
         name={name as any}
         size={size}
-        color={color}
+        color={resolvedColor}
         style={style}
         {...props}
       />
     );
   }
 
-  const lucideIconName = LUCIDE_ICON_MAP[name.toLowerCase()] || name;
+  const lucideIconName = LUCIDE_ICON_MAP[name.toLowerCase()] || toPascalCase(name);
   const LucideIcon = (LucideIcons as any)[lucideIconName] as React.ComponentType<any> | undefined;
 
   if (LucideIcon) {
     return (
       <LucideIcon
         size={size}
-        color={color}
+        color={resolvedColor}
         style={style}
         strokeWidth={2}
         {...props}
@@ -141,12 +155,25 @@ export default function Icon({
     );
   }
 
-  console.warn(`[Icon] "${name}" not found in Lucide, falling back to Material`);
+  const materialName = MATERIAL_FALLBACK_MAP[name.toLowerCase()] || name;
+  if (materialName in MaterialCommunityIcons.glyphMap) {
+    return (
+      <MaterialCommunityIcons
+        name={materialName as any}
+        size={size}
+        color={resolvedColor}
+        style={style}
+        {...props}
+      />
+    );
+  }
+
+  console.warn(`[Icon] "${name}" not found in Lucide or Material, using placeholder`);
   return (
     <MaterialCommunityIcons
-      name={name as any}
+      name="help-circle-outline"
       size={size}
-      color={color}
+      color={resolvedColor}
       style={style}
       {...props}
     />

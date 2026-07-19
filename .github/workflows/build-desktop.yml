@@ -134,6 +134,13 @@ jobs:
         run: cd packages/@filmgallery/libraw-native && node scripts/download-libraw.js
 
       - name: Rebuild native modules for Electron ABI
+        shell: bash   # force bash on Windows (PowerShell doesn't understand 'set -o pipefail')
+        env:
+          # On macOS, Homebrew installs libraw to /opt/homebrew/lib but
+          # lightdrift-libraw's binding.gyp links '-lraw' without telling
+          # the linker where to find it. LIBRARY_PATH is clang/gcc's
+          # link-time search path env var (analogous to CPATH for includes).
+          LIBRARY_PATH: ${{ matrix.platform == 'mac' && '/opt/homebrew/lib' : '' }}
         run: |
           set -o pipefail
           npm run rebuild:electron 2>&1 | tee /tmp/rebuild-electron.log

@@ -1,88 +1,74 @@
-import React, { useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity, Dimensions, Animated } from 'react-native';
-import CachedImage from '../components/CachedImage';
-import { colors, spacing, radius } from '../theme';
-import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
-import { ApiContext } from '../context/ApiContext';
-import { api } from '../api/client';
+import CachedImage from '../../components/CachedImage';
+import SkeletonBox from '../../components/SkeletonBox';
+import { spacing, radius } from '../../theme';
+import { Text, useTheme } from 'react-native-paper';
+import { ApiContext } from '../../context/ApiContext';
+import { api } from '../../api/client';
 import { useFocusEffect } from '@react-navigation/native';
-import { getPhotoUrl } from '../utils/urls';
-import { Icon } from '../components/ui';
+import { getPhotoUrl } from '../../utils/urls';
+import { Icon } from '../../components/ui';
+import { useApiQuery } from '../../hooks/useApiQuery';
 
 const numColumns = 3;
 const screenWidth = Dimensions.get('window').width;
 // compute tile size accounting for horizontal padding and small gaps so items don't touch the right edge
 const tileSize = Math.floor((screenWidth - (spacing.md * 2) - (numColumns * 4)) / numColumns);
+const ROW_HEIGHT = tileSize + 4; // tile + 2*margin(2)
 
 export default function FavoritesScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
-  const [photos, setPhotos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+
+  const photosKey = baseUrl ? `favorites@${baseUrl}` : null;
+  const { data, loading, refresh } = useApiQuery<any[]>(
+    photosKey,
+    () => api.http.get('/api/photos/favorites'),
+  );
+  const photos = useMemo(() => data ?? [], [data]);
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const fetchFavorites = async () => {
-    if (!baseUrl) return;
-    setLoading(true);
-    try {
-      const res = await api.http.get('/api/photos/favorites');
-      setPhotos(res);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchFavorites();
-  }, [baseUrl]);
-
-  // Animate on focus
+  // Animate on focus (data stays warm in the query cache; no refetch needed)
   useFocusEffect(
     useCallback(() => {
-      fetchFavorites();
       fadeAnim.setValue(0);
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 300,
         useNativeDriver: true,
       }).start();
-    }, [baseUrl])
+    }, [])
   );
 
-  // Header refresh button with new Icon
+  // Header refresh button
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity 
-          onPress={async () => { 
-            const { clearImageCache } = await import('../components/CachedImage'); 
-            await clearImageCache(); 
-            fetchFavorites(); 
-          }}
+        <TouchableOpacity
+          onPress={refresh}
           style={{ marginRight: 16, padding: 8 }}
         >
           <Icon name="refresh-cw" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
       )
     });
-  }, [navigation, baseUrl, theme]);
+  }, [navigation, theme, refresh]);
 
   const renderItem = ({ item, index }: any) => {
     const thumbUrl = getPhotoUrl(baseUrl, item, 'thumb');
-    
+
     const showHeart = item.rating === 1;
     return (
       <Animated.View style={{ opacity: fadeAnim }}>
         <TouchableOpacity
-          onPress={() => navigation.navigate('PhotoView', { photo: item, rollId: item.roll_id, photos, initialIndex: index, viewMode: 'positive' })}
+          onPress={() => navigation.navigate('PhotoView', { photo: item, rollId: item.roll_id, photosKey, initialIndex: index, viewMode: 'positive' })}
           style={styles.thumbWrapper}
           activeOpacity={0.8}
         >
-          <View style={[styles.thumbInner, { width: tileSize, height: tileSize }]}>
+          <View style={[styles.thumbInner, { width: tileSize, height: tileSize, backgroundColor: theme.colors.surfaceVariant }]}>
             <CachedImage
               uri={thumbUrl || ""}
               style={styles.thumbImage}
@@ -102,11 +88,10 @@ export default function FavoritesScreen({ navigation }: any) {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {loading && photos.length === 0 ? (
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator animating={true} size="large" color={theme.colors.primary} />
-          <Text style={[styles.loaderText, { color: theme.colors.onSurfaceVariant }]}>
-            Loading favorites...
-          </Text>
+        <View style={styles.skeletonGrid}>
+          {Array.from({ length: 9 }).map((_, i) => (
+            <SkeletonBox key={i} width={tileSize} height={tileSize} style={styles.skeletonTile} />
+          ))}
         </View>
       ) : photos.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -120,7 +105,7 @@ export default function FavoritesScreen({ navigation }: any) {
         </View>
       ) : (
         <>
-          <View style={styles.countBar}>
+          <View style={[styles.countBar, { borderBottomColor: theme.colors.outlineVariant }]}>
             <Text style={[styles.countText, { color: theme.colors.onSurfaceVariant }]}>
               {photos.length} {photos.length === 1 ? 'favorite' : 'favorites'}
             </Text>
@@ -132,6 +117,15 @@ export default function FavoritesScreen({ navigation }: any) {
             numColumns={numColumns}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            initialNumToRender={12}
+            windowSize={7}
+            maxToRenderPerBatch={12}
+            removeClippedSubviews={true}
+            getItemLayout={(_, index) => ({
+              length: ROW_HEIGHT,
+              offset: ROW_HEIGHT * Math.floor(index / numColumns),
+              index,
+            })}
           />
         </>
       )}
@@ -140,17 +134,18 @@ export default function FavoritesScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-  },
-  loaderContainer: {
+  container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  loaderText: {
-    marginTop: 12,
-    fontSize: 14,
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+  },
+  skeletonTile: {
+    margin: 2,
+    borderRadius: radius.md,
   },
   emptyContainer: {
     flex: 1,
@@ -172,7 +167,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
   },
   countText: {
     fontSize: 13,
@@ -185,11 +179,10 @@ const styles = StyleSheet.create({
   thumbWrapper: { 
     margin: 2,
   },
-  thumbInner: { 
-    position: 'relative', 
-    borderRadius: radius.md, 
-    overflow: 'hidden', 
-    backgroundColor: colors.surfaceVariant,
+  thumbInner: {
+    position: 'relative',
+    borderRadius: radius.md,
+    overflow: 'hidden',
   },
   thumbImage: { 
     width: '100%', 

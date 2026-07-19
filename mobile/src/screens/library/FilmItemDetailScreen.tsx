@@ -2,13 +2,13 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, Animated } from 'react-native';
 import { ActivityIndicator, Button, HelperText, Text, TextInput, useTheme } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
-import { Icon } from '../components/ui';
-import DatePickerField from '../components/DatePickerField';
-import EquipmentPicker from '../components/EquipmentPicker';
-import { parseISODate, toISODateString } from '../utils/date';
-import { getFilmItem, updateFilmItem, deleteFilmItem } from '../api/filmItems';
-import { FILM_ITEM_STATUSES, FILM_ITEM_STATUS_LABELS } from '../constants/filmItemStatus';
-import { spacing } from '../theme';
+import { Icon } from '../../components/ui';
+import DatePickerField from '../../components/DatePickerField';
+import EquipmentPicker from '../../components/EquipmentPicker';
+import { parseISODate, toISODateString } from '../../utils/date';
+import { getFilmItem, updateFilmItem, deleteFilmItem } from '../../api/filmItems';
+import { FILM_ITEM_STATUSES, FILM_ITEM_STATUS_LABELS } from '../../constants/filmItemStatus';
+import { spacing } from '../../theme';
 
 export default function FilmItemDetailScreen({ route, navigation }: any) {
   const theme = useTheme();

@@ -3,8 +3,6 @@ module.exports = function(api) {
   return {
     presets: [
       'babel-preset-expo',
-      // NativeWind preset for Tailwind CSS support
-      'nativewind/babel',
     ],
     // IMPORTANT: Reanimated plugin must be last
     plugins: [

@@ -1,11 +1,13 @@
-import React, { useContext, useEffect, useState, useRef } from 'react';
+import React, { useContext, useRef, useMemo } from 'react';
 import { View, FlatList, StyleSheet, Dimensions, Animated, TouchableOpacity } from 'react-native';
-import { ActivityIndicator, useTheme } from 'react-native-paper';
+import { useTheme } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
-import { Icon } from '../components/ui';
-import { ApiContext } from '../context/ApiContext';
-import { api } from '../api/client';
-import FilmCard from '../components/FilmCard';
+import { Icon } from '../../components/ui';
+import { ApiContext } from '../../context/ApiContext';
+import { api } from '../../api/client';
+import FilmCard from '../../components/FilmCard';
+import SkeletonBox from '../../components/SkeletonBox';
+import { useApiQuery } from '../../hooks/useApiQuery';
 
 const numColumns = 2;
 const screenWidth = Dimensions.get('window').width;
@@ -14,30 +16,17 @@ const itemSize = Math.floor((screenWidth - 16*2 - 8) / numColumns); // padding 1
 export default function FilmsScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
-  const [films, setFilms] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
 
-  const fetchFilms = async () => {
-    if (!baseUrl) return;
-    setLoading(true);
-    try {
-      const res = await api.http.get('/api/films');
-      setFilms(res);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchFilms();
-  }, [baseUrl]);
+  const { data, loading, refresh } = useApiQuery<any[]>(
+    baseUrl ? `films@${baseUrl}` : null,
+    () => api.http.get('/api/films'),
+  );
+  const films = useMemo(() => data ?? [], [data]);
 
   // Animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
-  
+
   useFocusEffect(
     React.useCallback(() => {
       fadeAnim.setValue(0);
@@ -48,28 +37,28 @@ export default function FilmsScreen({ navigation }: any) {
       ]).start();
     }, [])
   );
-  
-  // Add header refresh button
+
+  // Header refresh button
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity 
-          style={{ marginRight: 16, padding: 4 }} 
-          onPress={async () => { const { clearImageCache } = await import('../components/CachedImage'); await clearImageCache(); fetchFilms(); }}
+        <TouchableOpacity
+          style={{ marginRight: 16, padding: 4 }}
+          onPress={refresh}
         >
-          <Icon name="refresh-cw" size={20} color="#5a4632" />
+          <Icon name="refresh-cw" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
       )
     });
-  }, [navigation, baseUrl]);
+  }, [navigation, theme, refresh]);
 
   const renderItem = ({ item }: any) => {
     const coverUri = item.thumbPath ? `${baseUrl}${item.thumbPath}` : null;
     // Film name already contains full information (brand + model)
     const displayTitle = item.name || '';
     // Build right text with format and category
-    const rightText = item.format && item.format !== '135' 
-      ? `${item.format} • ${item.category}` 
+    const rightText = item.format && item.format !== '135'
+      ? `${item.format} • ${item.category}`
       : item.category;
     return (
       <FilmCard
@@ -86,7 +75,11 @@ export default function FilmsScreen({ navigation }: any) {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {loading ? (
-        <ActivityIndicator animating={true} size="large" style={styles.loader} color="#5a4632" />
+        <View style={styles.skeletonGrid}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonBox key={i} width={itemSize} height={itemSize} style={styles.skeletonItem} />
+          ))}
+        </View>
       ) : (
         <FlatList
           data={films}
@@ -95,18 +88,21 @@ export default function FilmsScreen({ navigation }: any) {
           contentContainerStyle={styles.list}
           numColumns={numColumns}
           columnWrapperStyle={styles.columnWrapper}
+          initialNumToRender={8}
+          windowSize={7}
+          maxToRenderPerBatch={8}
+          removeClippedSubviews={true}
         />
       )}
-      {/* Removed unused add FAB */}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fdfdfd' },
+  container: { flex: 1 },
   list: { padding: 16 },
   columnWrapper: { justifyContent: 'space-between' },
   gridItem: { width: itemSize, marginBottom: 12 },
-  fab: { position: 'absolute', margin: 16, right: 0, bottom: 0, backgroundColor: '#f5f0e6' },
-  loader: { marginTop: 50 },
+  skeletonGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 16, justifyContent: 'space-between' },
+  skeletonItem: { marginBottom: 12, borderRadius: 12 },
 });

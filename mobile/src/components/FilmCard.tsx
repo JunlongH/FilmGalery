@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, type StyleProp, type ViewStyle } from 'react-native';
-import { Card } from 'react-native-paper';
+import { Card, useTheme } from 'react-native-paper';
 import CachedImage from './CachedImage';
 import CoverOverlay from './CoverOverlay';
 
@@ -14,14 +14,15 @@ export interface FilmCardProps {
 }
 
 export default function FilmCard({ coverUri, title, leftText, rightText, style, onPress }: FilmCardProps) {
+  const theme = useTheme();
   return (
     <TouchableOpacity onPress={onPress} style={style} activeOpacity={0.85}>
-      <Card style={styles.card} mode="elevated">
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]} mode="elevated">
         <View style={styles.square}>
           {coverUri ? (
-            <CachedImage uri={coverUri} contentFit="cover" style={styles.image} placeholderColor="#e9e4da" />
+            <CachedImage uri={coverUri} contentFit="cover" style={styles.image} />
           ) : (
-            <View style={[styles.image, styles.placeholder]} />
+            <View style={[styles.image, { backgroundColor: theme.colors.surfaceVariant }]} />
           )}
           <CoverOverlay title={title} leftText={leftText} rightText={rightText} />
         </View>
@@ -31,8 +32,7 @@ export default function FilmCard({ coverUri, title, leftText, rightText, style, 
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#f5f0e6', borderRadius: 8, overflow: 'hidden' },
+  card: { borderRadius: 8, overflow: 'hidden' },
   square: { width: '100%', aspectRatio: 1, position: 'relative' },
   image: { width: '100%', height: '100%' },
-  placeholder: { backgroundColor: '#d7d2c7' },
 });

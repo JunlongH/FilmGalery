@@ -10,14 +10,16 @@ import {
 } from 'react-native';
 import { GestureHandlerRootView, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { api } from '../services/api';
 import { Photo } from '../types';
+import type { RootStackParamList } from '../types/navigation';
 import { imageCache } from '../utils/imageCache';
 
 const { width, height } = Dimensions.get('window');
 
 const HomeScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -41,15 +43,14 @@ const HomeScreen: React.FC = () => {
           .map(p => api.getImageURL(p.thumb_rel_path || p.full_rel_path))
           .filter(url => url !== null) as string[];
         await imageCache.preloadBatch(thumbUrls);
-        
-        // 预加载前3张原图（避免一次加载太多）
-        const fullUrls = result
-          .slice(0, 3)
-          .map(p => api.getImageURL(p.full_rel_path))
-          .filter(url => url !== null) as string[];
-        imageCache.preloadBatch(fullUrls).catch(err => 
-          console.warn('Background full image preload failed:', err)
-        );
+
+        // 只预加载当前照片的原图
+        const currentFullUrl = api.getImageURL(result[0].full_rel_path);
+        if (currentFullUrl && !imageCache.has(currentFullUrl)) {
+          imageCache.preload(currentFullUrl).catch(err =>
+            console.warn('Background full image preload failed:', err)
+          );
+        }
       } else {
         setError('No photos available');
       }
@@ -72,19 +73,16 @@ const HomeScreen: React.FC = () => {
     setImageState('thumb');
     setFullImageLoaded(false);
 
-    // 预加载当前和下一张的原图
-    const currentPhoto = photos[currentIndex];
+    // 只预加载下一张的原图
     const nextIndex = (currentIndex + 1) % photos.length;
     const nextPhoto = photos[nextIndex];
+    const nextUrl = api.getImageURL(nextPhoto?.full_rel_path);
 
-    const urlsToPreload = [
-      api.getImageURL(currentPhoto?.full_rel_path),
-      api.getImageURL(nextPhoto?.full_rel_path),
-    ].filter(url => url !== null) as string[];
-
-    imageCache.preloadBatch(urlsToPreload).catch(err => 
-      console.warn('Failed to preload images:', err)
-    );
+    if (nextUrl && !imageCache.has(nextUrl)) {
+      imageCache.preload(nextUrl).catch(err =>
+        console.warn('Failed to preload next image:', err)
+      );
+    }
   }, [currentIndex, photos]);
 
   const onGestureEvent = (event: any) => {

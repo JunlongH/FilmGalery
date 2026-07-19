@@ -1,62 +1,49 @@
-import React, { useContext, useEffect, useState, useRef, useCallback } from 'react';
-import { View, FlatList, StyleSheet, RefreshControl, Animated, TouchableOpacity } from 'react-native';
-import { Card, Title, Paragraph, ActivityIndicator, Text, useTheme } from 'react-native-paper';
-import { useFocusEffect } from '@react-navigation/native';
-import CachedImage from '../components/CachedImage';
-import CoverOverlay from '../components/CoverOverlay';
-import { colors, spacing, radius } from '../theme';
-import { ApiContext } from '../context/ApiContext';
-import { Icon } from '../components/ui';
-import { api } from '../api/client';
+import React, { useContext, useMemo } from 'react';
+import { View, FlatList, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
+import { Card, Title, Paragraph, Text, useTheme } from 'react-native-paper';
+import CachedImage from '../../components/CachedImage';
+import CoverOverlay from '../../components/CoverOverlay';
+import SkeletonBox from '../../components/SkeletonBox';
+import { spacing, radius } from '../../theme';
+import { ApiContext } from '../../context/ApiContext';
+import { Icon } from '../../components/ui';
+import { api } from '../../api/client';
 import { format } from 'date-fns';
+import { useApiQuery } from '../../hooks/useApiQuery';
 
 export default function FilmRollsScreen({ route, navigation }: any) {
   const theme = useTheme();
   const { filmId, filmName } = route.params;
   const { baseUrl } = useContext(ApiContext);
-  const [rolls, setRolls] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<any>(null);
 
-  const fetchRolls = async () => {
-    if (!baseUrl) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.http.get('/api/rolls');
-      // Filter by filmId
-      const filtered = res.filter((r: any) => r.filmId === filmId);
-      setRolls(filtered);
-    } catch (err) {
-      setError('Failed to connect to server.');
-      console.log(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Shares the cached rolls list with the Timeline — no extra request when warm
+  const { data, error: queryError, loading, refreshing, refresh } = useApiQuery<any[]>(
+    baseUrl ? `rolls@${baseUrl}` : null,
+    () => api.http.get('/api/rolls'),
+  );
+  const rolls = useMemo(
+    () => (data ?? []).filter((r: any) => r.filmId === filmId),
+    [data, filmId],
+  );
+  const error = rolls.length === 0 && queryError ? 'Failed to connect to server.' : null;
 
-  useEffect(() => {
-    fetchRolls();
+  React.useEffect(() => {
     navigation.setOptions({ title: filmName || 'Film Rolls' });
-  }, [baseUrl, filmId]);
+  }, [navigation, filmName]);
 
-  // Add header refresh button
+  // Header refresh button
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={{ marginRight: 16, padding: 4 }}
-          onPress={async () => { 
-            const { clearImageCache } = await import('../components/CachedImage'); 
-            await clearImageCache(); 
-            fetchRolls(); 
-          }}
+          onPress={refresh}
         >
           <Icon name="refresh-cw" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
       )
     });
-  }, [navigation, baseUrl, filmId, theme]);
+  }, [navigation, theme, refresh]);
 
   const renderItem = ({ item }: any) => {
     let coverUrl = null;
@@ -68,7 +55,7 @@ export default function FilmRollsScreen({ route, navigation }: any) {
 
     return (
       <Card 
-        style={styles.card} 
+        style={[styles.card, { backgroundColor: theme.colors.surface }]} 
         onPress={() => navigation.navigate('RollDetail', { rollId: item.id, rollName: item.title || `Roll #${item.id}` })}
         mode="elevated"
       >
@@ -83,8 +70,8 @@ export default function FilmRollsScreen({ route, navigation }: any) {
           </View>
         ) : (
           <Card.Content style={styles.cardContent}>
-            <Title style={styles.cardTitle}>{item.title || `Roll #${item.id}`}</Title>
-            <Paragraph style={styles.meta}>{item.film_name_joined || item.film_type || 'Unknown Film'}</Paragraph>
+            <Title style={[styles.cardTitle, { color: theme.colors.onSurface }]}>{item.title || `Roll #${item.id}`}</Title>
+            <Paragraph style={[styles.meta, { color: theme.colors.onSurfaceVariant }]}>{item.film_name_joined || item.film_type || 'Unknown Film'}</Paragraph>
           </Card.Content>
         )}
       </Card>
@@ -94,13 +81,17 @@ export default function FilmRollsScreen({ route, navigation }: any) {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
+        <View style={[styles.errorContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
+          <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
         </View>
       )}
       
       {loading && rolls.length === 0 ? (
-        <ActivityIndicator animating={true} size="large" style={styles.loader} color="#5a4632" />
+        <View style={styles.list}>
+          {[0, 1].map((i) => (
+            <SkeletonBox key={i} height={160} style={styles.skeletonCard} />
+          ))}
+        </View>
       ) : (
         <FlatList
           data={rolls}
@@ -108,9 +99,13 @@ export default function FilmRollsScreen({ route, navigation }: any) {
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={fetchRolls} colors={['#5a4632']} />
+            <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[theme.colors.primary]} />
           }
-          ListEmptyComponent={!loading ? <Text style={styles.empty}>No rolls found for this film.</Text> : null}
+          ListEmptyComponent={!loading ? <Text style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>No rolls found for this film.</Text> : null}
+          initialNumToRender={6}
+          windowSize={7}
+          maxToRenderPerBatch={6}
+          removeClippedSubviews={true}
         />
       )}
     </View>
@@ -120,14 +115,12 @@ export default function FilmRollsScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   list: {
     padding: spacing.lg,
   },
   card: {
     marginBottom: spacing.lg,
-    backgroundColor: colors.surface,
     borderRadius: radius.md,
     overflow: 'hidden',
   },
@@ -172,32 +165,30 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   cardTitle: {
-    color: colors.textPrimary,
     fontWeight: '600' as const,
     fontSize: 18,
   },
   dateText: {
-    color: colors.textSecondary,
     fontSize: 12,
   },
   meta: {
     fontSize: 14,
-    color: colors.textSecondary,
   },
   loader: {
     marginTop: 50,
   },
   errorContainer: {
     padding: spacing.md,
-    backgroundColor: colors.surfaceVariant,
   },
   errorText: {
-    color: colors.error,
     textAlign: 'center',
   },
   empty: {
     textAlign: 'center',
     marginTop: spacing.lg,
-    color: colors.textSecondary,
+  },
+  skeletonCard: {
+    borderRadius: radius.md,
+    marginBottom: spacing.lg,
   },
 });

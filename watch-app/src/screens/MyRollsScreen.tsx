@@ -101,7 +101,7 @@ const MyRollsScreen: React.FC = () => {
         <FlatList
           data={rolls}
           renderItem={renderItem}
-          keyExtractor={item => item.id.toString()}
+          keyExtractor={item => String(item.id)}
           contentContainerStyle={styles.list}
         />
       )}

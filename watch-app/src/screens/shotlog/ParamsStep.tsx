@@ -5,10 +5,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  TextInput,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { FilmItem } from '../types';
+import { FilmItem } from '../../types';
+import { FixedLensInfo } from './SelectRollStep';
 
 const SHUTTER_SPEEDS = [
   '1/8000', '1/4000', '1/2000', '1/1000', '1/500', '1/250', '1/125',
@@ -19,46 +18,42 @@ const APERTURES = [
   1.4, 1.8, 2, 2.8, 4, 5.6, 8, 11, 16, 22,
 ];
 
-const ShotLogParamsScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
-  const roll: FilmItem = route.params?.roll;
-  const filmNameParam: string | undefined = route.params?.filmName;
-  const filmIsoParam: string | undefined = route.params?.filmIso;
-  const fixedLensInfo: { text: string; focal_length?: number; max_aperture?: number } | undefined = route.params?.fixedLensInfo;
+export interface ShotParams {
+  count: number;
+  shutterSpeed: string;
+  aperture: number | null;
+}
 
+interface ParamsStepProps {
+  roll: FilmItem;
+  filmName?: string;
+  filmIso?: string;
+  fixedLensInfo?: FixedLensInfo;
+  onNext: (params: ShotParams) => void;
+}
+
+const ParamsStep: React.FC<ParamsStepProps> = ({
+  roll,
+  filmName,
+  filmIso,
+  fixedLensInfo,
+  onNext,
+}) => {
   const [count, setCount] = useState(1);
   const [shutterSpeed, setShutterSpeed] = useState('1/125');
   const [aperture, setAperture] = useState<number | null>(5.6);
 
-  if (!roll) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.header}>Error</Text>
-        <Text style={styles.rollInfo}>Roll not found</Text>
-      </View>
-    );
-  }
-
   const handleNext = () => {
-    navigation.navigate('ShotLogLocation', {
-      roll,
-      filmName: filmNameParam,
-      filmIso: filmIsoParam,
-      count,
-      shutterSpeed,
-      aperture,
-      fixedLensInfo,
-    });
+    onNext({ count, shutterSpeed, aperture });
   };
 
-  const filmDisplayName = roll?.film_type || roll?.film_name || filmNameParam || 'Unknown Film';
-  const isoDisplay = roll?.iso || filmIsoParam;
+  const filmDisplayName = roll?.film_type || roll?.film_name || filmName || 'Unknown Film';
+  const isoDisplay = roll?.iso || filmIso;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.header}>Shot Parameters</Text>
-      
+
       <Text style={styles.rollInfo}>{roll?.title}</Text>
       <Text style={[styles.rollInfo, { fontSize: 14, marginBottom: 4, fontWeight: '600' }]}>
         {filmDisplayName}
@@ -66,7 +61,7 @@ const ShotLogParamsScreen: React.FC = () => {
       <Text style={[styles.rollInfo, { fontSize: 12, marginBottom: fixedLensInfo ? 8 : 24 }]}>
         {isoDisplay ? `ISO ${isoDisplay}` : ''} {roll?.loaded_camera ? `• ${roll.loaded_camera}` : ''}
       </Text>
-      
+
       {/* Fixed Lens Indicator */}
       {fixedLensInfo && (
         <View style={styles.fixedLensIndicator}>
@@ -266,4 +261,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ShotLogParamsScreen;
+export default ParamsStep;

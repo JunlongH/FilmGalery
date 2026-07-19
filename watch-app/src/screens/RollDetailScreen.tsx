@@ -38,7 +38,7 @@ const RollDetailScreen: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      if (!roll) return;
+      if (!roll || roll.id == null) return;
       const data = await api.getPhotosByRoll(roll.id);
       // Guard: ensure all photos belong to this roll
       const filteredPhotos = data.filter(photo => photo.roll_id === roll.id);
@@ -129,7 +129,7 @@ const RollDetailScreen: React.FC = () => {
       <FlatList
         data={photos}
         renderItem={renderPhoto}
-        keyExtractor={item => item.id.toString()}
+        keyExtractor={item => String(item.id)}
         numColumns={3}
         contentContainerStyle={styles.grid}
         ListHeaderComponent={renderHeader}

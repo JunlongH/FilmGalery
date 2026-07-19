@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,16 +7,34 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { api } from '../services/api';
-import { FilmItem, Film } from '../types';
+import { api } from '../../services/api';
+import { FilmItem, Film } from '../../types';
 
-const ShotLogSelectRollScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
+export interface FixedLensInfo {
+  text: string;
+  focal_length?: number;
+  max_aperture?: number;
+}
+
+type CameraResult = Awaited<ReturnType<typeof api.getCamera>>;
+
+interface SelectRollStepProps {
+  onSelect: (
+    roll: FilmItem,
+    filmName: string,
+    filmIso: string | undefined,
+    fixedLensInfo: FixedLensInfo | undefined
+  ) => void;
+}
+
+const SelectRollStep: React.FC<SelectRollStepProps> = ({ onSelect }) => {
   const [rolls, setRolls] = useState<FilmItem[]>([]);
   const [filmById, setFilmById] = useState<Map<number, Film>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // In-flight camera lookups keyed by equip id, kicked off when rolls load so
+  // the camera is usually already fetched by the time the user taps a roll.
+  const cameraPromisesRef = useRef<Map<number, Promise<CameraResult>>>(new Map());
 
   useEffect(() => {
     loadRolls();
@@ -33,9 +51,20 @@ const ShotLogSelectRollScreen: React.FC = () => {
       ]);
 
       const map = new Map<number, Film>();
-      films.forEach(f => map.set(f.id, f));
+      films.forEach(f => {
+        if (f.id != null) map.set(f.id, f);
+      });
       setFilmById(map);
       setRolls(data);
+
+      // Prefetch cameras in the background
+      const promises = new Map<number, Promise<CameraResult>>();
+      data.forEach(item => {
+        if (item.camera_equip_id && !promises.has(item.camera_equip_id)) {
+          promises.set(item.camera_equip_id, api.getCamera(item.camera_equip_id));
+        }
+      });
+      cameraPromisesRef.current = promises;
     } catch (err: any) {
       console.error('Failed to load rolls:', err);
       setError(err.message || 'Failed to load rolls');
@@ -49,14 +78,17 @@ const ShotLogSelectRollScreen: React.FC = () => {
     // Film name already contains full information (brand + model)
     const filmName = roll.film_type || roll.film_name || film?.name || 'Unknown Film';
     const filmIsoRaw = roll.iso || (film?.iso != null ? String(film.iso) : undefined);
-    
+
     // Check if camera has fixed lens
-    let fixedLensInfo: { text: string; focal_length?: number; max_aperture?: number } | undefined;
+    let fixedLensInfo: FixedLensInfo | undefined;
     if (roll.camera_equip_id) {
       try {
-        const camera = await api.getCamera(roll.camera_equip_id);
+        const cameraPromise =
+          cameraPromisesRef.current.get(roll.camera_equip_id) ??
+          api.getCamera(roll.camera_equip_id);
+        const camera = await cameraPromise;
         if (camera?.has_fixed_lens) {
-          const lensText = camera.fixed_lens_focal_length 
+          const lensText = camera.fixed_lens_focal_length
             ? `${camera.fixed_lens_focal_length}mm${camera.fixed_lens_max_aperture ? ` f/${camera.fixed_lens_max_aperture}` : ''}`
             : 'Fixed Lens';
           fixedLensInfo = {
@@ -69,8 +101,8 @@ const ShotLogSelectRollScreen: React.FC = () => {
         console.warn('Failed to fetch camera info for fixed lens check', e);
       }
     }
-    
-    navigation.navigate('ShotLogParams', { roll, filmName, filmIso: filmIsoRaw, fixedLensInfo });
+
+    onSelect(roll, filmName, filmIsoRaw, fixedLensInfo);
   };
 
   const renderItem = ({ item }: { item: FilmItem }) => {
@@ -82,7 +114,7 @@ const ShotLogSelectRollScreen: React.FC = () => {
     const isoValue = item.iso || (film?.iso != null ? String(film.iso) : undefined);
     const formatValue = film?.format && film.format !== '135' ? ` • ${film.format}` : '';
     const isoInfo = isoValue ? ` ISO ${isoValue}${formatValue}` : '';
-    
+
     return (
       <TouchableOpacity
         style={styles.rollItem}
@@ -128,7 +160,7 @@ const ShotLogSelectRollScreen: React.FC = () => {
         <FlatList
           data={rolls}
           renderItem={renderItem}
-          keyExtractor={item => item.id.toString()}
+          keyExtractor={item => String(item.id)}
           contentContainerStyle={styles.list}
         />
       )}
@@ -207,4 +239,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ShotLogSelectRollScreen;
+export default SelectRollStep;

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, type ImageStyle, type StyleProp } from 'react-native';
 import { Image as ExpoImage, type ImageContentFit } from 'expo-image';
+import { useTheme } from 'react-native-paper';
 import { useCachedImage } from '../hooks/useCachedImage';
 
 export interface CachedImageProps extends Omit<React.ComponentProps<typeof ExpoImage>, 'source' | 'style' | 'contentFit' | 'transition' | 'placeholder' | 'onLoadEnd' | 'onError'> {
@@ -17,10 +18,11 @@ export default function CachedImage({
   style,
   contentFit = 'cover',
   transition = 150,
-  placeholderColor = '#eee',
+  placeholderColor,
   showLoadedIndicator = false,
   ...rest
 }: CachedImageProps) {
+  const theme = useTheme();
   const { source, loaded, onLoadEnd, onError } = useCachedImage(uri);
   const effectiveTransition = loaded ? 0 : transition;
 
@@ -37,7 +39,7 @@ export default function CachedImage({
         onError={onError}
         placeholder={{
           blurhash: undefined,
-          color: placeholderColor,
+          color: placeholderColor ?? theme.colors.surfaceVariant,
         } as any}
       />
       {showLoadedIndicator && loaded && (

@@ -1,14 +1,15 @@
-import React, { useContext, useEffect, useState, useRef, useCallback } from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity, Dimensions, ScrollView, Animated } from 'react-native';
-import CachedImage from '../components/CachedImage';
-import { colors, spacing, radius } from '../theme';
-import { ActivityIndicator, Text, Surface, Divider, useTheme, Switch } from 'react-native-paper';
-import { useFocusEffect } from '@react-navigation/native';
-import { Icon } from '../components/ui';
-import { ApiContext } from '../context/ApiContext';
-import { api } from '../api/client';
+import React, { useContext, useMemo, useCallback } from 'react';
+import { View, FlatList, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import CachedImage from '../../components/CachedImage';
+import SkeletonBox from '../../components/SkeletonBox';
+import { spacing, radius } from '../../theme';
+import { Text, Surface, Divider, useTheme, Switch } from 'react-native-paper';
+import { Icon } from '../../components/ui';
+import { ApiContext } from '../../context/ApiContext';
+import { api } from '../../api/client';
 import { format } from 'date-fns';
-import { getPhotoUrl } from '../utils/urls';
+import { getPhotoUrl } from '../../utils/urls';
+import { useApiQuery } from '../../hooks/useApiQuery';
 
 const numColumns = 3;
 const screenWidth = Dimensions.get('window').width;
@@ -18,75 +19,65 @@ export default function RollDetailScreen({ route, navigation }: any) {
   const theme = useTheme();
   const { rollId } = route.params;
   const { baseUrl } = useContext(ApiContext);
-  const [photos, setPhotos] = useState<any[]>([]);
-  const [roll, setRoll] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(false);
-  const [showNegatives, setShowNegatives] = useState(false);
+  const [expanded, setExpanded] = React.useState(false);
+  const [showNegatives, setShowNegatives] = React.useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [rollRes, photosRes] = await Promise.all([
-          api.http.get(`/api/rolls/${rollId}`),
-          api.http.get(`/api/rolls/${rollId}/photos`)
-        ]);
-        setRoll(rollRes);
-        setPhotos(photosRes);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [rollId, baseUrl]);
+  const rollKey = baseUrl ? `roll:${rollId}@${baseUrl}` : null;
+  const photosKey = baseUrl ? `rollPhotos:${rollId}@${baseUrl}` : null;
 
-  // Add header refresh button
+  const rollQuery = useApiQuery<any>(
+    rollKey,
+    () => api.http.get(`/api/rolls/${rollId}`),
+  );
+  const photosQuery = useApiQuery<any[]>(
+    photosKey,
+    () => api.http.get(`/api/rolls/${rollId}/photos`),
+  );
+  const roll = rollQuery.data ?? null;
+  const photos = useMemo(() => photosQuery.data ?? [], [photosQuery.data]);
+  const loading = rollQuery.loading && photosQuery.loading;
+
+  const refresh = useCallback(() => {
+    rollQuery.refresh();
+    photosQuery.refresh();
+  }, [rollQuery.refresh, photosQuery.refresh]);
+
+  // Header refresh button
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={{ marginRight: 16, padding: 4 }}
-          onPress={async () => {
-            setLoading(true);
-            const { clearImageCache } = await import('../components/CachedImage');
-            await clearImageCache();
-            try {
-              const [rollRes, photosRes] = await Promise.all([
-                api.http.get(`/api/rolls/${rollId}`),
-                api.http.get(`/api/rolls/${rollId}/photos`)
-              ]);
-              setRoll(rollRes);
-              setPhotos(photosRes);
-            } finally {
-              setLoading(false);
-            }
-          }}
+          onPress={refresh}
         >
           <Icon name="refresh-cw" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
-      )
+      ),
     });
-  }, [navigation, baseUrl, rollId, theme]);
+  }, [navigation, theme, refresh]);
 
-  const hasNegatives = photos.some((p: any) => p.negative_rel_path);
+  const hasNegatives = useMemo(() => photos.some((p: any) => p.negative_rel_path), [photos]);
+
+  const visiblePhotos = useMemo(
+    () => (showNegatives ? photos.filter((p: any) => p.negative_rel_path) : photos),
+    [photos, showNegatives],
+  );
 
   const renderHeader = () => {
     if (!roll) return null;
     return (
-      <Surface style={styles.headerSurface} elevation={1}>
+      <Surface style={[styles.headerSurface, { backgroundColor: theme.colors.surface }]} elevation={1}>
         <View style={styles.headerContent}>
           <View style={styles.headerTopRow}>
-            <Text style={styles.title}>{roll.title || `Roll #${roll.id}`}</Text>
+            <Text style={[styles.title, { color: theme.colors.onSurface }]}>{roll.title || `Roll #${roll.id}`}</Text>
             <View style={styles.headerActions}>
                 {hasNegatives && (
                     <View style={styles.toggleRow}>
-                        <Text style={styles.toggleLabel}>Negatives</Text>
-                        <Switch 
-                            value={showNegatives} 
-                            onValueChange={setShowNegatives} 
-                            color={colors.primary} 
+                        <Text style={[styles.toggleLabel, { color: theme.colors.onSurfaceVariant }]}>Negatives</Text>
+                        <Switch
+                            value={showNegatives}
+                            onValueChange={setShowNegatives}
+                            color={theme.colors.primary}
                             style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                         />
                     </View>
@@ -99,13 +90,13 @@ export default function RollDetailScreen({ route, navigation }: any) {
                   <Icon
                     name={expanded ? 'chevron-up' : 'chevron-down'}
                     size={24}
-                    color={colors.textSecondary}
+                    color={theme.colors.onSurfaceVariant}
                   />
                 </TouchableOpacity>
             </View>
           </View>
 
-          <Text style={styles.date}>
+          <Text style={[styles.date, { color: theme.colors.onSurfaceVariant }]}>
             {roll.start_date ? format(new Date(roll.start_date), 'MMMM d, yyyy') : 'No Date'}
             {roll.end_date ? ` - ${format(new Date(roll.end_date), 'MMMM d, yyyy')}` : ''}
           </Text>
@@ -116,30 +107,30 @@ export default function RollDetailScreen({ route, navigation }: any) {
 
               <View style={styles.metaRow}>
                 <View style={styles.metaItem}>
-                  <Text style={styles.metaLabel}>Camera</Text>
-                  <Text style={styles.metaValue}>{roll.display_camera || '-'}</Text>
+                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>Camera</Text>
+                  <Text style={[styles.metaValue, { color: theme.colors.onSurface }]}>{roll.display_camera || '-'}</Text>
                 </View>
                 <View style={styles.metaItem}>
-                  <Text style={styles.metaLabel}>Lens</Text>
-                  <Text style={styles.metaValue}>{roll.display_lens || '-'}</Text>
+                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>Lens</Text>
+                  <Text style={[styles.metaValue, { color: theme.colors.onSurface }]}>{roll.display_lens || '-'}</Text>
                 </View>
               </View>
 
               <View style={styles.metaRow}>
                 <View style={styles.metaItem}>
-                  <Text style={styles.metaLabel}>Film Stock</Text>
-                  <Text style={styles.metaValue}>{roll.film_name_joined || roll.film_type || '-'}</Text>
+                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>Film Stock</Text>
+                  <Text style={[styles.metaValue, { color: theme.colors.onSurface }]}>{roll.film_name_joined || roll.film_type || '-'}</Text>
                 </View>
                 <View style={styles.metaItem}>
-                  <Text style={styles.metaLabel}>ISO</Text>
-                  <Text style={styles.metaValue}>{roll.film_iso_joined || roll.iso || '-'}</Text>
+                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>ISO</Text>
+                  <Text style={[styles.metaValue, { color: theme.colors.onSurface }]}>{roll.film_iso_joined || roll.iso || '-'}</Text>
                 </View>
               </View>
 
               {roll.notes ? (
                 <View style={styles.notesContainer}>
-                  <Text style={styles.metaLabel}>Notes</Text>
-                  <Text style={styles.notesText}>{roll.notes}</Text>
+                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>Notes</Text>
+                  <Text style={[styles.notesText, { color: theme.colors.onSurface }]}>{roll.notes}</Text>
                 </View>
               ) : null}
             </>
@@ -149,9 +140,7 @@ export default function RollDetailScreen({ route, navigation }: any) {
     );
   };
 
-  const visiblePhotos = showNegatives ? photos.filter((p: any) => p.negative_rel_path) : photos;
-
-  const renderItem = ({ item }: any) => {
+  const renderItem = ({ item, index }: any) => {
     let uri;
     if (showNegatives && item.negative_rel_path) {
         uri = getPhotoUrl(baseUrl, item, 'negative');
@@ -159,16 +148,14 @@ export default function RollDetailScreen({ route, navigation }: any) {
         uri = getPhotoUrl(baseUrl, item, 'thumb');
     }
 
-    const initialIndex = visiblePhotos.findIndex(p => p.id === item.id);
-
     return (
-      <TouchableOpacity 
-        onPress={() => navigation.navigate('PhotoView', { 
-            photo: item, 
+      <TouchableOpacity
+        onPress={() => navigation.navigate('PhotoView', {
+            photo: item,
             rollId: rollId,
             viewMode: showNegatives ? 'negative' : 'positive',
-            photos: visiblePhotos,
-            initialIndex,
+            photosKey,
+            initialIndex: index,
         })}
         activeOpacity={0.8}
       >
@@ -186,21 +173,33 @@ export default function RollDetailScreen({ route, navigation }: any) {
     );
   };
 
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View style={styles.skeletonGrid}>
+          {Array.from({ length: 9 }).map((_, i) => (
+            <SkeletonBox key={i} width={tileSize} height={tileSize} style={styles.skeletonTile} />
+          ))}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {loading ? (
-        <ActivityIndicator animating={true} size="large" style={styles.loader} color={colors.primary} />
-      ) : (
-        <FlatList
-          data={photos}
-          renderItem={renderItem}
-          keyExtractor={item => item.id.toString()}
-          numColumns={numColumns}
-          contentContainerStyle={styles.list}
-          ListHeaderComponent={renderHeader}
-          columnWrapperStyle={styles.columnWrapper}
-        />
-      )}
+      <FlatList
+        data={visiblePhotos}
+        renderItem={renderItem}
+        keyExtractor={item => item.id.toString()}
+        numColumns={numColumns}
+        contentContainerStyle={styles.list}
+        ListHeaderComponent={renderHeader}
+        columnWrapperStyle={styles.columnWrapper}
+        initialNumToRender={12}
+        windowSize={7}
+        maxToRenderPerBatch={12}
+        removeClippedSubviews={true}
+      />
     </View>
   );
 }
@@ -218,7 +217,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   headerSurface: {
-    backgroundColor: colors.surface,
     marginBottom: spacing.md,
     borderBottomLeftRadius: radius.lg,
     borderBottomRightRadius: radius.lg,
@@ -243,24 +241,20 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: 12,
     marginRight: 4,
-    color: colors.textSecondary,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold' as const,
-    color: colors.textPrimary,
     flex: 1,
     marginRight: spacing.md,
   },
   date: {
     fontSize: 14,
-    color: colors.textSecondary,
     marginTop: 4,
     marginBottom: spacing.sm,
   },
   divider: {
     marginVertical: spacing.md,
-    backgroundColor: '#e0e0e0',
   },
   metaRow: {
     flexDirection: 'row',
@@ -271,14 +265,12 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     fontSize: 11,
-    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   metaValue: {
     fontSize: 15,
-    color: colors.textPrimary,
     fontWeight: '500' as const,
   },
   notesContainer: {
@@ -286,14 +278,12 @@ const styles = StyleSheet.create({
   },
   notesText: {
     fontSize: 14,
-    color: colors.textPrimary,
     lineHeight: 20,
   },
   thumbnail: {
     width: tileSize,
     height: tileSize,
     borderRadius: radius.sm,
-    backgroundColor: '#eee',
   },
   favoriteBadge: {
     position: 'absolute',
@@ -303,7 +293,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 2,
   },
-  loader: {
-    marginTop: 50,
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.md,
+  },
+  skeletonTile: {
+    marginRight: spacing.xs,
+    marginBottom: spacing.xs,
+    borderRadius: radius.sm,
   },
 });

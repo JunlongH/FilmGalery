@@ -7,22 +7,24 @@ import {
   ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../types/navigation';
 
 interface MenuItem {
   id: string;
   title: string;
   icon: string;
-  screen: string;
+  screen: 'ShotLog' | 'MyRolls' | 'Settings';
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: '1', title: 'Shot Log', icon: '📷', screen: 'ShotLogSelectRoll' },
+  { id: '1', title: 'Shot Log', icon: '📷', screen: 'ShotLog' },
   { id: '2', title: 'My Rolls', icon: '🎞️', screen: 'MyRolls' },
   { id: '3', title: 'Settings', icon: '⚙️', screen: 'Settings' },
 ];
 
 const MainMenuScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
     <View style={styles.container}>

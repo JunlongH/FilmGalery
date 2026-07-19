@@ -1,28 +1,44 @@
-import React, { useContext, useEffect, useMemo, useState, useRef } from 'react';
-import { View, FlatList, RefreshControl, StyleSheet, Image, Animated } from 'react-native';
-import { ActivityIndicator, Chip, Text, useTheme } from 'react-native-paper';
+import React, { useContext, useMemo, useRef } from 'react';
+import { View, FlatList, RefreshControl, StyleSheet, Animated } from 'react-native';
+import { Chip, Text, useTheme } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
-import { ApiContext } from '../context/ApiContext';
-import { getFilmItems, getFilms } from '../api/filmItems';
-import { buildUploadUrl } from '../utils/urlHelper';
-import { FILM_ITEM_STATUS_FILTERS, FILM_ITEM_STATUS_LABELS } from '../constants/filmItemStatus';
-import TouchScale from '../components/TouchScale';
-import { spacing, radius } from '../theme';
-import { Icon, Badge } from '../components/ui';
+import { ApiContext } from '../../context/ApiContext';
+import { getFilmItems, getFilms } from '../../api/filmItems';
+import { buildUploadUrl } from '../../utils/urlHelper';
+import { FILM_ITEM_STATUS_FILTERS, FILM_ITEM_STATUS_LABELS } from '../../constants/filmItemStatus';
+import TouchScale from '../../components/TouchScale';
+import CachedImage from '../../components/CachedImage';
+import SkeletonBox from '../../components/SkeletonBox';
+import { spacing, radius } from '../../theme';
+import { Icon } from '../../components/ui';
+import { useApiQuery } from '../../hooks/useApiQuery';
+
+interface InventoryData {
+  items: any[];
+  films: any[];
+}
 
 export default function InventoryScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [allItems, setAllItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [films, setFilms] = useState<any[]>([]);
+  const [statusFilter, setStatusFilter] = React.useState('all');
+
+  const { data, error: queryError, loading, refreshing, refresh } = useApiQuery<InventoryData>(
+    baseUrl ? `inventory@${baseUrl}` : null,
+    async () => {
+      const [filmItemsRes, filmsRes] = await Promise.all([getFilmItems(), getFilms()]);
+      const items = (filmItemsRes as any) && Array.isArray((filmItemsRes as any).items) ? (filmItemsRes as any).items : [];
+      return { items, films: Array.isArray(filmsRes) ? filmsRes : [] };
+    },
+  );
+  const allItems = useMemo(() => data?.items ?? [], [data]);
+  const films = useMemo(() => data?.films ?? [], [data]);
+  const error = allItems.length === 0 && queryError ? 'Failed to load inventory' : '';
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
-  
+
   // Animate on focus
   useFocusEffect(
     React.useCallback(() => {
@@ -34,34 +50,6 @@ export default function InventoryScreen({ navigation }: any) {
       ]).start();
     }, [])
   );
-
-  const loadAll = async () => {
-    if (!baseUrl) return;
-    setLoading(true);
-    setError('');
-    try {
-      const [filmItemsRes, filmsRes] = await Promise.all([
-        getFilmItems(),
-        getFilms(),
-      ]);
-      const items = (filmItemsRes as any) && Array.isArray((filmItemsRes as any).items) ? (filmItemsRes as any).items : [];
-      setAllItems(items);
-      setFilms(Array.isArray(filmsRes) ? filmsRes : []);
-    } catch (err) {
-      console.log('Failed to load film items', err);
-      setError('Failed to load inventory');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadAll();
-  }, [baseUrl]);
-
-  const onRefresh = () => {
-    loadAll();
-  };
 
   const filmById = useMemo(() => {
     const map = new Map();
@@ -79,11 +67,11 @@ export default function InventoryScreen({ navigation }: any) {
   const renderItem = ({ item }: any) => {
     const film = filmById.get(item.film_id) || null;
     // Film name already contains full information (brand + model)
-    const filmName = film 
-      ? (film.name || film.brand || 'Unknown Film') 
+    const filmName = film
+      ? (film.name || film.brand || 'Unknown Film')
       : `Film #${item.film_id || ''}`;
     // Build subtitle with format and ISO
-    const filmMeta = film 
+    const filmMeta = film
       ? `ISO ${film.iso}${film.format && film.format !== '135' ? ` • ${film.format}` : ''}`
       : '';
     // For loaded items, show the camera used when available
@@ -100,7 +88,7 @@ export default function InventoryScreen({ navigation }: any) {
       <TouchScale onPress={() => navigation.navigate('FilmItemDetail', { itemId: item.id, filmName })}>
         <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           {thumb ? (
-            <Image source={{ uri: thumb }} style={styles.thumb} resizeMode="cover" />
+            <CachedImage uri={thumb} style={styles.thumb} contentFit="cover" />
           ) : null}
           <View style={styles.cardBody}>
             <Text variant="titleMedium" numberOfLines={1}>{filmName}</Text>
@@ -141,7 +129,11 @@ export default function InventoryScreen({ navigation }: any) {
       </View>
 
       {loading && items.length === 0 ? (
-        <ActivityIndicator animating size="large" style={{ marginTop: 40 }} />
+        <View style={styles.list}>
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonBox key={i} height={80} style={styles.skeletonCard} />
+          ))}
+        </View>
       ) : (
           <>
             {error ? (
@@ -153,8 +145,20 @@ export default function InventoryScreen({ navigation }: any) {
           renderItem={renderItem}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={onRefresh} colors={[theme.colors.primary]} />
+            <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[theme.colors.primary]} />
           }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Icon name="package" size={56} color={theme.colors.onSurfaceVariant} />
+              <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
+                No film items match this filter
+              </Text>
+            </View>
+          }
+          initialNumToRender={10}
+          windowSize={7}
+          maxToRenderPerBatch={10}
+          removeClippedSubviews={true}
           />
           </>
       )}
@@ -171,4 +175,7 @@ const styles = StyleSheet.create({
   thumb: { width: 80, height: 80 },
   cardBody: { flex: 1, padding: spacing.md, justifyContent: 'center' },
   status: { marginTop: 4 },
+  skeletonCard: { borderRadius: radius.md, marginBottom: spacing.md },
+  emptyContainer: { alignItems: 'center', paddingTop: 60 },
+  emptyText: { marginTop: 12, fontSize: 14 },
 });

@@ -1,24 +1,36 @@
 import React, { useContext, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { View, FlatList, StyleSheet, RefreshControl, ScrollView, Animated, Dimensions, TouchableOpacity } from 'react-native';
-import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
-import { colors, spacing, radius } from '../theme';
-import CachedImage from '../components/CachedImage';
-import { ApiContext } from '../context/ApiContext';
-import { api } from '../api/client';
+import { ActivityIndicator, Text, useTheme, FAB } from 'react-native-paper';
+import { colors, spacing, radius } from '../../theme';
+import CachedImage from '../../components/CachedImage';
+import SkeletonBox from '../../components/SkeletonBox';
+import { ApiContext } from '../../context/ApiContext';
+import { api } from '../../api/client';
 import { format } from 'date-fns';
-import { getRollCoverUrl } from '../utils/urls';
-import { Icon } from '../components/ui';
+import { getRollCoverUrl } from '../../utils/urls';
+import { Icon } from '../../components/ui';
 import { useFocusEffect } from '@react-navigation/native';
+import { useApiQuery } from '../../hooks/useApiQuery';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
-  const [rolls, setRolls] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<any>(null);
   const [selectedYear, setSelectedYear] = useState<any>(null); // null = all years
+
+  const {
+    data: rollsData,
+    error: queryError,
+    loading,
+    refreshing,
+    refresh,
+  } = useApiQuery<any[]>(
+    baseUrl ? `rolls@${baseUrl}` : null,
+    () => api.http.get('/api/rolls'),
+  );
+  const rolls = useMemo(() => rollsData ?? [], [rollsData]);
+  const error = rolls.length === 0 && queryError ? 'Failed to connect to server. Check Settings.' : null;
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -29,7 +41,7 @@ export default function HomeScreen({ navigation }: any) {
     useCallback(() => {
       fadeAnim.setValue(0);
       slideAnim.setValue(20);
-      
+
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -44,25 +56,6 @@ export default function HomeScreen({ navigation }: any) {
       ]).start();
     }, [])
   );
-
-  const fetchRolls = useCallback(async () => {
-    if (!baseUrl) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.http.get('/api/rolls');
-      setRolls(res);
-    } catch (err) {
-      setError('Failed to connect to server. Check Settings.');
-      console.log(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [baseUrl]);
-
-  useEffect(() => {
-    fetchRolls();
-  }, [fetchRolls]);
 
   // Derive year list from rolls
   const years = useMemo(() => {
@@ -163,9 +156,23 @@ export default function HomeScreen({ navigation }: any) {
       )}
       
       {loading && rolls.length === 0 ? (
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator animating={true} size="large" color={theme.colors.primary} />
-          <Text style={[styles.loaderText, { color: theme.colors.onSurfaceVariant }]}>Loading rolls...</Text>
+        <View style={styles.skeletonContainer}>
+          <View style={styles.skeletonChipsRow}>
+            <SkeletonBox width={72} height={40} style={styles.skeletonChip} />
+            <SkeletonBox width={72} height={40} style={styles.skeletonChip} />
+            <SkeletonBox width={72} height={40} style={styles.skeletonChip} />
+          </View>
+          {[0, 1, 2].map((i) => (
+            <SkeletonBox key={i} height={200} style={styles.skeletonCard} />
+          ))}
+        </View>
+      ) : rolls.length === 0 && !error ? (
+        <View style={styles.emptyContainer}>
+          <Icon name="film" size={64} color={theme.colors.onSurfaceVariant} />
+          <Text style={[styles.emptyTitle, { color: theme.colors.onSurface }]}>No rolls yet</Text>
+          <Text style={[styles.emptySubtitle, { color: theme.colors.onSurfaceVariant }]}>
+            Your film rolls will appear here once the server is connected.
+          </Text>
         </View>
       ) : (
         <>
@@ -226,12 +233,23 @@ export default function HomeScreen({ navigation }: any) {
             keyExtractor={item => item.id.toString()}
             contentContainerStyle={styles.list}
             refreshControl={
-              <RefreshControl refreshing={loading} onRefresh={fetchRolls} colors={[theme.colors.primary]} />
+              <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[theme.colors.primary]} />
             }
             showsVerticalScrollIndicator={false}
+            initialNumToRender={5}
+            windowSize={7}
+            maxToRenderPerBatch={5}
+            removeClippedSubviews={true}
           />
         </>
       )}
+      <FAB
+        icon="camera"
+        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+        color="#fff"
+        onPress={() => navigation.navigate('ShotLog')}
+        accessibilityLabel="Open shot log"
+      />
     </View>
   );
 }
@@ -331,6 +349,43 @@ const styles = StyleSheet.create({
   loaderText: {
     marginTop: 12,
     fontSize: 14,
+  },
+  skeletonContainer: {
+    padding: spacing.md,
+  },
+  skeletonChipsRow: {
+    flexDirection: 'row',
+    marginBottom: spacing.md,
+  },
+  skeletonChip: {
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  skeletonCard: {
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600' as const,
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  fab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
   },
   errorContainer: {
     flexDirection: 'row',

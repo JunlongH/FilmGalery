@@ -94,7 +94,7 @@ function createSessionsStore(db) {
         `SELECT id, device_name, device_kind, device_fp, issued_at, expires_at,
                 last_seen_at, revoked_at, issued_by
            FROM sessions
-          ORDER BY issued_at DESC`,
+          ORDER BY issued_at DESC, id DESC`,
         (err, rows) => (err ? reject(err) : resolve(rows || []))
       );
     });

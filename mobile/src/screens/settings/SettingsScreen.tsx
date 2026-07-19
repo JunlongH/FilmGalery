@@ -3,8 +3,8 @@ import { View, StyleSheet, Alert, ActivityIndicator, ScrollView, Animated } from
 import { TextInput, Button, Text, Switch, useTheme, Chip, SegmentedButtons } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ApiContext } from '../context/ApiContext';
-import { Icon } from '../components/ui';
+import { ApiContext } from '../../context/ApiContext';
+import { Icon } from '../../components/ui';
 import { 
   discoverPort, 
   discoverServices, 
@@ -13,7 +13,7 @@ import {
   validateServer,
   isPrivateIp,
   DISCOVERY_MODE 
-} from '../utils/portDiscovery';
+} from '../../utils/portDiscovery';
 
 export default function SettingsScreen({ navigation }: any) {
   const theme = useTheme();
@@ -211,7 +211,6 @@ export default function SettingsScreen({ navigation }: any) {
         onPress={handleAutoDiscover} 
         loading={discovering}
         disabled={discovering}
-        buttonColor="#5a4632"
         icon="magnify"
         style={{ marginBottom: 12 }}
       >
@@ -261,7 +260,6 @@ export default function SettingsScreen({ navigation }: any) {
           compact 
           onPress={handleSwap} 
           icon="swap-vertical" 
-          textColor="#5a4632"
         >
           Swap Primary & Backup
         </Button>
@@ -283,15 +281,15 @@ export default function SettingsScreen({ navigation }: any) {
       />
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Button mode="outlined" onPress={() => testConnection(url)} style={[styles.button, { flex: 1, marginRight: 8 }]} textColor="#5a4632">
+        <Button mode="outlined" onPress={() => testConnection(url)} style={[styles.button, { flex: 1, marginRight: 8 }]}>
           Test Primary
         </Button>
-        <Button mode="outlined" onPress={() => testConnection(backup)} style={[styles.button, { flex: 1, marginLeft: 8 }]} textColor="#5a4632">
+        <Button mode="outlined" onPress={() => testConnection(backup)} style={[styles.button, { flex: 1, marginLeft: 8 }]}>
           Test Backup
         </Button>
       </View>
 
-      <Button mode="contained" onPress={save} style={styles.button} buttonColor="#5a4632">
+      <Button mode="contained" onPress={save} style={styles.button}>
         Save Settings
       </Button>
       <View style={{ marginTop: 24 }}>
@@ -302,19 +300,6 @@ export default function SettingsScreen({ navigation }: any) {
         </View>
       </View>
 
-      <View style={{ marginTop: 24 }}>
-        <Text style={[styles.label, { color: theme.colors.primary }]}>Equipment Library</Text>
-        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>Manage your cameras, lenses, and flashes</Text>
-        <Button 
-          mode="outlined" 
-          onPress={() => navigation.navigate('Equipment')} 
-          icon="camera"
-          textColor="#5a4632"
-          style={{ marginTop: 8 }}
-        >
-          Open Equipment Library
-        </Button>
-      </View>
       
       <View style={{ marginTop: 24 }}>
         <Text style={[styles.label, { color: theme.colors.primary }]}>Location Diagnostic (位置诊断)</Text>

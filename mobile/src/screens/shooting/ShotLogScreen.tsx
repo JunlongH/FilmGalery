@@ -2,15 +2,15 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { ActivityIndicator, Button, HelperText, Text, TextInput, useTheme } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Icon } from '../components/ui';
-import DatePickerField from '../components/DatePickerField';
-import DraggableFab from '../components/DraggableFab';
-import ShotModeModal from '../components/ShotModeModal';
-import locationService from '../services/locationService.native';
-import { parseISODate, toISODateString } from '../utils/date';
-import { getFilmItem, updateFilmItem, getMetadataOptions, getCountries, searchLocations, getFilms } from '../api/filmItems';
-import { getCamera, getCompatibleLenses, getLenses } from '../api/equipment';
-import { spacing, radius } from '../theme';
+import { Icon } from '../../components/ui';
+import DatePickerField from '../../components/DatePickerField';
+import DraggableFab from '../../components/DraggableFab';
+import ShotModeModal from '../../components/ShotModeModal';
+import locationService from '../../services/locationService.native';
+import { parseISODate, toISODateString } from '../../utils/date';
+import { getFilmItem, updateFilmItem, getMetadataOptions, getCountries, searchLocations, getFilms } from '../../api/filmItems';
+import { getCamera, getCompatibleLenses, getLenses } from '../../api/equipment';
+import { spacing, radius } from '../../theme';
 
 function parseShotLog(raw: any): any[] {
   if (!raw) return [];

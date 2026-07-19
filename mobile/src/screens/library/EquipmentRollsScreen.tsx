@@ -2,65 +2,50 @@
  * EquipmentRollsScreen - Shows rolls that use a specific piece of equipment
  * Navigates to RollDetail when a roll is tapped
  */
-import React, { useContext, useEffect, useState, useLayoutEffect, useRef, useCallback } from 'react';
-import { View, FlatList, StyleSheet, RefreshControl, Animated, TouchableOpacity } from 'react-native';
-import { Card, Title, Paragraph, ActivityIndicator, Text, useTheme } from 'react-native-paper';
-import { useFocusEffect } from '@react-navigation/native';
-import CachedImage from '../components/CachedImage';
-import CoverOverlay from '../components/CoverOverlay';
-import { colors, spacing, radius } from '../theme';
-import { ApiContext } from '../context/ApiContext';
-import { Icon } from '../components/ui';
-import { getRollsByEquipment } from '../api/equipment';
+import React, { useContext, useLayoutEffect, useMemo } from 'react';
+import { View, FlatList, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
+import { Card, Title, Paragraph, Text, useTheme } from 'react-native-paper';
+import CachedImage from '../../components/CachedImage';
+import CoverOverlay from '../../components/CoverOverlay';
+import SkeletonBox from '../../components/SkeletonBox';
+import { spacing, radius } from '../../theme';
+import { ApiContext } from '../../context/ApiContext';
+import { Icon } from '../../components/ui';
+import { getRollsByEquipment } from '../../api/equipment';
 import { format } from 'date-fns';
+import { useApiQuery } from '../../hooks/useApiQuery';
 
 export default function EquipmentRollsScreen({ route, navigation }: any) {
   const theme = useTheme();
   const { type, id, name } = route.params; // type: 'camera'|'lens'|'flash'|'film'
   const { baseUrl } = useContext(ApiContext);
-  const [rolls, setRolls] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<any>(null);
 
-  const fetchRolls = async () => {
-    if (!id) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getRollsByEquipment(type, id);
-      setRolls(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setError('Failed to load rolls.');
-      console.error('Failed to fetch rolls by equipment:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, error: queryError, loading, refreshing, refresh } = useApiQuery<any[]>(
+    baseUrl && id ? `equipmentRolls:${type}:${id}@${baseUrl}` : null,
+    async () => {
+      const res = await getRollsByEquipment(type, id);
+      return Array.isArray(res) ? res : [];
+    },
+  );
+  const rolls = useMemo(() => data ?? [], [data]);
+  const error = rolls.length === 0 && queryError ? 'Failed to load rolls.' : null;
 
-  useEffect(() => {
-    fetchRolls();
-  }, [type, id]);
-
-  useEffect(() => {
+  React.useEffect(() => {
     navigation.setOptions({ title: name || 'Equipment Rolls' });
   }, [navigation, name]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={{ marginRight: 16, padding: 4 }}
-          onPress={async () => {
-            const { clearImageCache } = await import('../components/CachedImage');
-            await clearImageCache();
-            fetchRolls();
-          }}
+          onPress={refresh}
         >
           <Icon name="refresh-cw" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
       )
     });
-  }, [navigation, theme]);
+  }, [navigation, theme, refresh]);
 
   const getTypeLabel = () => {
     switch (type) {
@@ -118,7 +103,11 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
   if (loading && rolls.length === 0) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" style={styles.loader} />
+        <View style={styles.list}>
+          {[0, 1, 2].map((i) => (
+            <SkeletonBox key={i} height={200} style={styles.skeletonCard} />
+          ))}
+        </View>
       </View>
     );
   }
@@ -126,12 +115,8 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
   if (error) {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: theme.colors.background }]}>
-        <Text variant="bodyLarge" style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={{ padding: 8 }} onPress={async () => {
-          const { clearImageCache } = await import('../components/CachedImage');
-          await clearImageCache();
-          fetchRolls();
-        }}>
+        <Text variant="bodyLarge" style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
+        <TouchableOpacity style={{ padding: 8 }} onPress={refresh}>
           <Icon name="refresh-cw" size={32} color={theme.colors.primary} />
         </TouchableOpacity>
       </View>
@@ -146,8 +131,12 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
         renderItem={renderItem}
         contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={fetchRolls} />
+          <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[theme.colors.primary]} />
         }
+        initialNumToRender={6}
+        windowSize={7}
+        maxToRenderPerBatch={6}
+        removeClippedSubviews={true}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text variant="titleMedium" style={styles.emptyText}>
@@ -208,8 +197,11 @@ const styles = StyleSheet.create({
   loader: {
     marginTop: spacing.xl,
   },
+  skeletonCard: {
+    borderRadius: radius.md,
+    marginBottom: spacing.md,
+  },
   errorText: {
-    color: colors.error,
     marginBottom: spacing.md,
     textAlign: 'center',
   },

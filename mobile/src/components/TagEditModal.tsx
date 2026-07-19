@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Modal, Portal, Text, TextInput, Chip, Button } from 'react-native-paper';
+import { Modal, Portal, Text, TextInput, Chip, Button, useTheme } from 'react-native-paper';
 import { api } from '../api/client';
 import { ApiContext } from '../context/ApiContext';
 import { Icon } from './ui';
@@ -23,6 +23,7 @@ interface TagOption {
 }
 
 export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagEditModalProps) {
+  const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
   const [input, setInput] = useState<string>('');
   const [currentTags, setCurrentTags] = useState<string[]>([]);
@@ -90,8 +91,8 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagE
 
   return (
     <Portal>
-      <Modal visible={visible} onDismiss={onDismiss} contentContainerStyle={styles.modalContent}>
-        <Text style={styles.title}>Edit Tags</Text>
+      <Modal visible={visible} onDismiss={onDismiss} contentContainerStyle={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+        <Text style={[styles.title, { color: theme.colors.onSurface }]}>Edit Tags</Text>
 
         <View style={styles.tagContainer}>
           {currentTags.map((tag) => (
@@ -115,7 +116,6 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagE
             onChangeText={setInput}
             onSubmitEditing={() => addTag(input)}
             style={[styles.input, { flex: 1 }]}
-            activeOutlineColor="#5a4632"
           />
           <TouchableOpacity
             onPress={() => addTag(input)}
@@ -124,7 +124,7 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagE
               width: 40,
               height: 40,
               borderRadius: 20,
-              backgroundColor: '#0097A7',
+              backgroundColor: theme.colors.primary,
               justifyContent: 'center',
               alignItems: 'center',
             }}
@@ -148,8 +148,8 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagE
         </ScrollView>
 
         <View style={styles.actions}>
-          <Button onPress={onDismiss} textColor="#666">Cancel</Button>
-          <Button mode="contained" onPress={handleSave} buttonColor="#5a4632">Save</Button>
+          <Button onPress={onDismiss}>Cancel</Button>
+          <Button mode="contained" onPress={handleSave}>Save</Button>
         </View>
       </Modal>
     </Portal>
@@ -157,11 +157,11 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagE
 }
 
 const styles = StyleSheet.create({
-  modalContent: { backgroundColor: 'white', padding: 20, margin: 20, borderRadius: 8 },
-  title: { fontSize: 20, fontWeight: 'bold' as const, marginBottom: 16, color: '#5a4632' },
+  modalContent: { padding: 20, margin: 20, borderRadius: 8 },
+  title: { fontSize: 20, fontWeight: 'bold' as const, marginBottom: 16 },
   tagContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
   chip: { margin: 4, backgroundColor: '#eef8ee' },
-  input: { marginBottom: 8, backgroundColor: '#fff' },
+  input: { marginBottom: 8 },
   suggestions: { maxHeight: 150, marginBottom: 16, borderWidth: 1, borderColor: '#eee', borderRadius: 4 },
   sectionTitle: { marginTop: 8, marginBottom: 6, color: '#666', fontSize: 12, textTransform: 'uppercase' as const },
   suggestionItem: { padding: 12, flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#eee' },

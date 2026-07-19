@@ -39,7 +39,9 @@ export interface LocationCoords {
 }
 
 // Store last known position for quick access
+const CACHED_POSITION_MAX_AGE = 2 * 60 * 1000; // 2 minutes
 let cachedPosition: LocationCoords | null = null;
+let cachedPositionAt: number = 0;
 let watchId: number | null = null;
 
 export const requestLocationPermission = async (): Promise<boolean> => {
@@ -95,6 +97,7 @@ export const startLocationWatch = async (): Promise<void> => {
         longitude: position.coords.longitude,
         accuracy: position.coords.accuracy ?? undefined,
       };
+      cachedPositionAt = Date.now();
       console.log('[Location] Watch update:', cachedPosition?.accuracy?.toFixed(0), 'm');
       
       // If we have good accuracy, stop watching to save battery
@@ -149,8 +152,8 @@ export const getCurrentLocation = async (): Promise<LocationCoords | null> => {
     throw new Error('Location permission denied');
   }
 
-  // Step 1: If we have a cached position, return it immediately
-  if (cachedPosition) {
+  // Step 1: If we have a fresh cached position (< 2 min), return it immediately
+  if (cachedPosition && Date.now() - cachedPositionAt < CACHED_POSITION_MAX_AGE) {
     console.log('[Location] Using CACHED position:', cachedPosition.latitude.toFixed(4), cachedPosition.longitude.toFixed(4));
     return cachedPosition;
   }
@@ -179,6 +182,7 @@ export const getCurrentLocation = async (): Promise<LocationCoords | null> => {
           console.log(`[Location] ✓ ${strategyName} success in ${elapsed}ms: (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}) ±${coords.accuracy?.toFixed(0)}m`);
           // Update cache
           cachedPosition = coords;
+          cachedPositionAt = Date.now();
           resolve(coords);
         },
         (error: any) => {

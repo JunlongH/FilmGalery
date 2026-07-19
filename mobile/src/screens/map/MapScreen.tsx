@@ -13,26 +13,26 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, useContext } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
-  Image,
   Dimensions,
   Animated,
   FlatList,
-  Platform,
 } from 'react-native';
 import { useTheme } from 'react-native-paper';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { api } from '../api/client';
-import { Icon, Badge } from '../components/ui';
-import { ApiContext } from '../context/ApiContext';
-import { getPhotoUrl } from '../utils/urls';
-import LeafletMap from '../components/map/LeafletMap';
+import { useNavigation } from '@react-navigation/native';
+import { api } from '../../api/client';
+import { Icon, Badge } from '../../components/ui';
+import CachedImage from '../../components/CachedImage';
+import { ApiContext } from '../../context/ApiContext';
+import { getPhotoUrl } from '../../utils/urls';
+import LeafletMap from '../../components/map/LeafletMap';
 import { wgs84ToGcj02 } from '@filmgallery/shared/coordTransform';
+import { useApiQuery } from '../../hooks/useApiQuery';
 
 const { width, height } = Dimensions.get('window');
 
@@ -49,99 +49,63 @@ export default function MapScreen() {
   const navigation = useNavigation();
   const { baseUrl, mapProvider } = useContext(ApiContext);
   const mapRef = useRef<any>(null);
-  
-  const [loading, setLoading] = useState(true);
-  const [photos, setPhotos] = useState<any[]>([]);
+
   const [mapRegion, setMapRegion] = useState(INITIAL_REGION);
   const [selectedPhoto, setSelectedPhoto] = useState<any>(null);
   const [showList, setShowList] = useState(false);
 
+  const photosKey = baseUrl ? `geoPhotos@${baseUrl}` : null;
+  const { data: rawPhotos, loading, refresh } = useApiQuery<any[]>(
+    photosKey,
+    async () => {
+      const data = await api.http.get('/api/photos/geo');
+      if (Array.isArray(data)) return data;
+      if (data?.photos && Array.isArray(data.photos)) return data.photos;
+      return [];
+    },
+  );
+
+  // Normalize coords + apply provider-specific datum transform
+  const photos = useMemo(() => {
+    return (rawPhotos ?? [])
+      .map((p: any) => {
+        const lat = parseFloat(p.latitude);
+        const lng = parseFloat(p.longitude);
+        // When using Amap, convert WGS-84 (DB) → GCJ-02 (display)
+        const displayCoords = mapProvider === 'amap'
+          ? wgs84ToGcj02(lat, lng)
+          : { lat, lng };
+        return {
+          ...p,
+          latitude: displayCoords.lat,
+          longitude: displayCoords.lng,
+          location_name: p.detail_location || p.city || p.country || null,
+        };
+      })
+      .filter((p: any) => !isNaN(p.latitude) && !isNaN(p.longitude));
+  }, [rawPhotos, mapProvider]);
+
+  // Auto-fit map to show all photos once they're loaded
+  useEffect(() => {
+    if (photos.length === 0) return;
+    const lats = photos.map((p: any) => p.latitude).filter((v: any) => v != null && v !== 0);
+    const lngs = photos.map((p: any) => p.longitude).filter((v: any) => v != null && v !== 0);
+    if (lats.length === 0 || lngs.length === 0) return;
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    setMapRegion({
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max(0.01, (maxLat - minLat) * 1.2),
+      longitudeDelta: Math.max(0.01, (maxLng - minLng) * 1.2),
+    });
+  }, [photos]);
+
   // Animation values
   const listAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(0)).current;
-
-  // Fetch photos with GPS data
-  const fetchPhotos = useCallback(async () => {
-    if (!baseUrl) {
-      console.log('[MapScreen] No baseUrl yet, skipping fetch');
-      return;
-    }
-    try {
-      setLoading(true);
-      console.log('[MapScreen] Fetching photos from:', `${baseUrl}/api/photos/geo`);
-      const data = await api.http.get('/api/photos/geo');
-      console.log('[MapScreen] Response data:', JSON.stringify(data).slice(0, 200));
-
-      // Handle response format: { photos: [...], total: N, returned: N }
-      let photoData = [];
-      if (data) {
-        if (Array.isArray(data)) {
-          photoData = data;
-        } else if (data.photos && Array.isArray(data.photos)) {
-          photoData = data.photos;
-        }
-      }
-      
-      console.log('[MapScreen] Parsed photos:', photoData.length);
-      
-      if (photoData.length > 0) {
-        // Convert coordinates to numbers and fix thumbnail URLs
-        const processedPhotos = photoData.map((p: any) => {
-          const thumbnailUrl = getPhotoUrl(baseUrl, p, 'thumb');
-          const lat = parseFloat(p.latitude);
-          const lng = parseFloat(p.longitude);
-          // When using Amap, convert WGS-84 (DB) → GCJ-02 (display)
-          const displayCoords = mapProvider === 'amap'
-            ? wgs84ToGcj02(lat, lng)
-            : { lat, lng };
-          return {
-            ...p,
-            latitude: displayCoords.lat,
-            longitude: displayCoords.lng,
-            thumbnailUrl: thumbnailUrl,
-            // Generate location name from available fields
-            location_name: p.detail_location || p.city || p.country || null,
-          };
-        }).filter((p: any) => !isNaN(p.latitude) && !isNaN(p.longitude));
-        
-        console.log('[MapScreen] Processed photos with valid coords:', processedPhotos.length);
-        setPhotos(processedPhotos);
-        
-        // Auto-fit map to show all photos
-        const lats = processedPhotos.map((p: any) => p.latitude).filter((v: any) => v != null && v !== 0);
-        const lngs = processedPhotos.map((p: any) => p.longitude).filter((v: any) => v != null && v !== 0);
-        
-        console.log('[MapScreen] Valid coords:', lats.length, 'lats,', lngs.length, 'lngs');
-        
-        if (lats.length > 0 && lngs.length > 0) {
-          const minLat = Math.min(...lats);
-          const maxLat = Math.max(...lats);
-          const minLng = Math.min(...lngs);
-          const maxLng = Math.max(...lngs);
-          
-          setMapRegion({
-            latitude: (minLat + maxLat) / 2,
-            longitude: (minLng + maxLng) / 2,
-            latitudeDelta: Math.max(0.01, (maxLat - minLat) * 1.2),
-            longitudeDelta: Math.max(0.01, (maxLng - minLng) * 1.2),
-          });
-        }
-      } else {
-        setPhotos([]);
-      }
-    } catch (error) {
-      console.log('Failed to fetch photos with GPS:', (error as Error).message);
-      setPhotos([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [baseUrl]);
-
-  useEffect(() => {
-    if (baseUrl) {
-      fetchPhotos();
-    }
-  }, [baseUrl, fetchPhotos]);
 
   // Handle marker press
   const handleMarkerPress = useCallback((photo: any) => {
@@ -177,12 +141,15 @@ export default function MapScreen() {
   // Navigate to photo view
   const handlePhotoPress = useCallback(() => {
     if (selectedPhoto) {
-      navigation.navigate('PhotoView', { 
-        photoId: selectedPhoto.id,
-        rollId: selectedPhoto.roll_id,
+      const initialIndex = photos.findIndex((p: any) => p.id === selectedPhoto.id);
+      navigation.navigate('PhotoView', {
+        photo: selectedPhoto,
+        photosKey: photosKey ?? undefined,
+        initialIndex: Math.max(0, initialIndex),
+        viewMode: 'positive',
       });
     }
-  }, [selectedPhoto, navigation]);
+  }, [selectedPhoto, navigation, photos, photosKey]);
 
   // Navigate to cluster location
   // Handle cluster press - zoom in to expand cluster, or show photo if single
@@ -260,8 +227,193 @@ export default function MapScreen() {
     return result;
   }, [photos, mapRegion?.latitudeDelta]);
 
-  const styles = StyleSheet.create({
-    container: {
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={styles.loadingText}>Loading map data...</Text>
+      </View>
+    );
+  }
+
+  if (photos.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Icon name="map-pin-off" size={64} color={theme.colors.onSurfaceVariant} />
+        <Text style={styles.emptyText}>
+          No photos with GPS data found.{'\n'}
+          Take some photos with location enabled!
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <LeafletMap 
+        photos={photos}
+        region={mapRegion}
+        onMarkerPress={handleMarkerPress}
+      />
+
+      {/* Stats overlay */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{photos.length}</Text>
+          <Text style={styles.statLabel}>Photos</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{clusters.length}</Text>
+          <Text style={styles.statLabel}>Locations</Text>
+        </View>
+      </View>
+
+      {/* Control buttons */}
+      <View style={styles.controlsContainer}>
+        {/* Location list toggle */}
+        <TouchableOpacity 
+          style={[styles.controlButton, showList && styles.controlButtonActive]}
+          onPress={toggleList}
+        >
+          <Icon 
+            name="list" 
+            size={20} 
+            color={showList ? 'white' : theme.colors.primary} 
+          />
+        </TouchableOpacity>
+        
+        {/* Fit all markers */}
+        <TouchableOpacity 
+          style={styles.controlButton}
+          onPress={refresh}
+        >
+          <Icon name="maximize" size={20} color={theme.colors.primary} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Selected photo card */}
+      {selectedPhoto && (
+        <Animated.View 
+          style={[styles.selectedCard, {
+            opacity: cardAnim,
+            transform: [{
+              translateY: cardAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [50, 0],
+              }),
+            }],
+          }]}
+        >
+          <TouchableOpacity 
+            onPress={handlePhotoPress}
+            activeOpacity={0.9}
+            style={{ flexDirection: 'row', flex: 1 }}
+          >
+            {getPhotoUrl(baseUrl, selectedPhoto, 'thumb') && (
+              <CachedImage
+                uri={getPhotoUrl(baseUrl, selectedPhoto, 'thumb')!}
+                style={styles.selectedImage}
+                contentFit="cover"
+              />
+            )}
+            <View style={styles.selectedInfo}>
+              {/* Line 1: Location */}
+              <Text style={styles.selectedTitle} numberOfLines={1}>
+                {selectedPhoto.detail_location || selectedPhoto.city || selectedPhoto.country || selectedPhoto.filename || 'Photo'}
+              </Text>
+              {/* Line 2: Roll name */}
+              {selectedPhoto.roll_name ? (
+                <Text style={styles.selectedRollName} numberOfLines={1}>
+                  {selectedPhoto.roll_name}
+                </Text>
+              ) : null}
+              {/* Line 3: Meta info with · separator */}
+              <Text style={styles.selectedMeta} numberOfLines={1}>
+                {[
+                  selectedPhoto.date_taken || selectedPhoto.taken_at
+                    ? (() => {
+                        const raw = selectedPhoto.date_taken || selectedPhoto.taken_at;
+                        try { 
+                          const d = new Date(raw);
+                          if (!isNaN(d.getTime())) {
+                            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                          }
+                        } catch(e) {}
+                        return String(raw).slice(0, 10);
+                      })()
+                    : null,
+                  selectedPhoto.camera || null,
+                  selectedPhoto.lens || null,
+                ].filter(Boolean).join('  ·  ')}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={closeSelectedCard}
+          >
+            <Icon name="x" size={14} color={theme.colors.onSurfaceVariant} />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      {/* Location list panel */}
+      {showList && (
+        <Animated.View 
+          style={[styles.listPanel, {
+            transform: [{
+              translateY: listAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [height * 0.4, 0],
+              }),
+            }],
+          }]}
+        >
+          <View style={styles.listHandle} />
+          <View style={styles.listHeader}>
+            <Text style={styles.listTitle}>{clusters.length} Locations</Text>
+            <TouchableOpacity onPress={toggleList}>
+              <Icon name="x" size={20} color={theme.colors.onSurfaceVariant} />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={clusters}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity 
+                style={styles.listItem}
+                onPress={() => {
+                  handleClusterPress(item);
+                  toggleList();
+                }}
+              >
+                <CachedImage
+                  uri={getPhotoUrl(baseUrl, item.representative, 'thumb') || ''}
+                  style={styles.listItemImage}
+                  contentFit="cover"
+                />
+                <View style={styles.listItemInfo}>
+                  <Text style={styles.listItemTitle} numberOfLines={1}>
+                    {item.representative.location_name || item.representative.detail_location || item.representative.city || item.representative.country || `${item.representative.latitude.toFixed(4)}, ${item.representative.longitude.toFixed(4)}`}
+                  </Text>
+                  <Text style={styles.listItemSubtitle}>
+                    {item.count} {item.count === 1 ? 'photo' : 'photos'}
+                  </Text>
+                </View>
+                <Badge variant="primary">{item.count}</Badge>
+              </TouchableOpacity>
+            )}
+          />
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+const createStyles = (theme: any) =>
+  StyleSheet.create({
+container: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
@@ -554,185 +706,3 @@ export default function MapScreen() {
       marginTop: 2,
     },
   });
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={styles.loadingText}>Loading map data...</Text>
-      </View>
-    );
-  }
-
-  if (photos.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Icon name="map-pin-off" size={64} color={theme.colors.onSurfaceVariant} />
-        <Text style={styles.emptyText}>
-          No photos with GPS data found.{'\n'}
-          Take some photos with location enabled!
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <LeafletMap 
-        photos={photos}
-        region={mapRegion}
-        onMarkerPress={handleMarkerPress}
-        onMapReady={() => console.log('Leaflet Map Ready')}
-      />
-
-      {/* Stats overlay */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{photos.length}</Text>
-          <Text style={styles.statLabel}>Photos</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{clusters.length}</Text>
-          <Text style={styles.statLabel}>Locations</Text>
-        </View>
-      </View>
-
-      {/* Control buttons */}
-      <View style={styles.controlsContainer}>
-        {/* Location list toggle */}
-        <TouchableOpacity 
-          style={[styles.controlButton, showList && styles.controlButtonActive]}
-          onPress={toggleList}
-        >
-          <Icon 
-            name="list" 
-            size={20} 
-            color={showList ? 'white' : theme.colors.primary} 
-          />
-        </TouchableOpacity>
-        
-        {/* Fit all markers */}
-        <TouchableOpacity 
-          style={styles.controlButton}
-          onPress={fetchPhotos}
-        >
-          <Icon name="maximize" size={20} color={theme.colors.primary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Selected photo card */}
-      {selectedPhoto && (
-        <Animated.View 
-          style={[styles.selectedCard, {
-            opacity: cardAnim,
-            transform: [{
-              translateY: cardAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [50, 0],
-              }),
-            }],
-          }]}
-        >
-          <TouchableOpacity 
-            onPress={handlePhotoPress}
-            activeOpacity={0.9}
-            style={{ flexDirection: 'row', flex: 1 }}
-          >
-            {selectedPhoto.thumbnailUrl && (
-              <Image
-                source={{ uri: selectedPhoto.thumbnailUrl }}
-                style={styles.selectedImage}
-              />
-            )}
-            <View style={styles.selectedInfo}>
-              {/* Line 1: Location */}
-              <Text style={styles.selectedTitle} numberOfLines={1}>
-                {selectedPhoto.detail_location || selectedPhoto.city || selectedPhoto.country || selectedPhoto.filename || 'Photo'}
-              </Text>
-              {/* Line 2: Roll name */}
-              {selectedPhoto.roll_name ? (
-                <Text style={styles.selectedRollName} numberOfLines={1}>
-                  {selectedPhoto.roll_name}
-                </Text>
-              ) : null}
-              {/* Line 3: Meta info with · separator */}
-              <Text style={styles.selectedMeta} numberOfLines={1}>
-                {[
-                  selectedPhoto.date_taken || selectedPhoto.taken_at
-                    ? (() => {
-                        const raw = selectedPhoto.date_taken || selectedPhoto.taken_at;
-                        try { 
-                          const d = new Date(raw);
-                          if (!isNaN(d.getTime())) {
-                            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                          }
-                        } catch(e) {}
-                        return String(raw).slice(0, 10);
-                      })()
-                    : null,
-                  selectedPhoto.camera || null,
-                  selectedPhoto.lens || null,
-                ].filter(Boolean).join('  ·  ')}
-              </Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={closeSelectedCard}
-          >
-            <Icon name="x" size={14} color={theme.colors.onSurfaceVariant} />
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-
-      {/* Location list panel */}
-      {showList && (
-        <Animated.View 
-          style={[styles.listPanel, {
-            transform: [{
-              translateY: listAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [height * 0.4, 0],
-              }),
-            }],
-          }]}
-        >
-          <View style={styles.listHandle} />
-          <View style={styles.listHeader}>
-            <Text style={styles.listTitle}>{clusters.length} Locations</Text>
-            <TouchableOpacity onPress={toggleList}>
-              <Icon name="x" size={20} color={theme.colors.onSurfaceVariant} />
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            data={clusters}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => (
-              <TouchableOpacity 
-                style={styles.listItem}
-                onPress={() => {
-                  handleClusterPress(item);
-                  toggleList();
-                }}
-              >
-                <Image
-                  source={{ uri: item.representative.thumbnailUrl }}
-                  style={styles.listItemImage}
-                />
-                <View style={styles.listItemInfo}>
-                  <Text style={styles.listItemTitle} numberOfLines={1}>
-                    {item.representative.location_name || item.representative.detail_location || item.representative.city || item.representative.country || `${item.representative.latitude.toFixed(4)}, ${item.representative.longitude.toFixed(4)}`}
-                  </Text>
-                  <Text style={styles.listItemSubtitle}>
-                    {item.count} {item.count === 1 ? 'photo' : 'photos'}
-                  </Text>
-                </View>
-                <Badge variant="primary">{item.count}</Badge>
-              </TouchableOpacity>
-            )}
-          />
-        </Animated.View>
-      )}
-    </View>
-  );
-}

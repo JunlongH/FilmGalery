@@ -1,8 +1,8 @@
 import React, { useCallback, useContext, useEffect, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { ActivityIndicator, Button, Chip, Text, TextInput, useTheme } from 'react-native-paper';
-import { ApiContext } from '../context/ApiContext';
-import { getAIConfig, getAIModels, testAIConnection, updateAIConfig } from '../api/aiApi';
+import { ApiContext } from '../../context/ApiContext';
+import { getAIConfig, getAIModels, testAIConnection, updateAIConfig } from '../../api/aiApi';
 
 export default function AISettingsScreen() {
   const theme = useTheme();

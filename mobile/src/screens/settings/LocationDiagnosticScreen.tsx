@@ -7,8 +7,8 @@ import React, { useState, useRef, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, Animated } from 'react-native';
 import { Text, Button, Card, Divider, useTheme } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
-import { Icon } from '../components/ui';
-import locationService from '../services/locationService.native';
+import { Icon } from '../../components/ui';
+import locationService from '../../services/locationService.native';
 
 export default function LocationDiagnosticScreen() {
   const theme = useTheme();

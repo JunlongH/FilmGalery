@@ -1,8 +1,11 @@
 import React, { useRef, useEffect, useState, useContext } from 'react';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, TouchableOpacity, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { useTheme } from 'react-native-paper';
 import { getLeafletHtml } from './leafletHtml';
 import { ApiContext } from '../../context/ApiContext';
+
+const MAP_READY_TIMEOUT_MS = 15000;
 
 const LeafletMap = ({
   photos = [],
@@ -10,8 +13,11 @@ const LeafletMap = ({
   onMarkerPress,
   onMapReady
 }: any) => {
+  const theme = useTheme();
   const webViewRef = useRef<any>(null);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const { mapProvider, darkMode }: any = useContext(ApiContext);
 
   // Generate HTML with initial region and map provider
@@ -19,6 +25,14 @@ const LeafletMap = ({
     () => getLeafletHtml(region || { latitude: 31.2304, longitude: 121.4737 }, mapProvider, !!darkMode),
     [mapProvider, darkMode] // re-generate HTML when provider or theme changes
   );
+
+  // Fail gracefully if the map never signals readiness (e.g. WebView error)
+  useEffect(() => {
+    if (isMapReady) return;
+    setLoadFailed(false);
+    const timer = setTimeout(() => setLoadFailed(true), MAP_READY_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [isMapReady, reloadNonce]);
 
   // Update photos when they change (only if map is ready)
   useEffect(() => {
@@ -38,8 +52,8 @@ const LeafletMap = ({
        const zoom = Math.round(Math.log2(360 / (region.longitudeDelta || 0.05))) + 1;
        const message = JSON.stringify({
          type: 'CENTER_MAP',
-         payload: { 
-             lat: region.latitude, 
+         payload: {
+             lat: region.latitude,
              lng: region.longitude,
              zoom: Math.min(Math.max(zoom, 3), 18)
          }
@@ -54,7 +68,7 @@ const LeafletMap = ({
       if (data.type === 'MAP_READY') {
         setIsMapReady(true);
         if (onMapReady) onMapReady();
-        
+
         // Initial load of photos
         if (photos.length > 0 && webViewRef.current) {
              webViewRef.current.postMessage(JSON.stringify({
@@ -73,6 +87,7 @@ const LeafletMap = ({
   return (
     <View style={styles.container}>
       <WebView
+        key={reloadNonce}
         ref={webViewRef}
         originWhitelist={['*']}
         source={{ html: htmlContent }}
@@ -80,13 +95,36 @@ const LeafletMap = ({
         javaScriptEnabled={true}
         domStorageEnabled={true}
         onMessage={handleMessage}
+        onError={() => setLoadFailed(true)}
         androidLayerType="hardware"
         // Ensure mixture of http/https content works if thumbnails are http
-        mixedContentMode="always" 
+        mixedContentMode="always"
       />
-      {!isMapReady && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#0000ff" />
+      {!isMapReady && !loadFailed && (
+        <View style={[styles.loadingOverlay, { backgroundColor: theme.colors.surfaceVariant }]}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      )}
+      {!isMapReady && loadFailed && (
+        <View style={[styles.loadingOverlay, { backgroundColor: theme.colors.surfaceVariant }]}>
+          <Text style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
+            Map failed to load
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              setIsMapReady(false);
+              setLoadFailed(false);
+              setReloadNonce((n) => n + 1);
+            }}
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              borderRadius: 16,
+              backgroundColor: theme.colors.primary,
+            }}
+          >
+            <Text style={{ color: theme.colors.onPrimary }}>Retry</Text>
+          </TouchableOpacity>
         </View>
       )}
     </View>

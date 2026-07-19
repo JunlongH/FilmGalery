@@ -1,3 +1,11 @@
+import {
+  LEAFLET_JS,
+  LEAFLET_CSS,
+  MARKERCLUSTER_JS,
+  MARKERCLUSTER_CSS,
+  MARKERCLUSTER_DEFAULT_CSS,
+} from './leafletVendor';
+
 export const getLeafletHtml = (initialRegion: any, mapProvider = 'osm', isDark = false) => {
   const isAmapDark = mapProvider === 'amap' && isDark;
   const tileLayerConfig = mapProvider === 'amap'
@@ -15,9 +23,9 @@ export const getLeafletHtml = (initialRegion: any, mapProvider = 'osm', isDark =
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <style>${LEAFLET_CSS}</style>
+    <style>${MARKERCLUSTER_CSS}</style>
+    <style>${MARKERCLUSTER_DEFAULT_CSS}</style>
     <style>
         body { margin: 0; padding: 0; }
         #map { width: 100vw; height: 100vh; background-color: #f8f9fa; }
@@ -111,8 +119,8 @@ export const getLeafletHtml = (initialRegion: any, mapProvider = 'osm', isDark =
 <body>
     <div id="map"></div>
     
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script>${LEAFLET_JS}</script>
+    <script>${MARKERCLUSTER_JS}</script>
 
     <script>
         // Initialize Map
@@ -169,7 +177,7 @@ export const getLeafletHtml = (initialRegion: any, mapProvider = 'osm', isDark =
                      html += '</div>';
                 } else {
                      // 4 grid
-                     images.slice(0, 4).forEach((url: any) => {
+                     images.slice(0, 4).forEach((url) => {
                         html += '<div class="mosaic-item"><img src="' + url + '" onerror="this.style.display=\\'none\\'"/></div>';
                      });
                 }
@@ -221,7 +229,7 @@ export const getLeafletHtml = (initialRegion: any, mapProvider = 'osm', isDark =
         function updateMarkers(photos) {
             markers.clearLayers();
             
-            const newMarkers = photos.map((photo: any) => {
+            const newMarkers = photos.map((photo) => {
                 const lat = parseFloat(photo.latitude);
                 const lng = parseFloat(photo.longitude);
                 if (isNaN(lat) || isNaN(lng)) return null;
@@ -252,7 +260,7 @@ export const getLeafletHtml = (initialRegion: any, mapProvider = 'osm', isDark =
                 });
 
                 return marker;
-            }).filter((m: any) => m !== null);
+            }).filter((m) => m !== null);
 
             markers.addLayers(newMarkers);
         }

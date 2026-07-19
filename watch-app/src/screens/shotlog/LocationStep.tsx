@@ -9,19 +9,34 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { FilmItem, ShotLog } from '../types';
-import { autoDetectLocation } from '../services/location';
-import { api } from '../services/api';
+import { FilmItem, ShotLog } from '../../types';
+import { autoDetectLocation } from '../../services/location';
+import { api } from '../../services/api';
+import { FixedLensInfo } from './SelectRollStep';
+import { ShotParams } from './ParamsStep';
 
-const ShotLogLocationScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
-  const { roll, filmName, filmIso, count, shutterSpeed, aperture, fixedLensInfo } = route.params;
+interface LocationStepProps {
+  roll: FilmItem;
+  filmName?: string;
+  filmIso?: string;
+  fixedLensInfo?: FixedLensInfo;
+  params: ShotParams;
+  onSaved: () => void;
+}
+
+const LocationStep: React.FC<LocationStepProps> = ({
+  roll,
+  filmName,
+  filmIso,
+  fixedLensInfo,
+  params,
+  onSaved,
+}) => {
+  const { count, shutterSpeed, aperture } = params;
 
   const filmDisplayName = roll?.film_type || roll?.film_name || filmName || 'Unknown Film';
   const isoDisplay = roll?.iso || filmIso;
-  
+
   // Use fixed lens text if available, otherwise use roll.lens
   const lensForLog = fixedLensInfo?.text || roll.lens || undefined;
 
@@ -39,12 +54,12 @@ const ShotLogLocationScreen: React.FC = () => {
       console.log('[ShotLogLocation] Starting auto-detect...');
       const location = await autoDetectLocation();
       console.log('[ShotLogLocation] Auto-detect result:', JSON.stringify(location));
-      
+
       // Coordinates are always echoed by reverseGeocode (GeocodeResult).
       setLatitude(location.latitude.toFixed(6));
       setLongitude(location.longitude.toFixed(6));
       console.log('[ShotLogLocation] Set coords:', location.latitude, location.longitude);
-      
+
       // Set geocoded address fields
       if (location.country) {
         setCountry(location.country);
@@ -79,7 +94,7 @@ const ShotLogLocationScreen: React.FC = () => {
       setSaving(true);
 
       // Get current shot logs
-      const filmItem = await api.getFilmItem(roll.id);
+      const filmItem = await api.getFilmItem(roll.id!);
       let existingLogs: ShotLog[] = [];
       if (filmItem.shot_logs) {
         try {
@@ -94,7 +109,7 @@ const ShotLogLocationScreen: React.FC = () => {
         date: new Date().toISOString().split('T')[0],
         count,
         lens: lensForLog,
-        aperture,
+        aperture: aperture ?? undefined,
         shutter_speed: shutterSpeed,
         country: country || undefined,
         city: city || undefined,
@@ -107,12 +122,12 @@ const ShotLogLocationScreen: React.FC = () => {
       const updatedLogs = [...existingLogs, newLog];
 
       // Save to server
-      await api.updateFilmItemShotLogs(roll.id, updatedLogs);
+      await api.updateFilmItemShotLogs(roll.id!, updatedLogs);
 
       Alert.alert('Success', 'Shot log saved successfully', [
         {
           text: 'OK',
-          onPress: () => navigation.navigate('Home'),
+          onPress: onSaved,
         },
       ]);
     } catch (error: any) {
@@ -125,7 +140,7 @@ const ShotLogLocationScreen: React.FC = () => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.header}>Location</Text>
-      
+
       <Text style={[styles.filmInfo, { marginBottom: 24 }]}>
         {filmDisplayName}{isoDisplay ? ` • ISO ${isoDisplay}` : ''}
       </Text>
@@ -316,4 +331,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ShotLogLocationScreen;
+export default LocationStep;

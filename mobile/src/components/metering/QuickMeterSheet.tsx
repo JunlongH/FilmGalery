@@ -5,7 +5,7 @@
  * Replaces the modal dialog for better UX.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import { 
   View, 
   Text, 
@@ -119,8 +119,112 @@ export default function QuickMeterSheet({ visible, onClose }: any) {
     });
   }, [navigation, onClose, getFilmInfo]);
 
-  const styles = StyleSheet.create({
-    backdrop: {
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  if (!visible) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={onClose}
+    >
+      <View style={styles.container}>
+        <TouchableWithoutFeedback onPress={onClose}>
+          <Animated.View 
+            style={[styles.backdrop, { opacity: backdropAnim }]} 
+          />
+        </TouchableWithoutFeedback>
+        
+        <Animated.View 
+          style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
+        >
+          <View style={styles.handle} />
+          
+          <View style={styles.header}>
+            <View style={styles.headerIcon}>
+              <Icon name="gauge" size={22} color={theme.colors.primary} />
+            </View>
+            <Text style={styles.headerTitle}>Quick Meter</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Icon name="x" size={24} color={theme.colors.onSurfaceVariant} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.content}>
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={styles.loadingText}>Loading films...</Text>
+              </View>
+            ) : error ? (
+              <View style={styles.errorContainer}>
+                <Icon name="alert-circle" size={48} color={theme.colors.error} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : loadedFilmItems.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Icon name="film" size={48} color={theme.colors.onSurfaceVariant} />
+                <Text style={styles.emptyText}>
+                  No loaded films found.{'\n'}
+                  Load a film to start metering!
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={loadedFilmItems}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => {
+                  const filmInfo = getFilmInfo(item);
+                  const meta = [
+                    item.label,
+                    item.loaded_camera ? `on ${item.loaded_camera}` : null,
+                  ].filter(Boolean).join(' • ');
+                  
+                  return (
+                    <TouchableOpacity
+                      style={styles.filmItem}
+                      onPress={() => handleSelect(item)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.filmIcon}>
+                        <Icon name="film" size={22} color={theme.colors.primary} />
+                      </View>
+                      <View style={styles.filmInfo}>
+                        <Text style={styles.filmName}>{filmInfo.name}</Text>
+                        {meta ? <Text style={styles.filmMeta}>{meta}</Text> : null}
+                      </View>
+                      <View style={styles.isoBadge}>
+                        <Text style={styles.isoText}>ISO {filmInfo.iso}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
+          </View>
+
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={styles.footerButton}
+              onPress={() => {
+                onClose();
+                navigation.navigate('Inventory');
+              }}
+            >
+              <Icon name="package" size={18} color={theme.colors.onSurfaceVariant} />
+              <Text style={styles.footerButtonText}>Manage Inventory</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+const createStyles = (theme: any) =>
+  StyleSheet.create({
+backdrop: {
       position: 'absolute',
       top: 0,
       left: 0,
@@ -276,105 +380,3 @@ export default function QuickMeterSheet({ visible, onClose }: any) {
       color: theme.colors.onSurfaceVariant,
     },
   });
-
-  if (!visible) return null;
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-    >
-      <View style={styles.container}>
-        <TouchableWithoutFeedback onPress={onClose}>
-          <Animated.View 
-            style={[styles.backdrop, { opacity: backdropAnim }]} 
-          />
-        </TouchableWithoutFeedback>
-        
-        <Animated.View 
-          style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
-        >
-          <View style={styles.handle} />
-          
-          <View style={styles.header}>
-            <View style={styles.headerIcon}>
-              <Icon name="gauge" size={22} color={theme.colors.primary} />
-            </View>
-            <Text style={styles.headerTitle}>Quick Meter</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Icon name="x" size={24} color={theme.colors.onSurfaceVariant} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.content}>
-            {loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={styles.loadingText}>Loading films...</Text>
-              </View>
-            ) : error ? (
-              <View style={styles.errorContainer}>
-                <Icon name="alert-circle" size={48} color={theme.colors.error} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : loadedFilmItems.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Icon name="film" size={48} color={theme.colors.onSurfaceVariant} />
-                <Text style={styles.emptyText}>
-                  No loaded films found.{'\n'}
-                  Load a film to start metering!
-                </Text>
-              </View>
-            ) : (
-              <FlatList
-                data={loadedFilmItems}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => {
-                  const filmInfo = getFilmInfo(item);
-                  const meta = [
-                    item.label,
-                    item.loaded_camera ? `on ${item.loaded_camera}` : null,
-                  ].filter(Boolean).join(' • ');
-                  
-                  return (
-                    <TouchableOpacity
-                      style={styles.filmItem}
-                      onPress={() => handleSelect(item)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.filmIcon}>
-                        <Icon name="film" size={22} color={theme.colors.primary} />
-                      </View>
-                      <View style={styles.filmInfo}>
-                        <Text style={styles.filmName}>{filmInfo.name}</Text>
-                        {meta ? <Text style={styles.filmMeta}>{meta}</Text> : null}
-                      </View>
-                      <View style={styles.isoBadge}>
-                        <Text style={styles.isoText}>ISO {filmInfo.iso}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                }}
-              />
-            )}
-          </View>
-
-          <View style={styles.footer}>
-            <TouchableOpacity
-              style={styles.footerButton}
-              onPress={() => {
-                onClose();
-                navigation.navigate('Inventory');
-              }}
-            >
-              <Icon name="package" size={18} color={theme.colors.onSurfaceVariant} />
-              <Text style={styles.footerButtonText}>Manage Inventory</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-}

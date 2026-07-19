@@ -1,27 +1,33 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, Dimensions, ActivityIndicator, Platform, TouchableOpacity } from 'react-native';
-import { ApiContext } from '../context/ApiContext';
+import { ApiContext } from '../../context/ApiContext';
 import { Chip, Text, Snackbar } from 'react-native-paper';
-import { Icon } from '../components/ui';
+import { Icon } from '../../components/ui';
 // Removed direct legacy FileSystem usage (downloadAsync deprecated).
 // Use unified helper built on new File/Directory API.
-import { downloadImageAsync } from '../utils/fileSystem';
+import { downloadImageAsync } from '../../utils/fileSystem';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
-import TagEditModal from '../components/TagEditModal';
-import NoteEditModal from '../components/NoteEditModal';
-import { api } from '../api/client';
+import { Image as ExpoImage } from 'expo-image';
+import TagEditModal from '../../components/TagEditModal';
+import NoteEditModal from '../../components/NoteEditModal';
+import { api } from '../../api/client';
 import ImageViewer from 'react-native-image-zoom-viewer';
-import CachedImage from '../components/CachedImage';
-import { colors, spacing, radius } from '../theme';
-import { getPhotoUrl } from '../utils/urls';
+import CachedImage from '../../components/CachedImage';
+import ProgressiveImage from '../../components/ProgressiveImage';
+import { colors, spacing, radius } from '../../theme';
+import { getPhotoUrl } from '../../utils/urls';
+import { useQueryData } from '../../hooks/useApiQuery';
+import { setQueryData, invalidateQueries } from '../../api/queryCache';
 
 const { width, height } = Dimensions.get('window');
 
 export default function PhotoViewScreen({ route, navigation }: any) {
-  const { photo: initialPhoto, photoId, rollId, viewMode: initialViewMode = 'positive', photos = [], initialIndex = 0 } = route.params || {};
+  const { photo: initialPhoto, photoId, rollId, viewMode: initialViewMode = 'positive', photosKey, initialIndex = 0 } = route.params || {};
   const { baseUrl } = useContext(ApiContext);
-  const [photo, setPhoto] = useState(initialPhoto || null);
+  const cachedPhotos = useQueryData<any[]>(photosKey ?? null);
+  const photos = useMemo(() => cachedPhotos ?? (initialPhoto ? [initialPhoto] : []), [cachedPhotos, initialPhoto]);
+  const [photo, setPhoto] = useState(initialPhoto || photos[initialIndex] || null);
   const [loading, setLoading] = useState(!initialPhoto && !!photoId);
   const [index, setIndex] = useState(initialIndex);
   const [viewMode, setViewMode] = useState(initialViewMode);
@@ -32,7 +38,7 @@ export default function PhotoViewScreen({ route, navigation }: any) {
 
   // Fetch photo data if only photoId was provided
   useEffect(() => {
-    if (!initialPhoto && photoId && baseUrl) {
+    if (!initialPhoto && !photosKey && photoId && baseUrl) {
       setLoading(true);
       api.http.get(`/api/photos/single/${photoId}`)
         .then(res => {
@@ -44,7 +50,26 @@ export default function PhotoViewScreen({ route, navigation }: any) {
         })
         .finally(() => setLoading(false));
     }
-  }, [initialPhoto, photoId, baseUrl]);
+  }, [initialPhoto, photosKey, photoId, baseUrl]);
+
+  // Keep current photo in sync with the cached list (e.g. updated elsewhere)
+  useEffect(() => {
+    if (photos.length > 0 && photos[index] && photos[index].id !== photo?.id) {
+      setPhoto(photos[index]);
+    }
+  }, [photos, index]);
+
+  // Prefetch adjacent full-resolution images for smoother swiping
+  useEffect(() => {
+    if (!baseUrl || photos.length < 2) return;
+    const targets = [index - 1, index + 1]
+      .filter((i) => i >= 0 && i < photos.length)
+      .map((i) => getPhotoUrl(baseUrl, photos[i], viewMode === 'negative' && photos[i].negative_rel_path ? 'negative' : 'full'))
+      .filter(Boolean) as string[];
+    if (targets.length > 0) {
+      ExpoImage.prefetch(targets).catch(() => {});
+    }
+  }, [index, photos, baseUrl, viewMode]);
 
   // Show loading if fetching photo
   if (loading) {
@@ -70,12 +95,19 @@ export default function PhotoViewScreen({ route, navigation }: any) {
 
   const handleTagsSaved = (newTags: any) => {
     setPhoto({ ...photo, tags: newTags });
+    if (photosKey && photos.length > 0) {
+      setQueryData(photosKey, photos.map((p: any) => (p.id === photo.id ? { ...p, tags: newTags } : p)));
+      invalidateQueries('tags@');
+    }
   };
 
   const handleNoteSaved = async (newNote: any) => {
     try {
       await api.http.put(`/api/photos/${photo.id}`, { caption: newNote });
       setPhoto({ ...photo, caption: newNote });
+      if (photosKey && photos.length > 0) {
+        setQueryData(photosKey, photos.map((p: any) => (p.id === photo.id ? { ...p, caption: newNote } : p)));
+      }
     } catch (e) {
       console.error('Failed saving note', (e as Error)?.message || e);
     }
@@ -86,6 +118,10 @@ export default function PhotoViewScreen({ route, navigation }: any) {
     try {
       await api.http.put(`/api/photos/${photo.id}`, { rating: next });
       setPhoto((prev: any) => ({ ...prev, rating: next }));
+      if (photosKey && photos.length > 0) {
+        setQueryData(photosKey, photos.map((p: any) => (p.id === photo.id ? { ...p, rating: next } : p)));
+      }
+      invalidateQueries('favorites@');
     } catch (e) {
       console.error('Failed toggling like', (e as Error)?.message || e);
     }
@@ -94,8 +130,17 @@ export default function PhotoViewScreen({ route, navigation }: any) {
   const isLiked = photo?.rating === 1;
 
   const images = (photos && photos.length > 0)
-    ? photos.map((p: any) => ({ url: getPhotoUrl(baseUrl, p, viewMode === 'negative' && p.negative_rel_path ? 'negative' : 'full') }))
-    : [{ url: fullUrl }];
+    ? photos.map((p: any) => ({ url: getPhotoUrl(baseUrl, p, viewMode === 'negative' && p.negative_rel_path ? 'negative' : 'full') || '' }))
+    : [{ url: fullUrl || '' }];
+
+  const thumbByFullUrl = useMemo(() => {
+    const map = new Map<string, string | null>();
+    photos.forEach((p: any) => {
+      const full = getPhotoUrl(baseUrl, p, viewMode === 'negative' && p.negative_rel_path ? 'negative' : 'full');
+      if (full) map.set(full, getPhotoUrl(baseUrl, p, 'thumb'));
+    });
+    return map;
+  }, [photos, baseUrl, viewMode]);
 
   const anyNegatives = Array.isArray(photos) && photos.some((p: any) => p.negative_rel_path);
 
@@ -213,11 +258,11 @@ export default function PhotoViewScreen({ route, navigation }: any) {
         saveToLocalByLongPress={false}
         backgroundColor="black"
         renderImage={(props) => (
-          <CachedImage
-            uri={props.source?.uri}
+          <ProgressiveImage
+            thumbUri={thumbByFullUrl.get(props.source?.uri)}
+            fullUri={props.source?.uri}
             style={props.style}
             contentFit="contain"
-            transition={200}
           />
         )}
       />
@@ -272,6 +317,7 @@ export default function PhotoViewScreen({ route, navigation }: any) {
         <TouchableOpacity
           style={styles.closeBtn}
           onPress={() => navigation.goBack()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Icon name="x" size={30} color="#fff" />
         </TouchableOpacity>

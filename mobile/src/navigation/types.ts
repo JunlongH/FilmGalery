@@ -15,7 +15,7 @@ export type RootStackParamList = {
     photo?: any;
     photoId?: number | string;
     rollId?: number | string;
-    photos?: any[];
+    photosKey?: string | null;
     initialIndex?: number;
     viewMode?: string;
   } | undefined;
@@ -25,7 +25,9 @@ export type RootStackParamList = {
   EquipmentRolls: { type?: string; id?: number | string; name?: string } | undefined;
   LocationDiagnostic: undefined;
   Favorites: undefined;
-  Themes: undefined;
+  Collections: undefined;
+  Films: undefined;
+  Negatives: undefined;
   Equipment: undefined;
   Inventory: undefined;
   Stats: undefined;

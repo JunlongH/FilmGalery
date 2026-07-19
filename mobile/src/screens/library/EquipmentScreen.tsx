@@ -2,13 +2,13 @@
  * EquipmentScreen - Mobile equipment management
  * Manage cameras, lenses, and flashes
  */
-import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
-import { View, FlatList, StyleSheet, RefreshControl, TouchableOpacity, Image, Animated } from 'react-native';
-import { 
-  Text, 
-  FAB, 
-  Searchbar, 
-  SegmentedButtons, 
+import React, { useState, useCallback, useContext, useRef, useMemo } from 'react';
+import { View, FlatList, StyleSheet, RefreshControl, TouchableOpacity, Animated } from 'react-native';
+import {
+  Text,
+  FAB,
+  Searchbar,
+  SegmentedButtons,
   ActivityIndicator,
   useTheme,
   Portal,
@@ -17,22 +17,40 @@ import {
   TextInput
 } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
-import { getCameras, getLenses, getFlashes, createCamera, createLens, createFlash, deleteCamera, deleteLens, deleteFlash } from '../api/equipment';
-import { getFilms } from '../api/filmItems';
-import { spacing, radius } from '../theme';
-import { ApiContext } from '../context/ApiContext';
-import CachedImage from '../components/CachedImage';
-import { Icon } from '../components/ui';
-import { buildUploadUrl } from '../utils/urlHelper';
+import { getCameras, getLenses, getFlashes, createCamera, createLens, createFlash, deleteCamera, deleteLens, deleteFlash } from '../../api/equipment';
+import { getFilms } from '../../api/filmItems';
+import { spacing, radius } from '../../theme';
+import { ApiContext } from '../../context/ApiContext';
+import CachedImage from '../../components/CachedImage';
+import { Icon } from '../../components/ui';
+import { buildUploadUrl } from '../../utils/urlHelper';
+import { useApiQuery } from '../../hooks/useApiQuery';
+import { setQueryData } from '../../api/queryCache';
 
 export default function EquipmentScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
   const [tab, setTab] = useState('camera');
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+
+  const listKey = baseUrl
+    ? tab === 'film'
+      ? `films@${baseUrl}`
+      : `equipment:${tab}@${baseUrl}`
+    : null;
+
+  const { data, loading, refreshing, refresh } = useApiQuery<any[]>(
+    listKey,
+    async () => {
+      let res;
+      if (tab === 'camera') res = await getCameras();
+      else if (tab === 'lens') res = await getLenses();
+      else if (tab === 'flash') res = await getFlashes();
+      else res = await getFilms();
+      return Array.isArray(res) ? res : [];
+    },
+  );
+  const items = useMemo(() => data ?? [], [data]);
   
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -68,40 +86,9 @@ export default function EquipmentScreen({ navigation }: any) {
   // Delete dialog
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
-  useEffect(() => {
-    navigation.setOptions({ title: 'Equipments' });
+  React.useEffect(() => {
+    navigation.setOptions({ title: 'Equipment' });
   }, [navigation]);
-
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
-    try {
-      let data;
-      if (tab === 'camera') {
-        data = await getCameras();
-      } else if (tab === 'lens') {
-        data = await getLenses();
-      } else if (tab === 'flash') {
-        data = await getFlashes();
-      } else if (tab === 'film') {
-        data = await getFilms();
-      }
-      setItems(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to fetch equipment:', err);
-      setItems([]);
-    }
-    setLoading(false);
-  }, [tab]);
-
-  useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchItems();
-    setRefreshing(false);
-  };
 
   const handleAdd = async () => {
     if (!addBrand.trim() || !addModel.trim()) return;
@@ -142,8 +129,8 @@ export default function EquipmentScreen({ navigation }: any) {
         });
       }
       
-      if (newItem) {
-        setItems(prev => [...prev, newItem]);
+      if (newItem && listKey) {
+        setQueryData(listKey, [...items, newItem]);
       }
     } catch (err) {
       console.error('Failed to create equipment:', err);
@@ -175,7 +162,9 @@ export default function EquipmentScreen({ navigation }: any) {
         await deleteFlash(deleteTarget.id);
       }
       
-      setItems(prev => prev.filter((i: any) => i.id !== deleteTarget.id));
+      if (listKey) {
+        setQueryData(listKey, items.filter((i: any) => i.id !== deleteTarget.id));
+      }
     } catch (err) {
       console.error('Failed to delete equipment:', err);
     }
@@ -233,18 +222,7 @@ export default function EquipmentScreen({ navigation }: any) {
     
     // Get thumbnail URL - use buildUploadUrl for proper path handling
     const thumbUrl = buildUploadUrl(item.image_path || item.thumbPath, baseUrl);
-    
-    // Debug: log first item to verify data
-    if (filteredItems.indexOf(item) === 0) {
-      console.log(`[${tab}] First item:`, {
-        name: displayTitle,
-        image_path: item.image_path,
-        thumbPath: item.thumbPath,
-        baseUrl,
-        thumbUrl
-      });
-    }
-    
+
     return (
       <TouchableOpacity
         style={styles.cardWrapper}
@@ -336,7 +314,7 @@ export default function EquipmentScreen({ navigation }: any) {
           renderItem={renderItem}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[theme.colors.primary]} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>

@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, StyleSheet, type StyleProp, type ViewStyle, type DimensionValue } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, type StyleProp, type ViewStyle, type DimensionValue } from 'react-native';
+import { useTheme } from 'react-native-paper';
 
 export interface SkeletonBoxProps {
   width?: DimensionValue;
@@ -8,12 +9,33 @@ export interface SkeletonBoxProps {
 }
 
 export default function SkeletonBox({ width = '100%', height = 16, style }: SkeletonBoxProps) {
-  return <View style={[styles.base, { width, height }, style]} />;
+  const theme = useTheme();
+  const opacity = useRef(new Animated.Value(0.45)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.45, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.base,
+        { width, height, backgroundColor: theme.colors.surfaceVariant, opacity },
+        style,
+      ]}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: '#e6e6e6',
     borderRadius: 6,
   },
 });

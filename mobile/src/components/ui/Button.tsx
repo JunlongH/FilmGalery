@@ -11,10 +11,10 @@ interface VariantStyle {
 }
 
 const VARIANTS: Record<string, VariantStyle> = {
-  primary: { bg: colors.primary, text: '#fff', pressed: '#4A3828' },
+  primary: { bg: colors.primary, text: '#fff', pressed: '#00696E' },
   secondary: { bg: colors.secondary, text: '#fff', pressed: '#2E5A54' },
   outline: { bg: 'transparent', text: colors.primary, border: colors.primary, pressed: colors.primaryContainer },
-  ghost: { bg: 'transparent', text: colors.primary, pressed: 'rgba(90, 70, 50, 0.1)' },
+  ghost: { bg: 'transparent', text: colors.primary, pressed: 'rgba(0, 151, 167, 0.12)' },
   danger: { bg: colors.error, text: '#fff', pressed: '#8B0015' },
 };
 

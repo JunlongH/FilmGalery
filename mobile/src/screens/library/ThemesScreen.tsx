@@ -1,13 +1,14 @@
-import React, { useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { useContext, useCallback, useRef, useMemo } from 'react';
 import { View, FlatList, StyleSheet, Dimensions, TouchableOpacity, Animated } from 'react-native';
-import { ActivityIndicator, useTheme, Text } from 'react-native-paper';
-import { ApiContext } from '../context/ApiContext';
-import { api } from '../api/client';
-import TagCard from '../components/TagCard';
-import SkeletonBox from '../components/SkeletonBox';
+import { useTheme, Text } from 'react-native-paper';
+import { ApiContext } from '../../context/ApiContext';
+import { api } from '../../api/client';
+import TagCard from '../../components/TagCard';
+import SkeletonBox from '../../components/SkeletonBox';
 import { useFocusEffect } from '@react-navigation/native';
-import { Icon } from '../components/ui';
-import { spacing, radius } from '../theme';
+import { Icon } from '../../components/ui';
+import { spacing, radius } from '../../theme';
+import { useApiQuery } from '../../hooks/useApiQuery';
 
 const numColumns = 2;
 const screenWidth = Dimensions.get('window').width;
@@ -16,29 +17,18 @@ const cardWidth = (screenWidth - 32 - 12) / numColumns; // 32 padding, 12 gap
 export default function ThemesScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
-  const [tags, setTags] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+
+  const { data, loading, refresh } = useApiQuery<any[]>(
+    baseUrl ? `tags@${baseUrl}` : null,
+    async () => {
+      const res = await api.http.get('/api/tags');
+      return res.filter((t: any) => t.photos_count > 0);
+    },
+  );
+  const tags = useMemo(() => data ?? [], [data]);
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  const fetchTags = async () => {
-    if (!baseUrl) return;
-    setLoading(true);
-    try {
-      const res = await api.http.get('/api/tags');
-      // Filter out tags with 0 photos
-      setTags(res.filter((t: any) => t.photos_count > 0));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTags();
-  }, [baseUrl]);
 
   // Animate on focus
   useFocusEffect(
@@ -52,23 +42,19 @@ export default function ThemesScreen({ navigation }: any) {
     }, [])
   );
 
-  // Header refresh button with new Icon
+  // Header refresh button
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity 
-          onPress={async () => { 
-            const { clearImageCache } = await import('../components/CachedImage'); 
-            await clearImageCache(); 
-            fetchTags(); 
-          }}
+        <TouchableOpacity
+          onPress={refresh}
           style={{ marginRight: 16, padding: 8 }}
         >
           <Icon name="refresh-cw" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
       )
     });
-  }, [navigation, baseUrl, theme]);
+  }, [navigation, theme, refresh]);
 
   const renderItem = ({ item }: any) => {
     let coverUrl = null;
@@ -170,7 +156,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
+    borderBottomColor: 'rgba(128,128,128,0.2)',
   },
   countText: {
     fontSize: 13,
