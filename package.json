@@ -14,7 +14,7 @@
     "packages/@filmgallery/*"
   ],
   "scripts": {
-    "postinstall": "cd client && npm install && cd ../server && npm install",
+    "postinstall": "cd client && npm install --legacy-peer-deps && cd ../server && npm install --legacy-peer-deps",
     "dev:client": "cd client && cross-env PORT=3000 REACT_APP_API_BASE=http://127.0.0.1:3000 npm start",
     "dev:server": "cd server && npm start",
     "dev:electron": "cross-env ELECTRON_DEV=true electron .",
