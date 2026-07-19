@@ -11,6 +11,11 @@ on:
         required: false
         default: 'dev'
 
+# Explicit permissions — the default GITHUB_TOKEN is read-only since the
+# 2023 security tightening; release creation needs write on contents.
+permissions:
+  contents: write
+
 jobs:
   build-desktop:
     strategy:
@@ -116,19 +121,24 @@ jobs:
       - name: Install server dependencies
         run: |
           cd server
-          npm install --legacy-peer-deps --ignore-scripts
+          npm install --legacy-peer-deps
 
       - name: Build client
         run: npm run build
 
-      # libraw-native's `prepare` script (npm run download-libraw) was skipped
-      # by --ignore-scripts above. It's needed before rebuild:electron so gyp
-      # has the LibRaw source files to compile against.
-      - name: Fetch LibRaw source (for native rebuild)
-        run: cd packages/@filmgallery/libraw-native && node scripts/download-libraw.js || true
-
       - name: Rebuild native modules for Electron ABI
-        run: npm run rebuild:electron
+        run: |
+          set -o pipefail
+          npm run rebuild:electron 2>&1 | tee /tmp/rebuild-electron.log
+
+      - name: Upload rebuild log (on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebuild-electron-${{ matrix.platform }}-${{ matrix.artifact-name }}
+          path: /tmp/rebuild-electron.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       # --publish never: electron-builder auto-publishes to GH releases when
       # GH_TOKEN is set + on a tag. That collides with the explicit release

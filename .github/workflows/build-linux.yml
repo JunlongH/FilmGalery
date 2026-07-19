@@ -8,6 +8,11 @@ on:
       - 'v*'
   workflow_dispatch:  # 允许手动触发
 
+# Explicit permissions — the default GITHUB_TOKEN is read-only since the
+# 2023 security tightening; release creation needs write on contents.
+permissions:
+  contents: write
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
