@@ -57,7 +57,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 上传构建产物到 GitHub Actions Artifacts
+      # Upload Artifacts — the explicit release creation lives in
+      # build-desktop.yml (which aggregates Win + Mac + Linux assets into
+      # one release). Having two workflows race to create the same tag's
+      # release caused 422 'already_exists' collisions.
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -66,16 +69,3 @@ jobs:
             dist_v9/*.AppImage
             dist_v9/*.deb
           if-no-files-found: warn
-
-      # 如果是 tag 推送，创建 Release
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            dist_v9/*.AppImage
-            dist_v9/*.deb
-          draft: true
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
