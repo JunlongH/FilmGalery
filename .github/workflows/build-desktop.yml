@@ -121,17 +121,24 @@ jobs:
       - name: Install server dependencies
         run: |
           cd server
-          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps --ignore-scripts
 
       - name: Build client
         run: npm run build
+
+      # libraw-native's prepare script (npm run download-libraw) was skipped
+      # by --ignore-scripts above. It's required for rebuild:electron to
+      # compile the LibRaw binding from source. Verbose (no || true) so any
+      # network/extract failure is visible in the step log.
+      - name: Fetch LibRaw source (for native rebuild)
+        run: cd packages/@filmgallery/libraw-native && node scripts/download-libraw.js
 
       - name: Rebuild native modules for Electron ABI
         run: |
           set -o pipefail
           npm run rebuild:electron 2>&1 | tee /tmp/rebuild-electron.log
 
-      - name: Upload rebuild log (on failure)
+      - name: Upload rebuild log (always — captures success + failure paths)
         if: always()
         uses: actions/upload-artifact@v4
         with:
