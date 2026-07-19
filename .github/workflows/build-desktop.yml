@@ -150,18 +150,7 @@ jobs:
           # the linker where to find it. LIBRARY_PATH is clang/gcc's
           # link-time search path env var (analogous to CPATH for includes).
           LIBRARY_PATH: "${{ matrix.platform == 'mac' && '/opt/homebrew/lib' || '' }}"
-        run: |
-          set -o pipefail
-          npm run rebuild:electron 2>&1 | tee /tmp/rebuild-electron.log
-
-      - name: Upload rebuild log (always — captures success + failure paths)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rebuild-electron-${{ matrix.platform }}-${{ matrix.artifact-name }}
-          path: /tmp/rebuild-electron.log
-          if-no-files-found: ignore
-          retention-days: 14
+        run: npm run rebuild:electron
 
       # --publish never: electron-builder auto-publishes to GH releases when
       # GH_TOKEN is set + on a tag. That collides with the explicit release
