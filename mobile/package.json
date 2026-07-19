@@ -17,6 +17,7 @@
     "build:aab": "node -e \"require('child_process').spawn('cmd', ['/c','set','EAS_NO_VCS=1','&&','npx','-y','eas-cli','build','-p','android','--profile','production'], { stdio: 'inherit' })\""
   },
   "dependencies": {
+    "@babel/runtime": "^7.29.0",
     "@filmgallery/api-client": "file:../packages/@filmgallery/api-client",
     "@filmgallery/shared": "file:../packages/shared",
     "@filmgallery/types": "file:../packages/@filmgallery/types",

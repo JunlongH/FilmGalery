@@ -140,7 +140,7 @@ jobs:
           # lightdrift-libraw's binding.gyp links '-lraw' without telling
           # the linker where to find it. LIBRARY_PATH is clang/gcc's
           # link-time search path env var (analogous to CPATH for includes).
-          LIBRARY_PATH: ${{ matrix.platform == 'mac' && '/opt/homebrew/lib' : '' }}
+          LIBRARY_PATH: "${{ matrix.platform == 'mac' && '/opt/homebrew/lib' || '' }}"
         run: |
           set -o pipefail
           npm run rebuild:electron 2>&1 | tee /tmp/rebuild-electron.log
