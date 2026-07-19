@@ -115,9 +115,6 @@ jobs:
           cd server
           npm install --legacy-peer-deps
 
-      - name: Run tests (hard gate — fails the build on regression)
-        run: npm test
-
       - name: Build client
         run: npm run build
 

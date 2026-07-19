@@ -51,8 +51,26 @@ jobs:
       - name: Lint (errors fail, warnings report)
         run: npm run lint
 
+      # Tests run with JSON output captured as an artifact so failures can be
+      # diagnosed without authenticated log access. The exit code still gates
+      # the run.
       - name: Test (root jest — shared + server)
-        run: npm test
+        run: |
+          mkdir -p /tmp/jest-out
+          npm test -- --json --outputFile=/tmp/jest-out/results.json --silent || TEST_FAILED=1
+          if [ -f /tmp/jest-out/results.json ]; then
+            python3 -c "import json; r=json.load(open('/tmp/jest-out/results.json')); [print(f\"  FAIL {t['name']}: {a['title'] if a.get('status')=='failed' else ''}\") for t in r.get('testResults',[]) for a in t.get('assertionResults',[]) if a.get('status')=='failed']" || true
+          fi
+          exit ${TEST_FAILED:-0}
+
+      - name: Upload jest results (on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-results-${{ github.run_id }}
+          path: /tmp/jest-out/
+          if-no-files-found: ignore
+          retention-days: 14
 
   mobile:
     name: Mobile (typecheck + jest + metro bundle)
