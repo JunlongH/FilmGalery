@@ -4,6 +4,7 @@ import type { ApiClient } from '@filmgallery/api-client';
 import { Photo, FilmItem, ShotLog, Roll, Film } from '../types';
 
 const SERVER_URL_KEY = '@server_url';
+const AUTH_TOKEN_KEY = '@auth_token';
 // Default to empty - user must configure server URL in settings.
 // This avoids having placeholder IP addresses in production code.
 const DEFAULT_URL = '';
@@ -58,6 +59,39 @@ class ApiService {
 
   getServerURL(): string {
     return this.baseURL;
+  }
+
+  // --- Phase 2B #1: Auth token ---
+
+  async loadAuthToken(): Promise<void> {
+    try {
+      const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+      if (token) this.client.setAuthToken(token);
+    } catch (error) {
+      console.error('Failed to load auth token:', error);
+    }
+  }
+
+  async saveAuthToken(token: string): Promise<void> {
+    try {
+      await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+      this.client.setAuthToken(token);
+    } catch (error) {
+      console.error('Failed to save auth token:', error);
+    }
+  }
+
+  async clearAuthToken(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+      this.client.clearAuthToken();
+    } catch (error) {
+      console.error('Failed to clear auth token:', error);
+    }
+  }
+
+  setOnUnauthorized(cb: () => void): void {
+    this.client.setOnUnauthorized(cb);
   }
 
   getImageURL(relativePath: string | undefined): string | null {

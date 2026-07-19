@@ -104,11 +104,11 @@ export default function ShotLogScreen({ route, navigation }: any) {
       const apertureStr = lens.max_aperture ? ` f/${lens.max_aperture}` : '';
       return name ? `${name} ${focalStr}${apertureStr}` : `${focalStr}${apertureStr}`;
     }
-    return name || lens.name || 'Unknown Lens';
+    return name || lens.name || '未知镜头';
   };
 
   useEffect(() => {
-    navigation.setOptions({ title: filmName ? `${filmName} Shot Log` : 'Shot Log' });
+    navigation.setOptions({ title: filmName ? `${filmName} 拍摄记录` : '拍摄记录' });
   }, [navigation, filmName]);
 
   // Preload location when screen opens - this gives ShotModeModal a head start
@@ -226,7 +226,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
               // Fixed lens camera
               const fixedLensText = result.focal_length 
                 ? `${result.focal_length}mm${result.max_aperture ? ` f/${result.max_aperture}` : ''}`
-                : 'Fixed Lens';
+                : '固定镜头';
               setCameraName(result.camera_name || '');
               setCameraMount('');
               setFixedLensInfo({
@@ -273,7 +273,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
         }
       } catch (err) {
         console.log('Failed to load shot log', err);
-        if (mounted) setError('Failed to load shot log');
+        if (mounted) setError('加载拍摄记录失败');
       } finally {
         if (mounted) setLoading(false);
       }
@@ -467,7 +467,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
       navigation.goBack();
     } catch (err) {
       console.log('Failed to save shot log', err);
-      setError('Save failed');
+      setError('保存失败');
     } finally {
       setSaving(false);
     }
@@ -484,7 +484,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
   if (!itemId) {
     return (
       <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
-        <Text style={{ color: theme.colors.error }}>Missing film item.</Text>
+        <Text style={{ color: theme.colors.error }}>缺少胶卷信息。</Text>
       </View>
     );
   }
@@ -509,7 +509,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
                 end={{ x: 1, y: 1 }}
                 style={styles.statCard}
               >
-                <Text style={styles.statLabel}>Total Shots</Text>
+                <Text style={styles.statLabel}>总拍摄数</Text>
                 <Text style={styles.statValue}>{totalShots}</Text>
               </LinearGradient>
 
@@ -519,7 +519,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
                 end={{ x: 1, y: 1 }}
                 style={styles.statCard}
               >
-                <Text style={styles.statLabel}>Days Logged</Text>
+                <Text style={styles.statLabel}>拍摄天数</Text>
                 <Text style={styles.statValue}>{daysLogged}</Text>
               </LinearGradient>
             </View>
@@ -535,15 +535,15 @@ export default function ShotLogScreen({ route, navigation }: any) {
                 ) : null}
               </View>
               <Text variant="bodyMedium" style={{ color: theme.colors.primary, fontWeight: 'bold' as const }}>
-                {item.count} shots
+                {item.count} 张
               </Text>
               {item.lens ? (
                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                  Lens: {item.lens}{item.focal_length ? ` @ ${item.focal_length}mm` : ''}
+                  镜头: {item.lens}{item.focal_length ? ` @ ${item.focal_length}mm` : ''}
                 </Text>
               ) : item.focal_length ? (
                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                  Focal: {item.focal_length}mm
+                  焦距: {item.focal_length}mm
                 </Text>
               ) : null}
               {(item.aperture !== undefined && item.aperture !== null) || item.shutter_speed ? (
@@ -574,23 +574,23 @@ export default function ShotLogScreen({ route, navigation }: any) {
         )}
         ListEmptyComponent={() => (
           <Text style={{ textAlign: 'center', marginVertical: spacing.xl, color: theme.colors.onSurfaceVariant }}>
-            No shot logs yet.
+            暂无拍摄记录。
           </Text>
         )}
       />
 
       <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.outlineVariant }]}>
-        <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>Add Log Entry</Text>
+        <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>添加记录</Text>
         <View style={styles.inputRow}>
           <View style={{ flex: 2 }}>
             <DatePickerField
-              label="Date"
+              label="日期"
               value={parseISODate(newDate) || new Date()}
               onChange={(d) => setNewDate(toISODateString(d))}
             />
           </View>
           <TextInput
-            label="Time"
+            label="时间"
             mode="outlined"
             value={newTime}
             onChangeText={setNewTime}
@@ -600,7 +600,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
             dense
           />
           <TextInput
-            label="Shots"
+            label="张数"
             mode="outlined"
             keyboardType="numeric"
             value={newShots}
@@ -614,7 +614,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
             disabled={!newDate}
             style={styles.addButton}
           >
-            Add
+            添加
           </Button>
         </View>
 
@@ -622,17 +622,17 @@ export default function ShotLogScreen({ route, navigation }: any) {
         {fixedLensInfo && (
           <View style={[styles.fixedLensIndicator, { backgroundColor: theme.dark ? 'rgba(34, 197, 94, 0.15)' : '#f0fdf4', borderColor: theme.dark ? '#22c55e' : '#86efac' }]}>
             <Text style={[styles.fixedLensText, { color: theme.dark ? '#4ade80' : '#166534' }]}>
-              🔒 Fixed Lens Camera: {fixedLensInfo.text}
+              🔒 固定镜头相机: {fixedLensInfo.text}
             </Text>
             <Text style={[styles.fixedLensSubtext, { color: theme.dark ? '#86efac' : '#15803d' }]}>
-              Lens is automatically set for {cameraName || 'this camera'}
+              镜头已自动设置为{cameraName || '此相机'}的镜头
             </Text>
           </View>
         )}
 
         {/* Lens input - disabled for fixed lens cameras */}
         <TextInput
-          label={fixedLensInfo ? "Lens (Fixed)" : "Lens (custom or pick below)"}
+          label={fixedLensInfo ? "镜头（固定）" : "镜头（自定义或从下方选择）"}
           mode="outlined"
           value={newLens}
           onChangeText={fixedLensInfo ? undefined : setNewLens}
@@ -642,7 +642,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
         />
         <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
           <TextInput
-            label="Aperture (f)"
+            label="光圈 (f)"
             mode="outlined"
             keyboardType="decimal-pad"
             value={newAperture}
@@ -652,7 +652,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
             dense
           />
           <TextInput
-            label="Shutter (s)"
+            label="快门 (s)"
             mode="outlined"
             value={newShutter}
             onChangeText={setNewShutter}
@@ -661,7 +661,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
             dense
           />
           <TextInput
-            label="Focal (mm)"
+            label="焦距 (mm)"
             mode="outlined"
             keyboardType="numeric"
             value={newFocalLength}
@@ -679,7 +679,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
               onPress={() => setShowLensOptions(v => !v)}
               style={{ alignSelf: 'flex-start', marginBottom: showLensOptions ? spacing.xs : spacing.sm }}
             >
-              {showLensOptions ? 'Hide lens options' : `Select from ${nativeLenses.length + adaptedLenses.length || lensOptions.length} lenses`}
+              {showLensOptions ? '隐藏镜头列表' : `从 ${nativeLenses.length + adaptedLenses.length || lensOptions.length} 个镜头中选择`}
             </Button>
             {showLensOptions && (
               <View style={{ marginBottom: spacing.sm }}>
@@ -687,7 +687,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
                 {nativeLenses.length > 0 && (
                   <>
                     <Text variant="labelMedium" style={{ color: theme.colors.primary, marginBottom: 6, fontWeight: '600' as const }}>
-                      📷 Native Lenses {cameraMount ? `(${cameraMount})` : ''}
+                      📷 原生镜头 {cameraMount ? `(${cameraMount})` : ''}
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm }}>
                       {nativeLenses.map((l: any) => {
@@ -722,7 +722,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
                 {adaptedLenses.length > 0 && (
                   <>
                     <Text variant="labelMedium" style={{ color: theme.colors.secondary, marginBottom: 6, fontWeight: '600' as const }}>
-                      🔄 Adapted Lenses
+                      🔄 转接镜头
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm }}>
                       {adaptedLenses.map((l: any) => {
@@ -776,7 +776,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
 
         <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
           <TextInput
-            label="Country"
+            label="国家"
             mode="outlined"
             value={newCountry}
             onChangeText={setNewCountry}
@@ -784,7 +784,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
             dense
           />
           <TextInput
-            label="City"
+            label="城市"
             mode="outlined"
             value={newCity}
             onChangeText={setNewCity}
@@ -799,7 +799,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
           onPress={() => setShowCountryOptions(v => !v)}
           style={{ alignSelf: 'flex-start', marginBottom: showCountryOptions ? spacing.xs : spacing.sm }}
         >
-          {showCountryOptions ? 'Hide country suggestions' : 'Show country suggestions'}
+          {showCountryOptions ? '隐藏国家建议' : '显示国家建议'}
         </Button>
         {showCountryOptions ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.sm }}>
@@ -825,7 +825,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
           disabled={!countryCode && !newCountry}
           style={{ alignSelf: 'flex-start', marginBottom: showCityOptions ? spacing.xs : spacing.sm }}
         >
-          {showCityOptions ? 'Hide city suggestions' : 'Show city suggestions'}
+          {showCityOptions ? '隐藏城市建议' : '显示城市建议'}
         </Button>
         {showCityOptions && (countryCode || newCountry) ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.sm }}>
@@ -846,7 +846,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
         ) : null}
 
         <TextInput
-          label="Detail location"
+          label="详细地点"
           mode="outlined"
           value={newDetail}
           onChangeText={setNewDetail}
@@ -855,11 +855,11 @@ export default function ShotLogScreen({ route, navigation }: any) {
         />
         
         <TextInput
-          label="Caption (Photo Description)"
+          label="照片描述"
           mode="outlined"
           value={newCaption}
           onChangeText={setNewCaption}
-          placeholder="Describe the shot, e.g. 'Sunset at the Great Wall'"
+          placeholder="描述这一张，例如「长城日落」"
           style={[styles.input, { marginBottom: spacing.xs }]}
           dense
         />
@@ -874,7 +874,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
         ) : (
           <View style={{ marginBottom: spacing.md, paddingHorizontal: 4 }}>
             <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12 }}>
-              💡 Use Shot Mode to capture GPS coordinates
+              💡 使用拍摄模式获取 GPS 坐标
             </Text>
           </View>
         )}
@@ -887,7 +887,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
           style={styles.saveButton}
           buttonColor={theme.colors.primary}
         >
-          Save Changes
+          保存修改
         </Button>
       </View>
 
@@ -909,7 +909,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
           onPress={() => setShowShotMode(true)}
         >
           <Icon name="camera" size={20} color="#fff" />
-          <Text style={{ marginLeft: 8, color: '#fff', fontWeight: '600' as const }}>Shot Mode</Text>
+          <Text style={{ marginLeft: 8, color: '#fff', fontWeight: '600' as const }}>拍摄模式</Text>
         </TouchableOpacity>
       </DraggableFab>
 

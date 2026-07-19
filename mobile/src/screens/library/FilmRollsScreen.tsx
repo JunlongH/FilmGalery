@@ -10,9 +10,11 @@ import { Icon } from '../../components/ui';
 import { api } from '../../api/client';
 import { format } from 'date-fns';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useT } from '../../i18n';
 
 export default function FilmRollsScreen({ route, navigation }: any) {
   const theme = useTheme();
+  const t = useT();
   const { filmId, filmName } = route.params;
   const { baseUrl } = useContext(ApiContext);
 
@@ -25,10 +27,10 @@ export default function FilmRollsScreen({ route, navigation }: any) {
     () => (data ?? []).filter((r: any) => r.filmId === filmId),
     [data, filmId],
   );
-  const error = rolls.length === 0 && queryError ? 'Failed to connect to server.' : null;
+  const error = rolls.length === 0 && queryError ? '无法连接服务器。' : null;
 
   React.useEffect(() => {
-    navigation.setOptions({ title: filmName || 'Film Rolls' });
+    navigation.setOptions({ title: filmName || '胶卷' });
   }, [navigation, filmName]);
 
   // Header refresh button
@@ -56,22 +58,22 @@ export default function FilmRollsScreen({ route, navigation }: any) {
     return (
       <Card 
         style={[styles.card, { backgroundColor: theme.colors.surface }]} 
-        onPress={() => navigation.navigate('RollDetail', { rollId: item.id, rollName: item.title || `Roll #${item.id}` })}
+        onPress={() => navigation.navigate('RollDetail', { rollId: item.id, rollName: item.title || `胶卷 #${item.id}` })}
         mode="elevated"
       >
         {coverUrl ? (
           <View style={styles.coverWrapper}>
             <CachedImage uri={coverUrl} style={styles.cover} contentFit="cover" />
             <CoverOverlay 
-              title={item.title || `Roll #${item.id}`}
-              leftText={(item.film_name_joined || item.film_type || 'Unknown Film')}
+              title={item.title || `胶卷 #${item.id}`}
+              leftText={(item.film_name_joined || item.film_type || '未知胶卷')}
               rightText={`${item.start_date ? format(new Date(item.start_date), 'yyyy-MM-dd') : ''}${item.end_date ? ` - ${format(new Date(item.end_date), 'yyyy-MM-dd')}` : ''}`}
             />
           </View>
         ) : (
           <Card.Content style={styles.cardContent}>
-            <Title style={[styles.cardTitle, { color: theme.colors.onSurface }]}>{item.title || `Roll #${item.id}`}</Title>
-            <Paragraph style={[styles.meta, { color: theme.colors.onSurfaceVariant }]}>{item.film_name_joined || item.film_type || 'Unknown Film'}</Paragraph>
+            <Title style={[styles.cardTitle, { color: theme.colors.onSurface }]}>{item.title || `胶卷 #${item.id}`}</Title>
+            <Paragraph style={[styles.meta, { color: theme.colors.onSurfaceVariant }]}>{item.film_name_joined || item.film_type || '未知胶卷'}</Paragraph>
           </Card.Content>
         )}
       </Card>
@@ -101,7 +103,7 @@ export default function FilmRollsScreen({ route, navigation }: any) {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[theme.colors.primary]} />
           }
-          ListEmptyComponent={!loading ? <Text style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>No rolls found for this film.</Text> : null}
+          ListEmptyComponent={!loading ? <Text style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>暂无使用此胶卷拍摄的卷。</Text> : null}
           initialNumToRender={6}
           windowSize={7}
           maxToRenderPerBatch={6}

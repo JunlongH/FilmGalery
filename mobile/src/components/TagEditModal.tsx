@@ -4,6 +4,7 @@ import { Modal, Portal, Text, TextInput, Chip, Button, useTheme } from 'react-na
 import { api } from '../api/client';
 import { ApiContext } from '../context/ApiContext';
 import { Icon } from './ui';
+import { useT } from '../i18n';
 
 export interface TagEditModalPhoto {
   id: number | string;
@@ -24,6 +25,7 @@ interface TagOption {
 
 export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagEditModalProps) {
   const theme = useTheme();
+  const t = useT();
   const { baseUrl } = useContext(ApiContext);
   const [input, setInput] = useState<string>('');
   const [currentTags, setCurrentTags] = useState<string[]>([]);
@@ -85,14 +87,14 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagE
     } catch (err: any) {
       console.error('[TagEditModal] Failed to save tags:', err);
       console.error('[TagEditModal] Error details:', err.response?.data || (err as Error).message);
-      alert(`Failed to save tags: ${err.response?.data?.error || (err as Error).message}`);
+      alert(`保存标签失败：${err.response?.data?.error || (err as Error).message}`);
     }
   };
 
   return (
     <Portal>
       <Modal visible={visible} onDismiss={onDismiss} contentContainerStyle={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-        <Text style={[styles.title, { color: theme.colors.onSurface }]}>Edit Tags</Text>
+        <Text style={[styles.title, { color: theme.colors.onSurface }]}>编辑标签</Text>
 
         <View style={styles.tagContainer}>
           {currentTags.map((tag) => (
@@ -111,7 +113,7 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagE
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TextInput
             mode="outlined"
-            label="Add a tag..."
+            label="添加标签..."
             value={input}
             onChangeText={setInput}
             onSubmitEditing={() => addTag(input)}
@@ -133,10 +135,10 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagE
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionTitle}>Choose from existing</Text>
+        <Text style={styles.sectionTitle}>从现有标签中选择</Text>
         <ScrollView style={styles.suggestions} keyboardShouldPersistTaps="handled">
           {suggestions.length === 0 ? (
-            <View style={styles.emptyBox}><Text style={{ color: '#888' }}>No matching tags</Text></View>
+            <View style={styles.emptyBox}><Text style={{ color: '#888' }}>没有匹配的标签</Text></View>
           ) : (
             suggestions.map((s) => (
               <TouchableOpacity key={s.id} onPress={() => addTag(s.name)} style={styles.suggestionItem}>
@@ -148,8 +150,8 @@ export default function TagEditModal({ visible, onDismiss, photo, onSave }: TagE
         </ScrollView>
 
         <View style={styles.actions}>
-          <Button onPress={onDismiss}>Cancel</Button>
-          <Button mode="contained" onPress={handleSave}>Save</Button>
+          <Button onPress={onDismiss}>取消</Button>
+          <Button mode="contained" onPress={handleSave}>保存</Button>
         </View>
       </Modal>
     </Portal>

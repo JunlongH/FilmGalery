@@ -5,6 +5,7 @@ import GeneralSettings from './Settings/GeneralSettings';
 import ServerSettings from './Settings/ServerSettings';
 import MapSettings from './Settings/MapSettings';
 import AISettings from './Settings/AISettings';
+import PairingSettings from './Settings/PairingSettings';
 
 export default function Settings() {
   const [config, setConfig] = useState({});
@@ -161,9 +162,13 @@ export default function Settings() {
              <MapSettings />
            )}
 
-           {activeTab === 'ai' && (
-             <AISettings />
-           )}
+            {activeTab === 'ai' && (
+              <AISettings />
+            )}
+
+            {activeTab === 'security' && (
+              <PairingSettings />
+            )}
         </div>
       </div>
     </div>

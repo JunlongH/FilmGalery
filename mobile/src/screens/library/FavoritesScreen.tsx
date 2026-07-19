@@ -10,6 +10,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { getPhotoUrl } from '../../utils/urls';
 import { Icon } from '../../components/ui';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useT } from '../../i18n';
 
 const numColumns = 3;
 const screenWidth = Dimensions.get('window').width;
@@ -19,6 +20,7 @@ const ROW_HEIGHT = tileSize + 4; // tile + 2*margin(2)
 
 export default function FavoritesScreen({ navigation }: any) {
   const theme = useTheme();
+  const t = useT();
   const { baseUrl } = useContext(ApiContext);
 
   const photosKey = baseUrl ? `favorites@${baseUrl}` : null;
@@ -97,17 +99,17 @@ export default function FavoritesScreen({ navigation }: any) {
         <View style={styles.emptyContainer}>
           <Icon name="heart" size={64} color={theme.colors.onSurfaceVariant} />
           <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
-            No favorites yet
+            暂无收藏
           </Text>
           <Text style={[styles.emptySubtext, { color: theme.colors.onSurfaceVariant }]}>
-            Add photos to your favorites to see them here
+            将照片加入收藏后会显示在这里
           </Text>
         </View>
       ) : (
         <>
           <View style={[styles.countBar, { borderBottomColor: theme.colors.outlineVariant }]}>
             <Text style={[styles.countText, { color: theme.colors.onSurfaceVariant }]}>
-              {photos.length} {photos.length === 1 ? 'favorite' : 'favorites'}
+              {photos.length} 张收藏
             </Text>
           </View>
           <FlatList

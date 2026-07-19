@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider as PaperProvider, useTheme } from 'react-native-paper';
@@ -20,6 +20,7 @@ import LibraryScreen from './src/screens/library/LibraryScreen';
 // Detail screens
 import RollDetailScreen from './src/screens/timeline/RollDetailScreen';
 import SettingsScreen from './src/screens/settings/SettingsScreen';
+import PairingScreen from './src/screens/settings/PairingScreen';
 import PhotoViewScreen from './src/screens/viewing/PhotoViewScreen';
 import FilmsScreen from './src/screens/library/FilmsScreen';
 import FavoritesScreen from './src/screens/library/FavoritesScreen';
@@ -36,12 +37,15 @@ import EquipmentRollsScreen from './src/screens/library/EquipmentRollsScreen';
 import LocationDiagnosticScreen from './src/screens/settings/LocationDiagnosticScreen';
 import AISettingsScreen from './src/screens/settings/AISettingsScreen';
 import { ApiContext } from './src/context/ApiContext';
-import { configureApi } from './src/api/client';
+import { configureApi, loadAuthToken, setApiOnUnauthorized } from './src/api/client';
 import appTheme, { appDarkTheme } from './src/theme';
 import type { MapProvider } from './src/context/ApiContext';
+import { initLanguage, useT } from './src/i18n';
 
 const RootStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+// Phase 2B: ref for programmatic navigation on 401 (setApiOnUnauthorized)
+const navigationRef = createNavigationContainerRef<any>();
 const TimelineStack = createNativeStackNavigator();
 const MapStack = createNativeStackNavigator();
 const LibraryStack = createNativeStackNavigator();
@@ -56,13 +60,14 @@ const stackScreenOptions = (theme: any) =>
 
 function TimelineStackScreen() {
   const theme = useTheme();
+  const t = useT();
   return (
     <TimelineStack.Navigator screenOptions={stackScreenOptions(theme)}>
       <TimelineStack.Screen
         name="TimelineHome"
         component={HomeScreen}
         options={{
-          title: 'Timeline',
+          title: '时间线',
           headerTitle: 'Film Gallery',
           headerRight: () => <HeaderRight showQuickMeter={true} showSettings={true} showAI={true} />,
         }}
@@ -73,14 +78,15 @@ function TimelineStackScreen() {
 
 function MapStackScreen() {
   const theme = useTheme();
+  const t = useT();
   return (
     <MapStack.Navigator screenOptions={stackScreenOptions(theme)}>
       <MapStack.Screen
         name="MapHome"
         component={MapScreen}
         options={{
-          title: 'Map',
-          headerTitle: 'Photo Map',
+          title: '地图',
+          headerTitle: '照片地图',
           headerRight: () => <HeaderRight showQuickMeter={false} showSettings={true} />,
         }}
       />
@@ -90,71 +96,72 @@ function MapStackScreen() {
 
 function LibraryStackScreen() {
   const theme = useTheme();
+  const t = useT();
   return (
     <LibraryStack.Navigator screenOptions={stackScreenOptions(theme)}>
       <LibraryStack.Screen
         name="LibraryHome"
         component={LibraryScreen}
         options={{
-          title: 'Library',
-          headerTitle: 'My Library',
+          title: '图库',
+          headerTitle: '我的图库',
           headerRight: () => <HeaderRight showQuickMeter={false} showSettings={true} />,
         }}
       />
       <LibraryStack.Screen
         name="Favorites"
         component={FavoritesScreen}
-        options={{ title: 'Favorites' }}
+        options={{ title: '收藏' }}
       />
       <LibraryStack.Screen
         name="Collections"
         component={ThemesScreen}
-        options={{ title: 'Collections' }}
+        options={{ title: '合集' }}
       />
       <LibraryStack.Screen
         name="TagDetail"
         component={TagDetailScreen}
-        options={({ route }) => ({ title: (route.params as any)?.tagName || 'Tag Details' })}
+        options={({ route }) => ({ title: (route.params as any)?.tagName || '标签详情' })}
       />
       <LibraryStack.Screen
         name="Equipment"
         component={EquipmentScreen}
-        options={{ title: 'Equipment' }}
+        options={{ title: '器材' }}
       />
       <LibraryStack.Screen
         name="EquipmentRolls"
         component={EquipmentRollsScreen}
-        options={({ route }) => ({ title: (route.params as any)?.name || 'Equipment Rolls' })}
+        options={({ route }) => ({ title: (route.params as any)?.name || '器材胶卷' })}
       />
       <LibraryStack.Screen
         name="Inventory"
         component={InventoryScreen}
-        options={{ title: 'Inventory' }}
+        options={{ title: '库存' }}
       />
       <LibraryStack.Screen
         name="Stats"
         component={StatsScreen}
-        options={{ title: 'Statistics' }}
+        options={{ title: '统计' }}
       />
       <LibraryStack.Screen
         name="Films"
         component={FilmsScreen}
-        options={{ title: 'Film Catalog' }}
+        options={{ title: '胶卷目录' }}
       />
       <LibraryStack.Screen
         name="FilmRolls"
         component={FilmRollsScreen}
-        options={({ route }) => ({ title: (route.params as any)?.filmName || 'Film Rolls' })}
+        options={({ route }) => ({ title: (route.params as any)?.filmName || '胶卷' })}
       />
       <LibraryStack.Screen
         name="FilmItemDetail"
         component={FilmItemDetailScreen}
-        options={{ title: 'Film Item' }}
+        options={{ title: '胶卷详情' }}
       />
       <LibraryStack.Screen
         name="Negatives"
         component={NegativeScreen}
-        options={{ title: 'Negatives' }}
+        options={{ title: '底片' }}
       />
     </LibraryStack.Navigator>
   );
@@ -169,6 +176,7 @@ function LibraryStackScreen() {
  */
 function HomeTabs() {
   const theme = useTheme();
+  const t = useT();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -209,13 +217,13 @@ function HomeTabs() {
         headerShown: false,
       })}
     >
-      <Tab.Screen name="Timeline" component={TimelineStackScreen} />
+      <Tab.Screen name="Timeline" component={TimelineStackScreen} options={{ title: '时间线' }} />
       <Tab.Screen
         name="Map"
         component={MapStackScreen}
-        options={{ freezeOnBlur: true }}
+        options={{ freezeOnBlur: true, title: '地图' }}
       />
-      <Tab.Screen name="Library" component={LibraryStackScreen} />
+      <Tab.Screen name="Library" component={LibraryStackScreen} options={{ title: '图库' }} />
     </Tab.Navigator>
   );
 }
@@ -228,6 +236,8 @@ export default function App() {
   const [mapProvider, setMapProvider] = useState<MapProvider>('osm');
   const [amapKey, setAmapKey] = useState<string>('');
 
+  const t = useT();
+
   useEffect(() => {
     // CRITICAL: configureApi must run BEFORE setLoading(false) so screens see
     // the correct baseUrl on their first fetch (fixes timing race that caused
@@ -238,8 +248,14 @@ export default function App() {
       AsyncStorage.getItem('theme_dark'),
       AsyncStorage.getItem('map_provider'),
       AsyncStorage.getItem('amap_key'),
-    ]).then(([url, backup, themeDark, savedProvider, savedAmapKey]) => {
+      initLanguage(),
+    ]).then(async ([url, backup, themeDark, savedProvider, savedAmapKey]) => {
       configureApi(url || '', backup || '');
+      // Phase 2B: restore auth token + wire 401 → pairing screen
+      await loadAuthToken();
+      setApiOnUnauthorized(() => {
+        navigationRef.current?.navigate('Pairing');
+      });
       if (url) setBaseUrl(url);
       if (backup) setBackupUrl(backup);
       if (themeDark === 'true') setDarkMode(true);
@@ -252,6 +268,8 @@ export default function App() {
   useEffect(() => {
     if (!loading && baseUrl) {
       configureApi(baseUrl, backupUrl);
+      // Phase 2B: re-apply auth token after client re-creation
+      loadAuthToken();
     }
   }, [loading, baseUrl, backupUrl]);
 
@@ -279,7 +297,7 @@ export default function App() {
     <ApiContext.Provider value={apiContextValue}>
       <PaperProvider theme={themeToUse as any}>
         <GestureHandlerRootView style={{ flex: 1 }}>
-        <NavigationContainer theme={themeToUse as any}>
+        <NavigationContainer ref={navigationRef} theme={themeToUse as any}>
           <RootStack.Navigator
             initialRouteName="Main"
             screenOptions={{
@@ -298,34 +316,39 @@ export default function App() {
             <RootStack.Screen
               name="RollDetail"
               component={RollDetailScreen}
-              options={({ route }) => ({ title: (route.params as any)?.rollName || 'Roll Details' })}
+              options={({ route }) => ({ title: (route.params as any)?.rollName || '胶卷详情' })}
             />
             {/* Full-screen / modal flows */}
             <RootStack.Screen
               name="PhotoView"
               component={PhotoViewScreen}
-              options={{ title: 'Photo', headerShown: false, presentation: 'fullScreenModal' }}
+              options={{ title: '照片', headerShown: false, presentation: 'fullScreenModal' }}
             />
             <RootStack.Screen
               name="ShotLog"
               component={ShotLogScreen}
-              options={{ title: 'Shot Log', presentation: 'fullScreenModal' }}
+              options={{ title: '拍摄记录', presentation: 'fullScreenModal' }}
             />
             {/* Settings group */}
             <RootStack.Screen
               name="Settings"
               component={SettingsScreen}
-              options={{ title: 'Settings' }}
+              options={{ title: '设置' }}
             />
             <RootStack.Screen
               name="AISettings"
               component={AISettingsScreen}
-              options={{ title: 'AI Assistant' }}
+              options={{ title: 'AI 助手' }}
             />
             <RootStack.Screen
               name="LocationDiagnostic"
               component={LocationDiagnosticScreen}
-              options={{ title: 'Location Diagnostics' }}
+              options={{ title: '位置诊断' }}
+            />
+            <RootStack.Screen
+              name="Pairing"
+              component={PairingScreen}
+              options={{ title: '设备配对' }}
             />
           </RootStack.Navigator>
           <StatusBar style={darkMode ? 'light' : 'dark'} />

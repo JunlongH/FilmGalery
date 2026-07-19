@@ -10,6 +10,46 @@ export const API_BASE = (typeof window !== 'undefined' && window.__electron?.API
   ? window.__electron.API_BASE 
   : (process.env.REACT_APP_API_BASE || 'http://127.0.0.1:4000');
 
+// ============================================================================
+// Phase 2B #1 — Auth token (remote mode)
+// ============================================================================
+// When the desktop client connects to a REMOTE server (non-loopback), the
+// server's auth middleware requires a Bearer token. The token is obtained
+// via the pairing flow (POST /api/pairing/verify) and persisted in
+// localStorage. Loopback connections pass through auth without a token.
+
+let _authToken = (() => {
+  try { return localStorage.getItem('__fg_auth_token') || null; }
+  catch { return null; }
+})();
+
+let _onUnauthorized = null;
+
+export function setAuthToken(token) {
+  _authToken = token || null;
+  try {
+    if (token) localStorage.setItem('__fg_auth_token', token);
+    else localStorage.removeItem('__fg_auth_token');
+  } catch { /* sandboxed storage */ }
+}
+
+export function getAuthToken() { return _authToken; }
+export function clearAuthToken() { setAuthToken(null); }
+
+export function setOnUnauthorized(fn) {
+  _onUnauthorized = typeof fn === 'function' ? fn : null;
+}
+
+function withAuthHeaders(headers = {}) {
+  if (!_authToken) return headers;
+  return { ...headers, Authorization: `Bearer ${_authToken}` };
+}
+
+export function isRemoteMode() {
+  const base = getApiBase();
+  return !/127\.0\.0\.1|localhost|\[::1\]/.test(base);
+}
+
 /**
  * Get current API_BASE (may change in hybrid mode after initial load)
  * Use this for runtime requests to ensure we use the latest configured server
@@ -108,11 +148,18 @@ export function buildUploadUrl(pathOrUrl) {
  */
 export async function jsonFetch(url, opts = {}) {
   const apiBase = getApiBase();
-  const r = await fetch(`${apiBase}${url}`, opts);
+  const authedOpts = _authToken
+    ? { ...opts, headers: withAuthHeaders(opts.headers) }
+    : opts;
+  const r = await fetch(`${apiBase}${url}`, authedOpts);
   const text = await r.text();
   let parsed;
   try { parsed = JSON.parse(text); } catch { parsed = undefined; }
   if (!r.ok) {
+    // Phase 2B: fire onUnauthorized for 401 so the UI can prompt re-pair
+    if (r.status === 401 && _onUnauthorized) {
+      try { _onUnauthorized(r); } catch { /* swallow */ }
+    }
     const serverMsg = parsed && (parsed.error || parsed.message);
     const msg = (typeof serverMsg === 'string' && serverMsg) || `HTTP ${r.status} ${r.statusText || ''}`.trim();
     const err = new Error(msg || `HTTP ${r.status}`);
@@ -171,6 +218,7 @@ export function uploadWithProgress(url, formData, onProgress, options = {}) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${apiBase}${url}`);
+    if (_authToken) xhr.setRequestHeader('Authorization', `Bearer ${_authToken}`);
     xhr.timeout = timeout;
     
     xhr.onload = () => {

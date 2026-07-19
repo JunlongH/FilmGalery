@@ -14,9 +14,11 @@ import { Icon } from '../../components/ui';
 import { getRollsByEquipment } from '../../api/equipment';
 import { format } from 'date-fns';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useT } from '../../i18n';
 
 export default function EquipmentRollsScreen({ route, navigation }: any) {
   const theme = useTheme();
+  const t = useT();
   const { type, id, name } = route.params; // type: 'camera'|'lens'|'flash'|'film'
   const { baseUrl } = useContext(ApiContext);
 
@@ -28,10 +30,10 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
     },
   );
   const rolls = useMemo(() => data ?? [], [data]);
-  const error = rolls.length === 0 && queryError ? 'Failed to load rolls.' : null;
+  const error = rolls.length === 0 && queryError ? '加载胶卷失败。' : null;
 
   React.useEffect(() => {
-    navigation.setOptions({ title: name || 'Equipment Rolls' });
+    navigation.setOptions({ title: name || '器材胶卷' });
   }, [navigation, name]);
 
   useLayoutEffect(() => {
@@ -49,11 +51,11 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
 
   const getTypeLabel = () => {
     switch (type) {
-      case 'camera': return 'Camera';
-      case 'lens': return 'Lens';
-      case 'flash': return 'Flash';
-      case 'film': return 'Film';
-      default: return 'Equipment';
+      case 'camera': return '相机';
+      case 'lens': return '镜头';
+      case 'flash': return '闪光灯';
+      case 'film': return '胶卷';
+      default: return '器材';
     }
   };
 
@@ -74,7 +76,7 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
         style={styles.card} 
         onPress={() => navigation.navigate('RollDetail', { 
           rollId: item.id, 
-          rollName: item.title || `Roll #${item.id}` 
+          rollName: item.title || `胶卷 #${item.id}` 
         })}
         mode="elevated"
       >
@@ -82,16 +84,16 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
           <View style={styles.coverWrapper}>
             <CachedImage uri={coverUrl} style={styles.cover} contentFit="cover" />
             <CoverOverlay 
-              title={item.title || `Roll #${item.id}`}
-              leftText={item.film_name_joined || item.film_type || 'Unknown Film'}
+              title={item.title || `胶卷 #${item.id}`}
+              leftText={item.film_name_joined || item.film_type || '未知胶卷'}
               rightText={dateRange}
             />
           </View>
         ) : (
           <Card.Content style={styles.cardContent}>
-            <Title style={styles.cardTitle}>{item.title || `Roll #${item.id}`}</Title>
+            <Title style={styles.cardTitle}>{item.title || `胶卷 #${item.id}`}</Title>
             <Paragraph style={styles.meta}>
-              {item.film_name_joined || item.film_type || 'Unknown Film'}
+              {item.film_name_joined || item.film_type || '未知胶卷'}
             </Paragraph>
             {dateRange ? <Paragraph style={styles.dateText}>{dateRange}</Paragraph> : null}
           </Card.Content>
@@ -140,10 +142,10 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text variant="titleMedium" style={styles.emptyText}>
-              No rolls found for this {getTypeLabel().toLowerCase()}
+              没有找到使用此{getTypeLabel()}的胶卷
             </Text>
             <Text variant="bodyMedium" style={styles.emptySubtext}>
-              Rolls using this equipment will appear here
+              使用此器材的胶卷会显示在这里
             </Text>
           </View>
         }

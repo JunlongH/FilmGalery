@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { Tabs, Tab } from '@heroui/react';
-import { Settings, Server, Database, MapPin, Bot } from 'lucide-react';
+import { Settings, Server, Database, MapPin, Bot, ShieldCheck } from 'lucide-react';
 
 // Settings tabs configuration
 const SETTINGS_TABS = [
@@ -15,6 +15,7 @@ const SETTINGS_TABS = [
   { key: 'storage', label: 'Storage', icon: Database },
   { key: 'map', label: '地图', icon: MapPin },
   { key: 'ai', label: 'AI 助手', icon: Bot },
+  { key: 'security', label: '安全', icon: ShieldCheck },
 ];
 
 export default function SettingsTabs({

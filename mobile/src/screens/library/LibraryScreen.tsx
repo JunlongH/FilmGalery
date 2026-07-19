@@ -30,6 +30,7 @@ import CachedImage from '../../components/CachedImage';
 import { ApiContext } from '../../context/ApiContext';
 import { getPhotoUrl } from '../../utils/urls';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useT } from '../../i18n';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -43,6 +44,7 @@ export default function LibraryScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
   const { baseUrl } = useContext(ApiContext);
+  const t = useT();
 
   const favoritesKey = baseUrl ? `favorites@${baseUrl}` : null;
   const tagsKey = baseUrl ? `tags@${baseUrl}` : null;
@@ -157,7 +159,7 @@ export default function LibraryScreen() {
         {/* Quick Stats */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Overview</Text>
+            <Text style={styles.sectionTitle}>概览</Text>
           </View>
           <View style={styles.statsGrid}>
             <TouchableOpacity
@@ -168,7 +170,7 @@ export default function LibraryScreen() {
                 <Icon name="film" size={22} color={theme.colors.primary} />
               </View>
               <Text style={styles.statValue}>{stats.rolls}</Text>
-              <Text style={styles.statLabel}>Rolls</Text>
+              <Text style={styles.statLabel}>胶卷</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -179,7 +181,7 @@ export default function LibraryScreen() {
                 <Icon name="image" size={22} color={theme.colors.primary} />
               </View>
               <Text style={styles.statValue}>{stats.photos}</Text>
-              <Text style={styles.statLabel}>Photos</Text>
+              <Text style={styles.statLabel}>照片</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -190,7 +192,7 @@ export default function LibraryScreen() {
                 <Icon name="heart" size={22} color="#E53935" />
               </View>
               <Text style={styles.statValue}>{stats.favorites}</Text>
-              <Text style={styles.statLabel}>Favorites</Text>
+              <Text style={styles.statLabel}>收藏</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -198,12 +200,12 @@ export default function LibraryScreen() {
         {/* Recent Favorites */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Favorites</Text>
+            <Text style={styles.sectionTitle}>最近收藏</Text>
             <TouchableOpacity
               style={styles.seeAllButton}
               onPress={() => navigation.navigate('Favorites')}
             >
-              <Text style={styles.seeAllText}>See All</Text>
+              <Text style={styles.seeAllText}>查看全部</Text>
               <Icon name="chevron-right" size={16} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
@@ -250,18 +252,18 @@ export default function LibraryScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-          ) : renderEmpty('No favorites yet')}
+          ) : renderEmpty('暂无收藏')}
         </View>
 
         {/* Collections/Themes */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Collections</Text>
+            <Text style={styles.sectionTitle}>合集</Text>
             <TouchableOpacity
               style={styles.seeAllButton}
               onPress={() => navigation.navigate('Collections')}
             >
-              <Text style={styles.seeAllText}>See All</Text>
+              <Text style={styles.seeAllText}>查看全部</Text>
               <Icon name="chevron-right" size={16} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
@@ -288,18 +290,18 @@ export default function LibraryScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-          ) : renderEmpty('No collections yet')}
+          ) : renderEmpty('暂无合集')}
         </View>
 
         {/* Equipment */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Equipment</Text>
+            <Text style={styles.sectionTitle}>器材</Text>
             <TouchableOpacity
               style={styles.seeAllButton}
               onPress={() => navigation.navigate('Equipment')}
             >
-              <Text style={styles.seeAllText}>See All</Text>
+              <Text style={styles.seeAllText}>查看全部</Text>
               <Icon name="chevron-right" size={16} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
@@ -326,20 +328,20 @@ export default function LibraryScreen() {
                   <View style={styles.equipmentInfo}>
                     <Text style={styles.equipmentName}>{item.name}</Text>
                     <Text style={styles.equipmentMeta}>
-                      {item.photo_count || 0} photos
+                      {item.photo_count || 0} 张照片
                     </Text>
                   </View>
                   <Icon name="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />
                 </TouchableOpacity>
               ))}
             </View>
-          ) : renderEmpty('No equipment yet')}
+          ) : renderEmpty('暂无器材')}
         </View>
 
         {/* Quick Actions */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Quick Access</Text>
+            <Text style={styles.sectionTitle}>快速入口</Text>
           </View>
 
           <View style={styles.quickAccessGrid}>
@@ -355,8 +357,8 @@ export default function LibraryScreen() {
                 <Icon name="package" size={40} color={theme.colors.primary} />
               </View>
               <View style={styles.quickCardContent}>
-                <Text style={styles.quickCardTitle}>Inventory</Text>
-                <Text style={styles.quickCardSubtitle}>{stats.inventory} in stock</Text>
+                <Text style={styles.quickCardTitle}>库存</Text>
+                <Text style={styles.quickCardSubtitle}>{stats.inventory} 件库存</Text>
               </View>
             </TouchableOpacity>
 
@@ -372,8 +374,8 @@ export default function LibraryScreen() {
                 <Icon name="bar-chart-2" size={40} color={theme.colors.secondary} />
               </View>
               <View style={styles.quickCardContent}>
-                <Text style={styles.quickCardTitle}>Statistics</Text>
-                <Text style={styles.quickCardSubtitle}>View insights</Text>
+                <Text style={styles.quickCardTitle}>统计</Text>
+                <Text style={styles.quickCardSubtitle}>查看数据洞察</Text>
               </View>
             </TouchableOpacity>
 
@@ -389,8 +391,8 @@ export default function LibraryScreen() {
                 <Icon name="film" size={40} color={theme.colors.tertiary} />
               </View>
               <View style={styles.quickCardContent}>
-                <Text style={styles.quickCardTitle}>Film Catalog</Text>
-                <Text style={styles.quickCardSubtitle}>Browse film stocks</Text>
+                <Text style={styles.quickCardTitle}>胶卷目录</Text>
+                <Text style={styles.quickCardSubtitle}>浏览胶卷型号</Text>
               </View>
             </TouchableOpacity>
 
@@ -406,8 +408,8 @@ export default function LibraryScreen() {
                 <Icon name="contrast" size={40} color={theme.colors.primary} />
               </View>
               <View style={styles.quickCardContent}>
-                <Text style={styles.quickCardTitle}>Negatives</Text>
-                <Text style={styles.quickCardSubtitle}>All scanned negatives</Text>
+                <Text style={styles.quickCardTitle}>底片</Text>
+                <Text style={styles.quickCardSubtitle}>全部已扫描底片</Text>
               </View>
             </TouchableOpacity>
           </View>

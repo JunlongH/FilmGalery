@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import { Modal, Portal, Text, TextInput, Button, useTheme } from 'react-native-paper';
+import { useT } from '../i18n';
 
 export interface NoteEditModalProps {
   visible: boolean;
@@ -11,6 +12,7 @@ export interface NoteEditModalProps {
 
 export default function NoteEditModal({ visible, initialValue = '', onCancel, onSave }: NoteEditModalProps) {
   const theme = useTheme();
+  const t = useT();
   const [val, setVal] = useState<string>(initialValue || '');
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export default function NoteEditModal({ visible, initialValue = '', onCancel, on
         onDismiss={onCancel}
         contentContainerStyle={[styles.modalContent, { backgroundColor: theme.colors.surface }]}
       >
-        <Text style={[styles.title, { color: theme.colors.onSurface }]}>Edit Note</Text>
+        <Text style={[styles.title, { color: theme.colors.onSurface }]}>编辑备注</Text>
         <TextInput
           mode="outlined"
           multiline
@@ -33,7 +35,7 @@ export default function NoteEditModal({ visible, initialValue = '', onCancel, on
           style={styles.input}
         />
         <Button mode="contained" onPress={() => onSave?.(val)}>
-          Save
+          保存
         </Button>
       </Modal>
     </Portal>

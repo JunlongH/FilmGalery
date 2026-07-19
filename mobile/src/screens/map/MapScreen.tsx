@@ -33,6 +33,7 @@ import { getPhotoUrl } from '../../utils/urls';
 import LeafletMap from '../../components/map/LeafletMap';
 import { wgs84ToGcj02 } from '@filmgallery/shared/coordTransform';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useT } from '../../i18n';
 
 const { width, height } = Dimensions.get('window');
 
@@ -46,6 +47,7 @@ const INITIAL_REGION = {
 
 export default function MapScreen() {
   const theme = useTheme();
+  const t = useT();
   const navigation = useNavigation();
   const { baseUrl, mapProvider } = useContext(ApiContext);
   const mapRef = useRef<any>(null);
@@ -191,31 +193,22 @@ export default function MapScreen() {
       clusterRadius = 0.001; // Street view - minimal clustering
     }
     
+    // Grid-based O(n) clustering: bucket photos into cells of clusterRadius,
+    // then merge each cell into one cluster. (Replaces the previous O(n²)
+    // pairwise scan, which was noticeable with hundreds of points.)
+    const buckets = new Map<string, any[]>();
+    photos.forEach((photo) => {
+      if (!photo.latitude || !photo.longitude) return;
+      const key = `${Math.floor(photo.latitude / clusterRadius)}:${Math.floor(photo.longitude / clusterRadius)}`;
+      const bucket = buckets.get(key);
+      if (bucket) bucket.push(photo);
+      else buckets.set(key, [photo]);
+    });
+
     const result: any[] = [];
-    const used = new Set();
-
-    photos.forEach((photo, i) => {
-      if (used.has(i) || !photo.latitude || !photo.longitude) return;
-
-      const cluster = [photo];
-      used.add(i);
-
-      photos.forEach((other, j) => {
-        if (used.has(j) || !other.latitude || !other.longitude) return;
-        
-        const dist = Math.sqrt(
-          Math.pow(photo.latitude - other.latitude, 2) + 
-          Math.pow(photo.longitude - other.longitude, 2)
-        );
-        
-        if (dist < clusterRadius) {
-          cluster.push(other);
-          used.add(j);
-        }
-      });
-
+    buckets.forEach((cluster) => {
       result.push({
-        id: photo.id,
+        id: cluster[0].id,
         latitude: cluster.reduce((sum, p) => sum + p.latitude, 0) / cluster.length,
         longitude: cluster.reduce((sum, p) => sum + p.longitude, 0) / cluster.length,
         count: cluster.length,
@@ -232,7 +225,7 @@ export default function MapScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={styles.loadingText}>Loading map data...</Text>
+        <Text style={styles.loadingText}>{t('map.loading')}</Text>
       </View>
     );
   }
@@ -242,8 +235,7 @@ export default function MapScreen() {
       <View style={styles.emptyContainer}>
         <Icon name="map-pin-off" size={64} color={theme.colors.onSurfaceVariant} />
         <Text style={styles.emptyText}>
-          No photos with GPS data found.{'\n'}
-          Take some photos with location enabled!
+          {t('map.empty')}
         </Text>
       </View>
     );
@@ -261,11 +253,11 @@ export default function MapScreen() {
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{photos.length}</Text>
-          <Text style={styles.statLabel}>Photos</Text>
+          <Text style={styles.statLabel}>{t('map.photos')}</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{clusters.length}</Text>
-          <Text style={styles.statLabel}>Locations</Text>
+          <Text style={styles.statLabel}>{t('map.locations')}</Text>
         </View>
       </View>
 
@@ -372,7 +364,7 @@ export default function MapScreen() {
         >
           <View style={styles.listHandle} />
           <View style={styles.listHeader}>
-            <Text style={styles.listTitle}>{clusters.length} Locations</Text>
+            <Text style={styles.listTitle}>{t('map.locationsCount', { count: clusters.length })}</Text>
             <TouchableOpacity onPress={toggleList}>
               <Icon name="x" size={20} color={theme.colors.onSurfaceVariant} />
             </TouchableOpacity>
@@ -398,7 +390,7 @@ export default function MapScreen() {
                     {item.representative.location_name || item.representative.detail_location || item.representative.city || item.representative.country || `${item.representative.latitude.toFixed(4)}, ${item.representative.longitude.toFixed(4)}`}
                   </Text>
                   <Text style={styles.listItemSubtitle}>
-                    {item.count} {item.count === 1 ? 'photo' : 'photos'}
+                    {t('common.photosCount', { count: item.count })}
                   </Text>
                 </View>
                 <Badge variant="primary">{item.count}</Badge>

@@ -19,6 +19,16 @@ config.resolver.nodeModulesPaths = [
 ];
 config.resolver.unstable_enableSymlinks = true;
 config.resolver.unstable_enablePackageExports = true;
+// Avoid watching huge non-source trees (crashes metro with ENOSPC once the
+// inotify watch limit is hit). All mobile deps resolve from mobile/node_modules
+// and packages/*, so the other workspace trees are excluded.
+const repoRoot = path.resolve(projectRoot, '..').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+config.resolver.blockList = [
+  new RegExp(`^${repoRoot}/node_modules/.*`),
+  new RegExp(`^${repoRoot}/(dist_v9|docker|tmp|docs|tests|tools|server|client|electron-gpu|watch-app|assets)/.*`),
+  /.*\/android\/\.gradle\/.*/,
+  /.*\/android\/app\/build\/.*/,
+];
 // Condition names used when resolving package `exports` maps. `react-native`
 // first (RN-specific entry), then generic ones.
 config.resolver.conditionNames = ['react-native', 'browser', 'require', 'import', 'default'];

@@ -1,4 +1,5 @@
 import { createApiClient, type ApiClient } from '@filmgallery/api-client';
+import * as SecureStore from 'expo-secure-store';
 
 export interface ApiErrorInfo {
   message: string;
@@ -30,10 +31,26 @@ function notifyError(err: any): void {
   errorListeners.forEach((cb) => {
     try {
       cb(info);
-    } catch (_) {
+    } catch {
       // listener must not break the client
     }
   });
+}
+
+// ============================================================================
+// Phase 2B #1 — Auth token persistence
+// ============================================================================
+// The token survives configureApi() re-creation because we remember it in a
+// closure variable and re-apply on every reconfigure. Persisted in
+// expo-secure-store (Android Keystore / iOS Keychain).
+
+const TOKEN_KEY = 'auth_token';
+let _pendingToken: string | null = null;
+let _onUnauthorizedCb: (() => void) | null = null;
+
+function applyAuth(client: ApiClient) {
+  if (_pendingToken) client.setAuthToken(_pendingToken);
+  if (_onUnauthorizedCb) client.setOnUnauthorized(_onUnauthorizedCb);
 }
 
 let _client: ApiClient = createApiClient({ baseUrl: '', timeout: 5000, onError: notifyError });
@@ -46,8 +63,43 @@ export function configureApi(primaryUrl: string, secondaryUrl?: string | null): 
     timeout: 5000,
     onError: notifyError,
   });
+  // Re-apply auth token + 401 hook after client re-creation.
+  applyAuth(_client);
 }
 
 export const api: ApiClient = new Proxy({} as ApiClient, {
   get: (_target, prop) => Reflect.get(_client, prop),
 });
+
+// --- Auth token API ---
+
+export async function loadAuthToken(): Promise<string | null> {
+  try {
+    _pendingToken = await SecureStore.getItemAsync(TOKEN_KEY);
+    if (_pendingToken) _client.setAuthToken(_pendingToken);
+    return _pendingToken;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveAuthToken(token: string): Promise<void> {
+  _pendingToken = token;
+  _client.setAuthToken(token);
+  try {
+    await SecureStore.setItemAsync(TOKEN_KEY, token);
+  } catch { /* best-effort */ }
+}
+
+export async function clearAuthToken(): Promise<void> {
+  _pendingToken = null;
+  _client.clearAuthToken();
+  try {
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
+  } catch { /* best-effort */ }
+}
+
+export function setApiOnUnauthorized(cb: () => void): void {
+  _onUnauthorizedCb = cb;
+  _client.setOnUnauthorized(cb);
+}

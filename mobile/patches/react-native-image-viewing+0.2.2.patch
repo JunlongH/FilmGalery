@@ -1,0 +1,48 @@
+diff --git a/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.android.js b/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.android.js
+index 5fcaa9f..8651c09 100644
+--- a/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.android.js
++++ b/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.android.js
+@@ -7,6 +7,7 @@
+  */
+ import React, { useCallback, useRef, useState } from "react";
+ import { Animated, ScrollView, Dimensions, StyleSheet, } from "react-native";
++import { Image as ExpoImage } from "expo-image";
+ import useImageDimensions from "../../hooks/useImageDimensions";
+ import usePanResponder from "../../hooks/usePanResponder";
+ import { getImageStyles, getImageTransform } from "../../utils";
+@@ -68,7 +69,10 @@ const ImageItem = ({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPre
+         onScroll,
+         onScrollEndDrag,
+     })}>
+-      <Animated.Image {...panHandlers} source={imageSrc} style={imageStylesWithOpacity} onLoad={onLoaded}/>
++      <Animated.View {...panHandlers} style={imageStylesWithOpacity}>
++        {imageSrc.thumbUri ? (<ExpoImage source={{ uri: imageSrc.thumbUri }} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="disk" transition={0} />) : null}
++        <ExpoImage source={imageSrc} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="disk" transition={200} onLoad={onLoaded} />
++      </Animated.View>
+       {(!isLoaded || !imageDimensions) && <ImageLoading />}
+     </ScrollView>);
+ };
+diff --git a/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.ios.js b/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.ios.js
+index 0708505..10b9c32 100644
+--- a/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.ios.js
++++ b/node_modules/react-native-image-viewing/dist/components/ImageItem/ImageItem.ios.js
+@@ -7,6 +7,7 @@
+  */
+ import React, { useCallback, useRef, useState } from "react";
+ import { Animated, Dimensions, ScrollView, StyleSheet, View, TouchableWithoutFeedback, } from "react-native";
++import { Image as ExpoImage } from "expo-image";
+ import useDoubleTapToZoom from "../../hooks/useDoubleTapToZoom";
+ import useImageDimensions from "../../hooks/useImageDimensions";
+ import { getImageStyles, getImageTransform } from "../../utils";
+@@ -62,7 +63,10 @@ const ImageItem = ({ imageSrc, onZoom, onRequestClose, onLongPress, delayLongPre
+     })}>
+         {(!loaded || !imageDimensions) && <ImageLoading />}
+         <TouchableWithoutFeedback onPress={doubleTapToZoomEnabled ? handleDoubleTap : undefined} onLongPress={onLongPressHandler} delayLongPress={delayLongPress}>
+-          <Animated.Image source={imageSrc} style={imageStylesWithOpacity} onLoad={() => setLoaded(true)}/>
++          <Animated.View style={imageStylesWithOpacity}>
++            {imageSrc.thumbUri ? (<ExpoImage source={{ uri: imageSrc.thumbUri }} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="disk" transition={0} />) : null}
++            <ExpoImage source={imageSrc} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="disk" transition={200} onLoad={() => setLoaded(true)} />
++          </Animated.View>
+         </TouchableWithoutFeedback>
+       </ScrollView>
+     </View>);

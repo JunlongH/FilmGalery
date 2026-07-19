@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Icon } from '../../components/ui';
 import { spacing, radius } from '../../theme';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useT } from '../../i18n';
 
 const numColumns = 2;
 const screenWidth = Dimensions.get('window').width;
@@ -16,6 +17,7 @@ const cardWidth = (screenWidth - 32 - 12) / numColumns; // 32 padding, 12 gap
 
 export default function ThemesScreen({ navigation }: any) {
   const theme = useTheme();
+  const t = useT();
   const { baseUrl } = useContext(ApiContext);
 
   const { data, loading, refresh } = useApiQuery<any[]>(
@@ -68,7 +70,7 @@ export default function ThemesScreen({ navigation }: any) {
         <TagCard
           coverUri={coverUrl}
           title={item.name}
-          subtitle={`${item.photos_count} photos`}
+          subtitle={`${item.photos_count} 张照片`}
           style={styles.cardContainer}
           onPress={() => navigation.navigate('TagDetail', { tagId: item.id, tagName: item.name })}
         />
@@ -93,17 +95,17 @@ export default function ThemesScreen({ navigation }: any) {
         <View style={styles.emptyContainer}>
           <Icon name="tags" size={64} color={theme.colors.onSurfaceVariant} />
           <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
-            No collections yet
+            暂无合集
           </Text>
           <Text style={[styles.emptySubtext, { color: theme.colors.onSurfaceVariant }]}>
-            Create tags to organize your photos
+            创建标签来整理你的照片
           </Text>
         </View>
       ) : (
         <>
           <View style={styles.countBar}>
             <Text style={[styles.countText, { color: theme.colors.onSurfaceVariant }]}>
-              {tags.length} {tags.length === 1 ? 'collection' : 'collections'}
+              {tags.length} 个合集
             </Text>
           </View>
           <FlatList

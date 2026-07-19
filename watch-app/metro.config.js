@@ -26,6 +26,14 @@ const config = {
     ],
     unstable_enableSymlinks: true,
     unstable_enablePackageExports: true,
+    // Avoid watching huge non-source trees (ENOSPC at the inotify limit).
+    // All watch deps resolve from watch-app/node_modules and packages/*.
+    blockList: [
+      new RegExp(`^${workspaceRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/node_modules/.*`),
+      new RegExp(`^${workspaceRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/(dist_v9|docker|tmp|docs|tests|tools|server|client|electron-gpu|mobile|assets)/.*`),
+      /.*\/android\/\.gradle\/.*/,
+      /.*\/android\/app\/build\/.*/,
+    ],
   },
   transformer: {
     getTransformOptions: async () => ({

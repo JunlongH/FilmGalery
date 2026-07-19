@@ -9,6 +9,7 @@ import SkeletonBox from '../../components/SkeletonBox';
 import { api } from '../../api/client';
 import { spacing, radius } from '../../theme';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useT } from '../../i18n';
 
 const { width } = Dimensions.get('window');
 const ITEM_SIZE = Math.floor((width - spacing.lg * 2 - spacing.sm * 3) / 4); // 4 columns
@@ -17,6 +18,7 @@ const ROW_HEIGHT = ITEM_SIZE + spacing.sm;
 
 export default function NegativeScreen({ navigation }: any) {
   const theme = useTheme();
+  const t = useT();
   const { baseUrl } = useContext(ApiContext);
   const [selectedFilm, setSelectedFilm] = React.useState<any>(null); // film filter
 
@@ -29,7 +31,7 @@ export default function NegativeScreen({ navigation }: any) {
     },
   );
   const photos = useMemo(() => data ?? [], [data]);
-  const error = photos.length === 0 && queryError ? 'Failed to load negatives' : null;
+  const error = photos.length === 0 && queryError ? '加载底片失败' : null;
 
   // Animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -50,13 +52,13 @@ export default function NegativeScreen({ navigation }: any) {
   const filmList = useMemo(() => {
     const map = new Map();
     photos.forEach((p: any) => {
-      const filmName = p.film_name || p.film_type || 'Unknown';
+      const filmName = p.film_name || p.film_type || '未知';
       map.set(filmName, (map.get(filmName) || 0) + 1);
     });
     return Array.from(map.entries()).sort((a,b)=> b[1]-a[1]);
   }, [photos]);
 
-  const filtered = selectedFilm ? photos.filter((p: any) => (p.film_name || p.film_type || 'Unknown') === selectedFilm) : photos;
+  const filtered = selectedFilm ? photos.filter((p: any) => (p.film_name || p.film_type || '未知') === selectedFilm) : photos;
 
   const renderItem = ({ item, index }: any) => {
     // Prefer small thumbnails in the 4-column grid; negative/full are multi-MB scans
@@ -78,7 +80,7 @@ export default function NegativeScreen({ navigation }: any) {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {error && <Text style={[styles.error, { color: theme.colors.error }]}>{error}</Text>}
       <View style={styles.filterBar}>
-        <Chip selected={!selectedFilm} onPress={() => setSelectedFilm(null)} style={styles.chip}>All</Chip>
+        <Chip selected={!selectedFilm} onPress={() => setSelectedFilm(null)} style={styles.chip}>全部</Chip>
         {filmList.map(([film, count]) => (
           <Chip key={film} selected={selectedFilm === film} onPress={() => setSelectedFilm(film)} style={styles.chip}>{film}</Chip>
         ))}

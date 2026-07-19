@@ -8,6 +8,7 @@ import { spacing, radius } from '../../theme';
 import { Icon } from '../../components/ui';
 import { ApiContext } from '../../context/ApiContext';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useT } from '../../i18n';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -35,6 +36,7 @@ interface StatsData {
 
 export default function StatsScreen({ navigation }: any) {
   const theme = useTheme();
+  const t = useT();
   const { baseUrl } = useContext(ApiContext);
 
   const { data, error: queryError, loading, refresh } = useApiQuery<StatsData>(
@@ -114,29 +116,29 @@ export default function StatsScreen({ navigation }: any) {
   return (
     <ScrollView style={{ backgroundColor: theme.colors.background }} contentContainerStyle={styles.content}>
       {queryError ? (
-        <Text style={{ color: theme.colors.error, marginBottom: spacing.sm }}>Failed to load statistics</Text>
+        <Text style={{ color: theme.colors.error, marginBottom: spacing.sm }}>加载统计失败</Text>
       ) : null}
 
       {/* Overview cards */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Overview</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>概览</Text>
       <View style={styles.row}>
-        <StatCard label="Total rolls" value={overview?.total_rolls ?? '-'} />
-        <StatCard label="Total photos" value={overview?.total_photos ?? '-'} />
+        <StatCard label="胶卷总数" value={overview?.total_rolls ?? '-'} />
+        <StatCard label="照片总数" value={overview?.total_photos ?? '-'} />
       </View>
       <View style={styles.row}>
-        <StatCard label="Total spending" value={overview ? `¥${Math.round(overview.total_cost || 0)}` : '-'} />
-        <StatCard label="Avg / roll" value={costs && costs.summary ? `¥${Math.round((costs.summary.total_purchase + costs.summary.total_develop) / (costs.summary.roll_count || 1))}` : '-'} />
+        <StatCard label="总花费" value={overview ? `¥${Math.round(overview.total_cost || 0)}` : '-'} />
+        <StatCard label="平均每卷" value={costs && costs.summary ? `¥${Math.round((costs.summary.total_purchase + costs.summary.total_develop) / (costs.summary.roll_count || 1))}` : '-'} />
       </View>
 
       {/* Inventory */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Inventory</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>库存</Text>
       <View style={styles.row}>
-        <StatCard label="In stock" value={inventory?.value?.total_count ?? 0} />
-        <StatCard label="Inventory value" value={inventory ? `¥${Math.round(inventory.value?.total_value || 0)}` : '-'} />
+        <StatCard label="库存数量" value={inventory?.value?.total_count ?? 0} />
+        <StatCard label="库存价值" value={inventory ? `¥${Math.round(inventory.value?.total_value || 0)}` : '-'} />
       </View>
 
       {/* Activity Chart */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Activity (Last 6 Months)</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>拍摄活动（近 6 个月）</Text>
       {activity && activity.length > 0 ? (
         <View style={[styles.chartContainer, { backgroundColor: theme.colors.surface }]}>
           <BarChart
@@ -155,11 +157,11 @@ export default function StatsScreen({ navigation }: any) {
           />
         </View>
       ) : (
-        <Text style={styles.noData}>No activity data</Text>
+        <Text style={styles.noData}>暂无活动数据</Text>
       )}
 
       {/* Film Distribution */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Top Films</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>常用胶卷</Text>
       {filmData.length > 0 ? (
         <View style={[styles.chartContainer, { backgroundColor: theme.colors.surface }]}>
           <PieChart
@@ -174,11 +176,11 @@ export default function StatsScreen({ navigation }: any) {
           />
         </View>
       ) : (
-        <Text style={styles.noData}>No film data</Text>
+        <Text style={styles.noData}>暂无胶卷数据</Text>
       )}
 
       {/* Camera Usage */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Top Cameras</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>常用相机</Text>
       {cameraData.length > 0 ? (
         <View style={[styles.chartContainer, { backgroundColor: theme.colors.surface }]}>
           <PieChart
@@ -193,7 +195,7 @@ export default function StatsScreen({ navigation }: any) {
           />
         </View>
       ) : (
-        <Text style={styles.noData}>No camera data</Text>
+        <Text style={styles.noData}>暂无相机数据</Text>
       )}
 
       <View style={{ height: spacing.xl }} />

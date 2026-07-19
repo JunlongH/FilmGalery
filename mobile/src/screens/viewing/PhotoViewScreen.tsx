@@ -3,37 +3,32 @@ import { View, StyleSheet, Dimensions, ActivityIndicator, Platform, TouchableOpa
 import { ApiContext } from '../../context/ApiContext';
 import { Chip, Text, Snackbar } from 'react-native-paper';
 import { Icon } from '../../components/ui';
-// Removed direct legacy FileSystem usage (downloadAsync deprecated).
-// Use unified helper built on new File/Directory API.
-import { downloadImageAsync } from '../../utils/fileSystem';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { Image as ExpoImage } from 'expo-image';
+import ImageView from 'react-native-image-viewing';
 import TagEditModal from '../../components/TagEditModal';
 import NoteEditModal from '../../components/NoteEditModal';
 import { api } from '../../api/client';
-import ImageViewer from 'react-native-image-zoom-viewer';
-import CachedImage from '../../components/CachedImage';
-import ProgressiveImage from '../../components/ProgressiveImage';
 import { colors, spacing, radius } from '../../theme';
 import { getPhotoUrl } from '../../utils/urls';
 import { useQueryData } from '../../hooks/useApiQuery';
 import { setQueryData, invalidateQueries } from '../../api/queryCache';
-
-const { width, height } = Dimensions.get('window');
+import { useT } from '../../i18n';
 
 export default function PhotoViewScreen({ route, navigation }: any) {
-  const { photo: initialPhoto, photoId, rollId, viewMode: initialViewMode = 'positive', photosKey, initialIndex = 0 } = route.params || {};
+  const { photo: initialPhoto, photoId, viewMode: initialViewMode = 'positive', photosKey, initialIndex = 0 } = route.params || {};
   const { baseUrl } = useContext(ApiContext);
+  const t = useT();
   const cachedPhotos = useQueryData<any[]>(photosKey ?? null);
   const photos = useMemo(() => cachedPhotos ?? (initialPhoto ? [initialPhoto] : []), [cachedPhotos, initialPhoto]);
   const [photo, setPhoto] = useState(initialPhoto || photos[initialIndex] || null);
-  const [loading, setLoading] = useState(!initialPhoto && !!photoId);
+  const [loading, setLoading] = useState(!initialPhoto && !!photoId && !photosKey);
   const [index, setIndex] = useState(initialIndex);
   const [viewMode, setViewMode] = useState(initialViewMode);
   const [tagModalVisible, setTagModalVisible] = useState(false);
   const [noteModalVisible, setNoteModalVisible] = useState(false);
-  const [snack, setSnack] = useState({ visible:false, msg:'' });
+  const [snack, setSnack] = useState({ visible: false, msg: '' });
   const [downloading, setDownloading] = useState(false);
 
   // Fetch photo data if only photoId was provided
@@ -41,13 +36,8 @@ export default function PhotoViewScreen({ route, navigation }: any) {
     if (!initialPhoto && !photosKey && photoId && baseUrl) {
       setLoading(true);
       api.http.get(`/api/photos/single/${photoId}`)
-        .then(res => {
-          setPhoto(res);
-        })
-        .catch(err => {
-          console.error('Failed to fetch photo:', (err as Error).message);
-          setSnack({ visible: true, msg: 'Failed to load photo' });
-        })
+        .then((res) => setPhoto(res))
+        .catch(() => setSnack({ visible: true, msg: t('photo.loadFailed') }))
         .finally(() => setLoading(false));
     }
   }, [initialPhoto, photosKey, photoId, baseUrl]);
@@ -59,39 +49,52 @@ export default function PhotoViewScreen({ route, navigation }: any) {
     }
   }, [photos, index]);
 
+  const fullUrlFor = (p: any) =>
+    getPhotoUrl(baseUrl, p, viewMode === 'negative' && p.negative_rel_path ? 'negative' : 'full');
+
   // Prefetch adjacent full-resolution images for smoother swiping
   useEffect(() => {
     if (!baseUrl || photos.length < 2) return;
     const targets = [index - 1, index + 1]
       .filter((i) => i >= 0 && i < photos.length)
-      .map((i) => getPhotoUrl(baseUrl, photos[i], viewMode === 'negative' && photos[i].negative_rel_path ? 'negative' : 'full'))
+      .map((i) => fullUrlFor(photos[i]))
       .filter(Boolean) as string[];
     if (targets.length > 0) {
       ExpoImage.prefetch(targets).catch(() => {});
     }
   }, [index, photos, baseUrl, viewMode]);
 
-  // Show loading if fetching photo
+  const images = useMemo(
+    () =>
+      photos.map((p: any) => ({
+        uri: fullUrlFor(p) || '',
+        thumbUri: getPhotoUrl(baseUrl, p, 'thumb') || undefined,
+      })),
+    [photos, baseUrl, viewMode],
+  );
+
+  const anyNegatives = useMemo(
+    () => Array.isArray(photos) && photos.some((p: any) => p.negative_rel_path),
+    [photos],
+  );
+
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: 16, color: colors.textSecondary }}>Loading photo...</Text>
+        <Text style={{ marginTop: 16, color: colors.textSecondary }}>{t('photo.loading')}</Text>
       </View>
     );
   }
 
-  // Show error if no photo
   if (!photo) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.container, styles.center]}>
         <Icon name="alert" size={48} color={colors.error} />
-        <Text style={{ marginTop: 16, color: colors.textSecondary }}>Photo not found</Text>
+        <Text style={{ marginTop: 16, color: colors.textSecondary }}>{t('photo.notFound')}</Text>
       </View>
     );
   }
-
-  const fullUrl = getPhotoUrl(baseUrl, photo, viewMode === 'negative' ? 'negative' : 'full');
 
   const handleTagsSaved = (newTags: any) => {
     setPhoto({ ...photo, tags: newTags });
@@ -129,24 +132,8 @@ export default function PhotoViewScreen({ route, navigation }: any) {
 
   const isLiked = photo?.rating === 1;
 
-  const images = (photos && photos.length > 0)
-    ? photos.map((p: any) => ({ url: getPhotoUrl(baseUrl, p, viewMode === 'negative' && p.negative_rel_path ? 'negative' : 'full') || '' }))
-    : [{ url: fullUrl || '' }];
-
-  const thumbByFullUrl = useMemo(() => {
-    const map = new Map<string, string | null>();
-    photos.forEach((p: any) => {
-      const full = getPhotoUrl(baseUrl, p, viewMode === 'negative' && p.negative_rel_path ? 'negative' : 'full');
-      if (full) map.set(full, getPhotoUrl(baseUrl, p, 'thumb'));
-    });
-    return map;
-  }, [photos, baseUrl, viewMode]);
-
-  const anyNegatives = Array.isArray(photos) && photos.some((p: any) => p.negative_rel_path);
-
   const requestPermissionsIfNeeded = async () => {
     if (Platform.OS === 'android' || Platform.OS === 'ios') {
-      // On Android 13+, avoid requesting AUDIO by using image-only save API and checking permissions
       const mediaPerm = await MediaLibrary.getPermissionsAsync();
       if (!mediaPerm.granted) {
         const req = await MediaLibrary.requestPermissionsAsync();
@@ -159,62 +146,86 @@ export default function PhotoViewScreen({ route, navigation }: any) {
     if (downloading) return;
     setDownloading(true);
     try {
-      // Call server endpoint that returns JPEG with embedded EXIF metadata
       const response = await fetch(`${baseUrl}/api/photos/${photo.id}/download-with-exif`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: { 'Content-Type': 'application/json' },
       });
-      
+
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);
       }
-      
+
       const blob = await response.blob();
       const fileName = `film_${photo.frame_number || photo.id}_${Date.now()}.jpg`;
-      
-      // Convert blob to base64 for FileSystem
+
       const reader = new FileReader();
       reader.onloadend = async () => {
         try {
           const base64 = ((reader.result as any) as string).split(',')[1];
           const targetUri = FileSystem.documentDirectory + fileName;
-          
-          await FileSystem.writeAsStringAsync(targetUri, base64, {
-            encoding: 'base64',
-          });
-          
-          // Request permissions and save to photo library
+          await FileSystem.writeAsStringAsync(targetUri, base64, { encoding: 'base64' });
           await requestPermissionsIfNeeded();
           await MediaLibrary.saveToLibraryAsync(targetUri);
-          
-          // Cleanup temp file
           try {
             await FileSystem.deleteAsync(targetUri, { idempotent: true });
           } catch (_) {}
-          
-          setSnack({ visible: true, msg: `Saved with metadata: ${fileName}` });
+          setSnack({ visible: true, msg: t('photo.saved', { name: fileName }) });
         } catch (saveErr) {
-          setSnack({ visible: true, msg: `Save failed: ${(saveErr as Error).message}` });
+          setSnack({ visible: true, msg: t('photo.saveFailed', { message: (saveErr as Error).message }) });
         } finally {
           setDownloading(false);
         }
       };
       reader.onerror = () => {
-        setSnack({ visible: true, msg: 'Failed to process image' });
+        setSnack({ visible: true, msg: t('photo.processFailed') });
         setDownloading(false);
       };
       reader.readAsDataURL(blob);
     } catch (e) {
-      setSnack({ visible: true, msg: (e as Error).message || 'Download error' });
+      setSnack({ visible: true, msg: (e as Error).message || t('photo.downloadError') });
       setDownloading(false);
     }
   };
 
-  const renderFooter = (currentIndex: any) => (
+  const header = () => (
+    <View style={styles.headerRow} pointerEvents="box-none">
+      {anyNegatives && (
+        <TouchableOpacity
+          style={styles.ctrlBtn}
+          onPress={() => setViewMode((prev: any) => (prev === 'negative' ? 'positive' : 'negative'))}
+        >
+          <Icon name={viewMode === 'negative' ? 'palette' : 'contrast'} size={26} color="#fff" />
+        </TouchableOpacity>
+      )}
+      <TouchableOpacity style={styles.ctrlBtn} onPress={downloadPhoto}>
+        <Icon name={downloading ? 'loader' : 'download'} size={26} color="#fff" />
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.ctrlBtn} onPress={toggleLike}>
+        <Icon
+          name="heart"
+          size={26}
+          color={isLiked ? '#ff9e9e' : '#fff'}
+          fill={isLiked ? '#ff9e9e' : 'transparent'}
+        />
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.ctrlBtn} onPress={() => setNoteModalVisible(true)}>
+        <Icon name="file-text" size={26} color="#fff" />
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.ctrlBtn} onPress={() => setTagModalVisible(true)}>
+        <Icon name="tags" size={26} color="#fff" />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.ctrlBtn}
+        onPress={() => navigation.goBack()}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Icon name="x" size={28} color="#fff" />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const footer = () => (
     <View style={styles.footerContainer} pointerEvents="box-none">
-      {/* Note Overlay */}
       {photo?.caption ? (
         <View style={styles.noteOverlayBg}>
           <View style={styles.noteOverlayInner}>
@@ -222,14 +233,12 @@ export default function PhotoViewScreen({ route, navigation }: any) {
           </View>
         </View>
       ) : null}
-
-      {/* Tags Overlay */}
       {photo?.tags && photo.tags.length > 0 ? (
         <View style={styles.tagsOverlayBg}>
           <View style={styles.tagsOverlayInner}>
-            {photo.tags.map((t: any, i: any) => (
+            {photo.tags.map((tg: any, i: any) => (
               <Chip key={i} style={styles.tagChip} textStyle={{ fontSize: 11 }}>
-                {typeof t === 'object' ? t.name : t}
+                {typeof tg === 'object' ? tg.name : tg}
               </Chip>
             ))}
           </View>
@@ -240,90 +249,25 @@ export default function PhotoViewScreen({ route, navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <ImageViewer
-        imageUrls={images}
-        index={index}
-        onChange={(i) => {
+      <ImageView
+        images={images}
+        imageIndex={index}
+        visible={true}
+        onRequestClose={() => navigation.goBack()}
+        onImageIndexChange={(i) => {
           if (typeof i === 'number' && photos[i]) {
             setIndex(i);
             setPhoto(photos[i]);
           }
         }}
-        renderIndicator={() => null as any}
-        enableSwipeDown={true}
-        onSwipeDown={() => navigation.goBack()}
-        renderFooter={renderFooter}
-        footerContainerStyle={{ bottom: 8, position: 'absolute', width: '100%', zIndex: 1 }}
-        loadingRender={() => <ActivityIndicator size="large" color="#fff" />}
-        saveToLocalByLongPress={false}
+        swipeToCloseEnabled={true}
+        doubleTapToZoomEnabled={true}
         backgroundColor="black"
-        renderImage={(props) => (
-          <ProgressiveImage
-            thumbUri={thumbByFullUrl.get(props.source?.uri)}
-            fullUri={props.source?.uri}
-            style={props.style}
-            contentFit="contain"
-          />
-        )}
+        HeaderComponent={header}
+        FooterComponent={footer}
       />
 
-      {/* Controls Layer - Absolute positioned on top of viewer */}
-      <View style={styles.controlsLayer} pointerEvents="box-none">
-        {anyNegatives && (
-          <TouchableOpacity
-            style={styles.modeBtn}
-            onPress={() => setViewMode((prev: any) => (prev === 'negative' ? 'positive' : 'negative'))}
-          >
-            <Icon 
-              name={viewMode === 'negative' ? 'palette' : 'contrast'} 
-              size={28} 
-              color="#fff" 
-            />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={styles.likeBtn}
-          onPress={toggleLike}
-        >
-          <Icon 
-            name={isLiked ? 'heart' : 'heart'} 
-            size={28} 
-            color={isLiked ? '#ff9e9e' : '#fff'} 
-            fill={isLiked ? '#ff9e9e' : 'transparent'}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.noteBtn}
-          onPress={() => setNoteModalVisible(true)}
-        >
-          <Icon name="file-text" size={28} color="#fff" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.tagBtn}
-          onPress={() => setTagModalVisible(true)}
-        >
-          <Icon name="tags" size={30} color="#fff" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.downloadBtn}
-          onPress={downloadPhoto}
-        >
-          <Icon name={downloading ? 'loader' : 'download'} size={30} color="#fff" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.closeBtn}
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Icon name="x" size={30} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      <TagEditModal 
+      <TagEditModal
         visible={tagModalVisible}
         onDismiss={() => setTagModalVisible(false)}
         photo={photo}
@@ -338,7 +282,7 @@ export default function PhotoViewScreen({ route, navigation }: any) {
       />
       <Snackbar
         visible={snack.visible}
-        onDismiss={() => setSnack({ visible:false, msg:'' })}
+        onDismiss={() => setSnack({ visible: false, msg: '' })}
         duration={3000}
       >{snack.msg}</Snackbar>
     </View>
@@ -350,65 +294,32 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  center: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerRow: {
+    position: 'absolute',
+    top: 48,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  ctrlBtn: {
+    marginHorizontal: 4,
+    padding: 8,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: radius.sm,
+  },
   footerContainer: {
     width: '100%',
     paddingBottom: 24,
-  },
-  controlsLayer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 100,
-    zIndex: 999,
-  },
-  modeBtn: {
-    position: 'absolute',
-    top: 40,
-    right: 270,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: radius.sm,
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: 40,
-    right: 20,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: radius.sm,
-  },
-  tagBtn: {
-    position: 'absolute',
-    top: 40,
-    right: 70,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: radius.sm,
-  },
-  noteBtn: {
-    position: 'absolute',
-    top: 40,
-    right: 120,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: radius.sm,
-  },
-  likeBtn: {
-    position: 'absolute',
-    top: 40,
-    right: 170,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: radius.sm,
-  },
-  downloadBtn: {
-    position: 'absolute',
-    top: 40,
-    right: 220,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: radius.sm,
   },
   tagsOverlayBg: {
     paddingHorizontal: spacing.lg,
     paddingBottom: 16,
     paddingTop: 24,
-    
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   tagsOverlayInner: {
@@ -443,4 +354,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-

@@ -5,21 +5,32 @@ import { useFocusEffect } from '@react-navigation/native';
 import { ApiContext } from '../../context/ApiContext';
 import { getFilmItems, getFilms } from '../../api/filmItems';
 import { buildUploadUrl } from '../../utils/urlHelper';
-import { FILM_ITEM_STATUS_FILTERS, FILM_ITEM_STATUS_LABELS } from '../../constants/filmItemStatus';
+import { FILM_ITEM_STATUS_FILTERS } from '../../constants/filmItemStatus';
 import TouchScale from '../../components/TouchScale';
 import CachedImage from '../../components/CachedImage';
 import SkeletonBox from '../../components/SkeletonBox';
 import { spacing, radius } from '../../theme';
 import { Icon } from '../../components/ui';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useT } from '../../i18n';
 
 interface InventoryData {
   items: any[];
   films: any[];
 }
 
+const FILM_ITEM_STATUS_LABELS_ZH: Record<string, string> = {
+  in_stock: '库存中',
+  loaded: '已装卷',
+  shot: '已拍完',
+  sent_to_lab: '已送冲',
+  developed: '已冲洗',
+  archived: '已归档',
+};
+
 export default function InventoryScreen({ navigation }: any) {
   const theme = useTheme();
+  const t = useT();
   const { baseUrl } = useContext(ApiContext);
   const [statusFilter, setStatusFilter] = React.useState('all');
 
@@ -33,7 +44,7 @@ export default function InventoryScreen({ navigation }: any) {
   );
   const allItems = useMemo(() => data?.items ?? [], [data]);
   const films = useMemo(() => data?.films ?? [], [data]);
-  const error = allItems.length === 0 && queryError ? 'Failed to load inventory' : '';
+  const error = allItems.length === 0 && queryError ? '加载库存失败' : '';
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -68,8 +79,8 @@ export default function InventoryScreen({ navigation }: any) {
     const film = filmById.get(item.film_id) || null;
     // Film name already contains full information (brand + model)
     const filmName = film
-      ? (film.name || film.brand || 'Unknown Film')
-      : `Film #${item.film_id || ''}`;
+      ? (film.name || film.brand || '未知胶卷')
+      : `胶卷 #${item.film_id || ''}`;
     // Build subtitle with format and ISO
     const filmMeta = film
       ? `ISO ${film.iso}${film.format && film.format !== '135' ? ` • ${film.format}` : ''}`
@@ -77,8 +88,8 @@ export default function InventoryScreen({ navigation }: any) {
     // For loaded items, show the camera used when available
     const statusLabel =
       item.status === 'loaded' && item.loaded_camera
-        ? `Loaded on ${item.loaded_camera}`
-        : ((FILM_ITEM_STATUS_LABELS as any)[item.status] || item.status);
+        ? `已装于 ${item.loaded_camera}`
+        : (FILM_ITEM_STATUS_LABELS_ZH[item.status] || item.status);
     const expiry = item.expiry_date || null;
     const label = item.label || '';
     const rawThumb = film?.thumbPath || film?.thumbUrl || null;
@@ -100,7 +111,7 @@ export default function InventoryScreen({ navigation }: any) {
             ) : null}
             <Text variant="bodySmall" style={styles.status}>
               {statusLabel}
-              {expiry ? ` • Exp ${expiry}` : ''}
+              {expiry ? ` • 有效期 ${expiry}` : ''}
             </Text>
           </View>
         </View>
@@ -122,7 +133,7 @@ export default function InventoryScreen({ navigation }: any) {
               onPress={() => setStatusFilter(item.value)}
               style={styles.chip}
             >
-              {item.label}
+              {item.value === 'all' ? '全部' : (FILM_ITEM_STATUS_LABELS_ZH[item.value] || item.label)}
             </Chip>
           )}
         />
@@ -151,7 +162,7 @@ export default function InventoryScreen({ navigation }: any) {
             <View style={styles.emptyContainer}>
               <Icon name="package" size={56} color={theme.colors.onSurfaceVariant} />
               <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
-                No film items match this filter
+                没有符合此筛选条件的胶卷
               </Text>
             </View>
           }

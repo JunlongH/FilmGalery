@@ -1,0 +1,216 @@
+const zh = {
+  // Tabs
+  'tab.timeline': '时间线',
+  'tab.map': '地图',
+  'tab.library': '图库',
+
+  // Screen titles
+  'title.app': 'Film Gallery',
+  'title.photoMap': '照片地图',
+  'title.myLibrary': '我的图库',
+  'title.settings': '设置',
+  'title.rollDetails': '胶卷详情',
+  'title.favorites': '收藏',
+  'title.collections': '合集',
+  'title.tagDetails': '标签详情',
+  'title.equipment': '器材',
+  'title.equipmentRolls': '器材胶卷',
+  'title.inventory': '库存',
+  'title.stats': '统计',
+  'title.filmCatalog': '胶卷目录',
+  'title.filmRolls': '胶卷',
+  'title.filmItem': '库存详情',
+  'title.negatives': '底片',
+  'title.shotLog': '拍摄记录',
+  'title.aiAssistant': 'AI 助手',
+  'title.locationDiagnostics': '位置诊断',
+  'title.photo': '照片',
+
+  // Common
+  'common.retry': '重试',
+  'common.cancel': '取消',
+  'common.save': '保存',
+  'common.delete': '删除',
+  'common.add': '添加',
+  'common.close': '关闭',
+  'common.clear': '清除',
+  'common.loading': '加载中…',
+  'common.all': '全部',
+  'common.seeAll': '查看全部',
+  'common.noDate': '无日期',
+  'common.connectionError': '连接失败：{message}',
+  'common.mapLoadFailed': '地图加载失败',
+  'common.inStock': '{count} 个在库',
+  'common.rollsCount': '{count} 卷',
+  'common.rollsInYear': '{count} 卷 · {year}',
+  'common.photosCount': '{count} 张照片',
+
+  // Home / Timeline
+  'home.emptyTitle': '还没有胶卷',
+  'home.emptySubtitle': '连接服务器后，你的胶卷会显示在这里。',
+  'home.error': '无法连接服务器，请检查设置。',
+  'home.logShot': '记录一张',
+
+  // Library
+  'library.overview': '概览',
+  'library.rolls': '胶卷',
+  'library.photos': '照片',
+  'library.favorites': '收藏',
+  'library.recentFavorites': '最近收藏',
+  'library.collections': '合集',
+  'library.equipment': '器材',
+  'library.quickAccess': '快速入口',
+  'library.inventory': '库存',
+  'library.statistics': '统计',
+  'library.viewInsights': '查看数据洞察',
+  'library.filmCatalog': '胶卷目录',
+  'library.browseFilmStocks': '浏览胶卷型号',
+  'library.negatives': '底片',
+  'library.allNegatives': '全部底片扫描',
+  'library.noFavorites': '暂无收藏',
+  'library.noCollections': '暂无合集',
+  'library.noEquipment': '暂无器材',
+
+  // RollDetail
+  'roll.negatives': '底片',
+  'roll.camera': '相机',
+  'roll.lens': '镜头',
+  'roll.filmStock': '胶卷',
+  'roll.notes': '备注',
+  'roll.expand': '展开详情',
+  'roll.collapse': '收起详情',
+
+  // Favorites
+  'favorites.count': '{count} 张收藏',
+  'favorites.emptyTitle': '暂无收藏',
+  'favorites.emptySubtitle': '收藏照片后会显示在这里',
+
+  // Collections
+  'collections.count': '{count} 个合集',
+  'collections.emptyTitle': '暂无合集',
+  'collections.emptySubtitle': '创建标签来整理你的照片',
+  'collections.photosCount': '{count} 张照片',
+
+  // TagDetail
+  'tag.empty': '该标签下暂无照片',
+
+  // Films
+  'films.empty': '暂无胶卷型号',
+  'films.noRolls': '该胶卷暂无胶卷记录',
+
+  // Negatives
+  'negatives.loadFailed': '底片加载失败',
+
+  // Equipment
+  'equipment.cameras': '相机',
+  'equipment.lenses': '镜头',
+  'equipment.flashes': '闪光灯',
+  'equipment.films': '胶卷',
+  'equipment.search': '搜索器材…',
+  'equipment.empty': '暂无{what}',
+  'equipment.emptyHint': '点 + 添加一个',
+  'equipment.addCamera': '添加相机',
+  'equipment.addLens': '添加镜头',
+  'equipment.addFlash': '添加闪光灯',
+  'equipment.addFilm': '添加胶卷',
+  'equipment.deleteTitle': '删除{what}？',
+  'equipment.deleteBody': '确定要删除 {name} 吗？',
+  'equipment.brand': '品牌',
+  'equipment.model': '型号',
+  'equipment.mount': '卡口（如 Nikon F、Canon EF）',
+  'equipment.fixedLens': '固定镜头',
+  'equipment.loadFailed': '器材加载失败',
+  'equipment.noRolls': '该{what}暂无使用记录',
+  'equipment.noRollsHint': '使用此器材的胶卷会显示在这里',
+
+  // Inventory
+  'inventory.loadFailed': '库存加载失败',
+  'inventory.empty': '没有符合条件的库存',
+
+  // Stats
+  'stats.loadFailed': '统计加载失败',
+  'stats.overview': '概览',
+  'stats.totalRolls': '总胶卷数',
+  'stats.totalPhotos': '总照片数',
+  'stats.totalSpending': '总花费',
+  'stats.avgPerRoll': '平均每卷',
+  'stats.inventory': '库存',
+  'stats.inStock': '在库数量',
+  'stats.inventoryValue': '库存价值',
+  'stats.activity': '活跃度（近 6 个月）',
+  'stats.topFilms': '常用胶卷',
+  'stats.topCameras': '常用相机',
+  'stats.noActivity': '暂无活跃数据',
+  'stats.noFilmData': '暂无胶卷数据',
+  'stats.noCameraData': '暂无相机数据',
+
+  // Map
+  'map.photos': '照片',
+  'map.locations': '个地点',
+  'map.loading': '地图数据加载中…',
+  'map.empty': '没有带 GPS 信息的照片。\n拍摄时开启定位后就会出现在这里。',
+  'map.loadFailed': '地图加载失败',
+  'map.locationsCount': '{count} 个地点',
+
+  // PhotoView
+  'photo.loading': '照片加载中…',
+  'photo.notFound': '照片不存在',
+  'photo.loadFailed': '照片加载失败',
+  'photo.saved': '已保存（含元数据）：{name}',
+  'photo.saveFailed': '保存失败：{message}',
+  'photo.downloadError': '下载出错',
+  'photo.processFailed': '图片处理失败',
+  'photo.permissionDenied': '未获得相册权限',
+  'photo.editNote': '编辑备注',
+  'photo.editTags': '编辑标签',
+  'photo.addTag': '添加标签…',
+  'photo.noMatchingTags': '没有匹配的标签',
+  'photo.chooseExisting': '从现有标签选择',
+
+  // ShotLog / metering
+  'shot.quickMeter': '快速测光',
+  'shot.loadedFilms': '已装卷',
+  'shot.loadFailed': '胶卷加载失败',
+  'shot.noLoaded': '没有已装卷的胶卷。\n先装卷再开始测光！',
+  'shot.loading': '正在加载胶卷…',
+  'shot.missingItem': '缺少库存条目。',
+
+  // Settings
+  'settings.autoDiscovery': '自动发现',
+  'settings.autoDiscoveryHint': '自动发现局域网内的 FilmGallery 服务，或通过 IP 地址扫描端口',
+  'settings.modeAuto': '自动',
+  'settings.modeMdns': '局域网 (mDNS)',
+  'settings.modePortScan': '端口扫描',
+  'settings.autoMode': '自动模式：优先使用 mDNS 发现，然后端口扫描',
+  'settings.serverIp': '服务器 IP 地址',
+  'settings.startDiscovery': '开始发现',
+  'settings.scanning': '正在扫描…',
+  'settings.discovered': '发现的服务：',
+  'settings.manualConfig': '手动配置',
+  'settings.primaryUrl': '主服务器地址',
+  'settings.primaryHint': '完整服务器地址（自动发现后会自动填入）',
+  'settings.backupUrl': '备用服务器地址（可选）',
+  'settings.backupHint': '主地址不可达时使用的备用地址。',
+  'settings.swap': '交换主备地址',
+  'settings.testPrimary': '测试主服务器',
+  'settings.testBackup': '测试备用服务器',
+  'settings.saveSettings': '保存设置',
+  'settings.darkMode': '深色模式',
+  'settings.darkModeHint': '使用深色界面，夜间更护眼',
+  'settings.language': '语言 / Language',
+  'settings.languageHint': '选择界面语言 / Choose UI language',
+  'settings.locationDiag': '位置诊断',
+  'settings.locationDiagHint': '排查 HyperOS/MIUI 设备上的定位问题',
+  'settings.openLocationDiag': '打开位置诊断',
+  'settings.mapSettings': '地图设置',
+  'settings.mapProvider': '地图服务商',
+  'settings.saved': '设置已保存',
+  'settings.testOk': '连接成功',
+  'settings.testFailed': '连接失败',
+
+  // Empty/error generic
+  'empty.generic': '这里还没有内容',
+} as const;
+
+export type TranslationKey = keyof typeof zh;
+export default zh;

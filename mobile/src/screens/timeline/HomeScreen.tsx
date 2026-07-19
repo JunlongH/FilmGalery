@@ -11,13 +11,17 @@ import { getRollCoverUrl } from '../../utils/urls';
 import { Icon } from '../../components/ui';
 import { useFocusEffect } from '@react-navigation/native';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useT } from '../../i18n';
+import QuickMeterSheet from '../../components/metering/QuickMeterSheet';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen({ navigation }: any) {
   const theme = useTheme();
   const { baseUrl } = useContext(ApiContext);
+  const t = useT();
   const [selectedYear, setSelectedYear] = useState<any>(null); // null = all years
+  const [showShotPicker, setShowShotPicker] = useState(false);
 
   const {
     data: rollsData,
@@ -30,7 +34,7 @@ export default function HomeScreen({ navigation }: any) {
     () => api.http.get('/api/rolls'),
   );
   const rolls = useMemo(() => rollsData ?? [], [rollsData]);
-  const error = rolls.length === 0 && queryError ? 'Failed to connect to server. Check Settings.' : null;
+  const error = rolls.length === 0 && queryError ? '无法连接服务器，请检查设置。' : null;
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -86,7 +90,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const renderItem = ({ item, index }: any) => {
     const coverUrl = getRollCoverUrl(baseUrl, item);
-    const filmLabel = item.film_name_joined || item.film_type || 'Unknown Film';
+    const filmLabel = item.film_name_joined || item.film_type || '未知胶卷';
     const dateStr = item.start_date ? format(new Date(item.start_date), 'yyyy-MM-dd') : '';
     const dateRange = item.end_date ? `${dateStr} - ${format(new Date(item.end_date), 'yyyy-MM-dd')}` : dateStr;
     const photoCount = item.photo_count || item.photos?.length || 0;
@@ -99,7 +103,7 @@ export default function HomeScreen({ navigation }: any) {
         }}
       >
         <TouchableOpacity 
-          onPress={() => navigation.navigate('RollDetail', { rollId: item.id, rollName: item.title || `Roll #${item.id}` })}
+          onPress={() => navigation.navigate('RollDetail', { rollId: item.id, rollName: item.title || `胶卷 #${item.id}` })}
           activeOpacity={0.9}
           style={[styles.card, { backgroundColor: theme.colors.surface }]}
         >
@@ -117,7 +121,7 @@ export default function HomeScreen({ navigation }: any) {
             {/* Content overlay */}
             <View style={styles.cardContent}>
               <Text style={styles.cardTitle} numberOfLines={1}>
-                {item.title || `Roll #${item.id}`}
+                {item.title || `胶卷 #${item.id}`}
               </Text>
               <View style={styles.cardMeta}>
                 <View style={styles.metaItem}>
@@ -169,9 +173,9 @@ export default function HomeScreen({ navigation }: any) {
       ) : rolls.length === 0 && !error ? (
         <View style={styles.emptyContainer}>
           <Icon name="film" size={64} color={theme.colors.onSurfaceVariant} />
-          <Text style={[styles.emptyTitle, { color: theme.colors.onSurface }]}>No rolls yet</Text>
+          <Text style={[styles.emptyTitle, { color: theme.colors.onSurface }]}>还没有胶卷</Text>
           <Text style={[styles.emptySubtitle, { color: theme.colors.onSurfaceVariant }]}>
-            Your film rolls will appear here once the server is connected.
+            连接服务器后，你的胶卷会显示在这里。
           </Text>
         </View>
       ) : (
@@ -196,7 +200,7 @@ export default function HomeScreen({ navigation }: any) {
                 <Text style={[
                   styles.yearChipText,
                   { color: !selectedYear ? '#fff' : theme.colors.primary }
-                ]}>All</Text>
+                ]}>全部</Text>
               </TouchableOpacity>
               {years.map((y: any) => (
                 <TouchableOpacity
@@ -222,8 +226,7 @@ export default function HomeScreen({ navigation }: any) {
           {/* Roll count */}
           <View style={styles.countBar}>
             <Text style={[styles.countText, { color: theme.colors.onSurfaceVariant }]}>
-              {filteredRolls.length} {filteredRolls.length === 1 ? 'roll' : 'rolls'}
-              {selectedYear ? ` in ${selectedYear}` : ''}
+              {filteredRolls.length} 卷{selectedYear ? ` · ${selectedYear} 年` : ''}
             </Text>
           </View>
 
@@ -247,9 +250,10 @@ export default function HomeScreen({ navigation }: any) {
         icon="camera"
         style={[styles.fab, { backgroundColor: theme.colors.primary }]}
         color="#fff"
-        onPress={() => navigation.navigate('ShotLog')}
-        accessibilityLabel="Open shot log"
+        onPress={() => setShowShotPicker(true)}
+        accessibilityLabel="记录拍摄"
       />
+      <QuickMeterSheet visible={showShotPicker} onClose={() => setShowShotPicker(false)} />
     </View>
   );
 }

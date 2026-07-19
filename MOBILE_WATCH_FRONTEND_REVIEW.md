@@ -274,3 +274,65 @@ RootStack (全屏/模态层)
 8. 遵循 Wear OS 导航惯例：垂直滚动列表 + 右滑返回（已开 `fullScreenGestureEnabled`，保持），菜单层级不超过 2 级（当前达标）；为 `useNavigation` 补路由参数类型（与 mobile 共用一份 route 类型定义）。
 
 > 上述 1/3/5 条分别与第八节 P0-6、P2-16、P1-8 联动，建议合并排期。
+
+---
+
+## 十、改造记录（2026-07-19 实施）
+
+全部 P0/P1/P2 与第九节导航方案已实施完毕，经模拟器两轮视觉迭代验证。
+
+### 新增基础设施
+
+| 文件 | 作用 |
+|------|------|
+| `mobile/src/api/queryCache.ts` | 查询缓存内核：TTL(默认 60s)+ SWR + 在途去重 + 前缀失效 + 订阅 |
+| `mobile/src/hooks/useApiQuery.ts` | `useApiQuery(key, fetcher, ttl)` hook(`{data,error,loading,refreshing,refresh}`)+ `useQueryData` 订阅 hook |
+| `mobile/src/components/ProgressiveImage.tsx` | 缩略图→全图渐进组件（底层已缓存缩略图，全图 onLoad 淡入，期间 spinner) |
+| `mobile/src/components/ApiErrorSnackbar.tsx` | 全局错误 Snackbar(4s 同消息去重）,client 层 Alert 改为 errorBus 订阅 |
+| `mobile/src/components/map/leafletVendor.ts` | 内联打包 Leaflet 1.9.4 + markercluster 1.4.1（约 200KB)，去除 unpkg CDN 运行时依赖 |
+
+### Mobile 修复明细
+
+- **P0**
+  - 图标：`Icon.tsx` 增加 kebab→PascalCase 自动回退（`bot`/`map-pin-off` 等任意合法 lucide 名直接可用）;Material 回退先校验 glyphMap，最终占位 `help-circle-outline`；默认色改主题 `onSurface`。实机验证 AI 按钮由 "?" 变为机器人图标。
+  - 6 个屏幕刷新按钮不再 `clearImageCache()` 清空全磁盘图片缓存，改走 query 层 `refresh()`。
+  - `client.ts` 移除逐请求 `Alert.alert` → `subscribeApiErrors` + App 级 Snackbar。
+  - Leaflet 本地化；**顺带发现并修复了地图从未工作的真正根因**:`leafletHtml.ts` 内联脚本里残留 3 处 TS 类型标注（`(url: any)` 等）被原样打进 HTML,WebView 解析即 SyntaxError——此前 CDN 问题掩盖了它。`LeafletMap` 增加 15s 超时 + "Map failed to load / Retry" 失败态，spinner 改主题色。实机验证地图（含暗色）正常渲染聚类。
+- **P1**
+  - 15 个屏幕/组件接入 `useApiQuery`：卷列表 `rolls@` 被 Home/FilmRolls 共享；收藏 `favorites@` 被 Library/Favorites 共享并由 PhotoView 点赞后失效；RollDetail 双键（`roll:` + `rollPhotos:`)；装备库 `films@` 与 Films 页共享；Stats/Library/Inventory/Map 各一组合键。同屏二次进入零请求。
+  - PhotoView 改收 `photosKey + initialIndex`（不再传整卷数组）；渐进加载 + 相邻帧 `ExpoImage.prefetch`；点赞/标签/备注写回缓存并失效相关键；关闭按钮加 hitSlop。实机验证点击后即时出图（原黑屏 spinner ~20s)。
+  - 网格列表统一 `initialNumToRender/windowSize/maxToRenderPerBatch/removeClippedSubviews`，无表头网格（Favorites/TagDetail/Negative）加 `getItemLayout`;Negative 网格改优先缩略图；RollDetail 去掉逐 tile `findIndex`(O(n²))。
+  - `ApiContext` value `useMemo`;Library/Map/QuickMeterSheet 三处渲染内 `StyleSheet.create` 改 `useMemo(createStyles)`。
+- **P2**
+  - 拆除 NativeWind 全链路（babel/metro/global.css/tailwind.config/nativewind-env.d.ts/package.json 依赖）；删除无引用的 `styles/spacing.ts`、`ui/Card.tsx`;package.json 移除 `react-native-maps`、`react-native-map-clustering`（需下次 prebuild 生效）。
+  - 棕色系硬编码清除：`FilmCard`/`TagCard` 米底色、`SettingsScreen` 7 处、`NoteEditModal`、`TagEditModal`、`ui/Button` 按压态、各处 `#5a4632` spinner 全部主题化。
+  - 暗色：`app.json` 改 `automatic`;RollDetail 整页 `useTheme`;`SkeletonBox` 加呼吸动画且主题化；`CachedImage` 占位色主题化；`StatsScreen` 图表容器/配置主题化；`Favorites/Themes` 分隔线主题化。实机验证 Timeline/RollDetail/Map 暗色正常。
+  - Home/Inventory 补空状态；Home/RollDetail/Favorites/TagDetail/Films/FilmRolls/EquipmentRolls/Negative 首屏加载改骨架屏。
+- **导航（第九节）**
+  - 嵌套化：`TimelineStack`/`MapStack`/`LibraryStack`(Library 11 个子页迁入）+ Root 仅留共享详情（RollDetail）与 modal(PhotoView、ShotLog 均 `fullScreenModal`)+ Settings 组；Map tab 启用 `freezeOnBlur`。
+  - 孤儿页面注册：`Films`(Film Catalog)、`Negatives` 进入 LibraryStack,Library Quick Access 新增两张入口卡；实机验证可达。
+  - 路由 `Themes`→`Collections`（标题已是 Collections);AISettings/LocationDiagnostic 标题改英文统一。
+  - Tab 图标改 Material 填充/描边对（movie-open/map/view-grid)。
+  - Timeline 新增拍摄 FAB → 打开 QuickMeterSheet 选已装卷 → ShotLog（修复了 FAB 直导 ShotLog 缺 itemId 的问题）。
+  - Settings 删除重复的 Equipment 入口。
+- **目录**:20 个屏幕按域收拢 `screens/{timeline,map,library,viewing,shooting,settings}/`。
+
+### Watch 修复明细
+
+- 启动门：`App.tsx` await `loadServerURL()` 后再渲染（黑底 #4CAF50 spinner 过渡），消除首请求空 baseUrl 竞争。
+- ShotLog 三步向导合并为单屏 `ShotLogScreen`(step state + BackHandler/beforeRemove 分步返回），三个旧步骤屏删除；选卷时后台预取 `getCamera()`，点选零等待。
+- Home 预载降级：仅当前帧全图，滑动时仅预取下一帧；`imageCache.has()` 启用（消除死 API)。
+- 定位缓存加 2 分钟新鲜度；`metro.config.js` 补齐 monorepo 支持 + `inlineRequires`;`node_modules/@filmgallery/*` 物理拷贝与 canonical 包重新同步（diff 干净）;package.json 移除 `react-native-paper`、`@react-native/new-app-screen`；导航补 `RootStackParamList` 类型。
+
+### 验证
+
+- mobile `tsc --noEmit` 0 错；mobile jest 33/33;`expo export` bundle 8.16MB 成功；watch `tsc` 0 错、jest 通过；root jest 331/332(1 失败为 server 端 `sessions-store` 预存时序抖动用例，已 stash 验证与本次改动无关）。
+- 模拟器两轮视觉迭代截图：`tmp/iter1-*.png`、`tmp/iter2-*.png`、`tmp/iter3-*.png`（首页/卷详情/全图/地图明暗双色/Settings/Library/FAB 流程）。
+
+### 遗留（未做，建议后续）
+
+1. UI 文案中英统一（产品决策，建议全中文或全英文一把梭）。
+2. `PhotoView` 的 `react-native-image-zoom-viewer` 单击关菜单与控件层的事件竞争（关闭按钮短击不灵敏，已加 hitSlop 缓解，建议中长期换 `react-native-image-viewing` 或自写查看器）。
+3. MapScreen JS 侧 O(n²) 聚类（当前 813 点约 66 万次比较/次，可接受；超 2k 点后建议换 supercluster 或只在列表展开时计算）。
+4. watch-app 未做视觉验证（无 Wear 模拟器镜像）;metro monorepo 配置待下次 `npm install` 转软链后生效验证。
+5. `userInterfaceStyle: automatic` 与移除 react-native-maps 需重新 prebuild 才进原生包。

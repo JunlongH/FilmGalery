@@ -4,6 +4,7 @@ import { TextInput, Button, Text, Switch, useTheme, Chip, SegmentedButtons } fro
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiContext } from '../../context/ApiContext';
+import { useT, getLanguage, setLanguage as saveLanguage } from '../../i18n';
 import { Icon } from '../../components/ui';
 import { 
   discoverPort, 
@@ -21,6 +22,7 @@ export default function SettingsScreen({ navigation }: any) {
   const [url, setUrl] = useState(baseUrl);
   const [backup, setBackup] = useState(backupUrl || '');
   const [isDark, setIsDark] = useState(!!darkMode);
+  const [language, setLanguageState] = useState(getLanguage());
   const [ipAddress, setIpAddress] = useState(''); // For auto-discovery
   const [discovering, setDiscovering] = useState(false);
   const [discoveredServices, setDiscoveredServices] = useState<any[]>([]);
@@ -141,18 +143,18 @@ export default function SettingsScreen({ navigation }: any) {
   const testConnection = async (targetUrl: any) => {
     const clean = cleanUrlString(targetUrl);
     if (!clean) {
-      alert('Please enter a URL');
+      alert('请输入 URL');
       return;
     }
     try {
       const res = await fetch(`${clean}/api/rolls`);
       if (res.ok) {
-        alert(`Connection Successful to ${clean}!`);
+        alert(`连接成功：${clean}`);
       } else {
-        alert(`Connected to ${clean}, but server returned ${res.status}`);
+        alert(`已连接 ${clean}，但服务器返回 ${res.status}`);
       }
     } catch (e) {
-      alert(`Connection Failed to ${clean}: ${(e as Error).message}`);
+      alert(`连接失败 ${clean}：${(e as Error).message}`);
     }
   };
 
@@ -239,7 +241,7 @@ export default function SettingsScreen({ navigation }: any) {
       
       {/* Manual Configuration Section */}
       <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>手动配置</Text>
-      <Text style={[styles.label, { color: theme.colors.primary }]}>Primary Server URL</Text>
+      <Text style={[styles.label, { color: theme.colors.primary }]}>主服务器 URL</Text>
       <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
         完整服务器地址（自动发现后会自动填入）
       </Text>
@@ -261,13 +263,13 @@ export default function SettingsScreen({ navigation }: any) {
           onPress={handleSwap} 
           icon="swap-vertical" 
         >
-          Swap Primary & Backup
+          交换主备地址
         </Button>
       </View>
       
-      <Text style={[styles.label, { color: theme.colors.primary }]}>Backup Server URL (Optional)</Text>
+      <Text style={[styles.label, { color: theme.colors.primary }]}>备用服务器 URL（可选）</Text>
       <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
-        Alternative IP address if primary is unreachable.
+        当主服务器无法连接时使用的备用地址。
       </Text>
       <TextInput
         mode="outlined"
@@ -282,28 +284,44 @@ export default function SettingsScreen({ navigation }: any) {
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Button mode="outlined" onPress={() => testConnection(url)} style={[styles.button, { flex: 1, marginRight: 8 }]}>
-          Test Primary
+          测试主服务器
         </Button>
         <Button mode="outlined" onPress={() => testConnection(backup)} style={[styles.button, { flex: 1, marginLeft: 8 }]}>
-          Test Backup
+          测试备用服务器
         </Button>
       </View>
 
       <Button mode="contained" onPress={save} style={styles.button}>
-        Save Settings
+        保存设置
       </Button>
       <View style={{ marginTop: 24 }}>
-        <Text style={[styles.label, { color: theme.colors.primary }]}>Dark Mode</Text>
+        <Text style={[styles.label, { color: theme.colors.primary }]}>深色模式</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant, marginBottom: 0 }]}>Reduce eye strain with a dark UI</Text>
+          <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant, marginBottom: 0 }]}>使用深色界面减轻眼睛疲劳</Text>
           <Switch value={isDark} onValueChange={toggleDark} />
         </View>
       </View>
 
+      <View style={{ marginTop: 24 }}>
+        <Text style={[styles.label, { color: theme.colors.primary }]}>语言 / Language</Text>
+        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>选择界面语言 / Choose UI language</Text>
+        <SegmentedButtons
+          value={language}
+          onValueChange={(v) => {
+            setLanguageState(v as any);
+            saveLanguage(v as any);
+          }}
+          buttons={[
+            { value: 'zh', label: '中文' },
+            { value: 'en', label: 'English' },
+          ]}
+        />
+      </View>
+
       
       <View style={{ marginTop: 24 }}>
-        <Text style={[styles.label, { color: theme.colors.primary }]}>Location Diagnostic (位置诊断)</Text>
-        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>Debug location issues on HyperOS/MIUI devices</Text>
+        <Text style={[styles.label, { color: theme.colors.primary }]}>位置诊断</Text>
+        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>调试 HyperOS/MIUI 设备上的定位问题</Text>
         <Button 
           mode="outlined" 
           onPress={() => navigation.navigate('LocationDiagnostic')} 
@@ -311,7 +329,7 @@ export default function SettingsScreen({ navigation }: any) {
           textColor="#f59e0b"
           style={{ marginTop: 8 }}
         >
-          Open Location Diagnostic
+          打开位置诊断
         </Button>
       </View>
 
@@ -376,6 +394,21 @@ export default function SettingsScreen({ navigation }: any) {
           style={{ marginTop: 8 }}
         >
           AI 助手设置
+        </Button>
+      </View>
+
+      {/* 设备配对 */}
+      <View style={{ marginTop: 24 }}>
+        <Text style={[styles.label, { color: theme.colors.primary }]}>设备配对</Text>
+        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>连接到服务器（远程模式需要配对码）</Text>
+        <Button
+          mode="outlined"
+          onPress={() => navigation.navigate('Pairing')}
+          icon="cellphone-key"
+          textColor={theme.colors.primary}
+          style={{ marginTop: 8 }}
+        >
+          设备配对
         </Button>
       </View>
 

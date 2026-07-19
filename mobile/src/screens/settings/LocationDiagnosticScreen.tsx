@@ -181,8 +181,8 @@ export default function LocationDiagnosticScreen() {
                   {locationResult.errors && (
                     <View style={styles.errorBox}>
                       <Text style={styles.errorTitle}>详细错误信息:</Text>
-                      <Text style={styles.errorText}>Watch: {locationResult.errors.watch}</Text>
-                      <Text style={styles.errorText}>Current: {locationResult.errors.current}</Text>
+                      <Text style={styles.errorText}>持续定位: {locationResult.errors.watch}</Text>
+                      <Text style={styles.errorText}>单次定位: {locationResult.errors.current}</Text>
                     </View>
                   )}
                   
