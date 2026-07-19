@@ -30,11 +30,23 @@ jobs:
           node-version: 20
           cache: npm
 
-      # Root install bootstraps client + server via the postinstall hook.
-      # --legacy-peer-deps matches build-linux.yml; without it, peer-dep
-      # conflicts in the React/Electron/canvas part of the tree fail the install.
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
+      # Install system deps that the postinstall chain needs (libraw-dev for
+      # the native package's optional build step; matches build-linux.yml).
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3 libraw-dev libvips-dev
+
+      # Explicit three-step install mirrors build-linux.yml. The root
+      # postinstall would also do this, but a previous attempt failed
+      # nondeterministically inside the postinstall hook; explicit steps give
+      # clearer logs and avoid npm lifecycle env quirks.
+      - name: Install root dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts
+      - name: Install client dependencies
+        run: cd client && npm install --legacy-peer-deps
+      - name: Install server dependencies
+        run: cd server && npm install --legacy-peer-deps
 
       - name: Lint (errors fail, warnings report)
         run: npm run lint
