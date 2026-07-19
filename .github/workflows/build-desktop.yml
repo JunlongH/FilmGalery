@@ -193,15 +193,20 @@ jobs:
       - name: Create or update release
         continue-on-error: true
         run: |
-          # Collect only installer files (skip metadata like latest*.yml)
-          INSTALLERS=$(find artifacts/ -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.zip" \) | sort)
-          echo "Installers to upload:"
-          echo "$INSTALLERS"
+          # Build a bash array of installer files (handles spaces in filenames
+          # like "FilmGallery Setup 3.2.0.exe" that unquoted $INSTALLERS would
+          # word-split into three args).
+          INSTALLERS=()
+          while IFS= read -r f; do
+            INSTALLERS+=("$f")
+          done < <(find artifacts/ -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.zip" \) | sort)
+          echo "Installers to upload (${#INSTALLERS[@]}):"
+          printf '  %s\n' "${INSTALLERS[@]}"
           # Try creating a new draft release; if it exists, upload with --clobber
-          gh release create "${{ github.ref_name }}" $INSTALLERS \
+          gh release create "${{ github.ref_name }}" "${INSTALLERS[@]}" \
             --draft \
             --generate-notes \
             --title "${{ github.ref_name }} — Phase 2B Auth + HTTPS" \
-            || gh release upload "${{ github.ref_name }}" $INSTALLERS --clobber
+            || gh release upload "${{ github.ref_name }}" "${INSTALLERS[@]}" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
