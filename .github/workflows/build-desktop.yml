@@ -121,6 +121,12 @@ jobs:
       - name: Build client
         run: npm run build
 
+      # libraw-native's `prepare` script (npm run download-libraw) was skipped
+      # by --ignore-scripts above. It's needed before rebuild:electron so gyp
+      # has the LibRaw source files to compile against.
+      - name: Fetch LibRaw source (for native rebuild)
+        run: cd packages/@filmgallery/libraw-native && node scripts/download-libraw.js || true
+
       - name: Rebuild native modules for Electron ABI
         run: npm run rebuild:electron
 
