@@ -58,26 +58,36 @@ test('FG_TLS_CERT pointing at a missing file → throws', () => {
   delete process.env.FG_TLS_KEY;
 });
 
+// Mock execSync to "produce" output files the way the real openssl commands
+// would: writes dummy content to every -out / -keyout target.
+function mockOpenssl(tmp) {
+  return jest.spyOn(child_process, 'execSync').mockImplementation((cmd) => {
+    if (typeof cmd !== 'string') return Buffer.from('');
+    const write = (flag, name) => {
+      const m = cmd.match(new RegExp(`${flag} "([^"]+)"`));
+      if (m) fs.writeFileSync(m[1], name);
+    };
+    if (cmd.startsWith('openssl req') || cmd.startsWith('openssl x509')) {
+      write('-keyout', 'KEY');
+      write('-out', cmd.includes('ca-cert.pem') ? 'CACERT' : 'CERT');
+    }
+    return Buffer.from('');
+  });
+}
+
 test('autocert: missing cache + openssl success → generates + caches', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tls-autocert-'));
   process.env.FG_TLS_CERT_DIR = tmp;
 
-  // Mock execSync to "produce" cert/key files when called with the openssl command.
-  jest.spyOn(child_process, 'execSync').mockImplementation((cmd) => {
-    if (typeof cmd === 'string' && cmd.startsWith('openssl req')) {
-      // openssl writes to the -keyout/-out paths in the real invocation;
-      // simulate that side effect.
-      fs.writeFileSync(path.join(tmp, 'key.pem'), 'KEY');
-      fs.writeFileSync(path.join(tmp, 'cert.pem'), 'CERT');
-      return Buffer.from('');
-    }
-    return Buffer.from('');
-  });
+  mockOpenssl(tmp);
 
   const result = loadTls();
   expect(result.source).toBe('generated');
-  expect(result.cert.toString()).toBe('CERT');
+  // Chain = leaf + CA
+  expect(result.cert.toString()).toContain('CERT');
+  expect(result.cert.toString()).toContain('CACERT');
   expect(result.key.toString()).toBe('KEY');
+  expect(fs.existsSync(path.join(tmp, 'ca-cert.pem'))).toBe(true);
 
   // Second call reuses the cache (no execSync).
   child_process.execSync.mockClear();
@@ -130,30 +140,29 @@ test('collectSanEntries: FG_TLS_EXTRA_SAN accepts bare IP, prefixed entry, and D
   delete process.env.FG_TLS_EXTRA_SAN;
 });
 
-test('autocert: SAN change (FG_TLS_EXTRA_SAN added) → regenerates cert', () => {
+test('autocert: SAN change (FG_TLS_EXTRA_SAN added) → regenerates leaf only, CA untouched', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tls-san-'));
   process.env.FG_TLS_CERT_DIR = tmp;
   delete process.env.FG_TLS_EXTRA_SAN;
 
-  jest.spyOn(child_process, 'execSync').mockImplementation((cmd) => {
-    if (typeof cmd === 'string' && cmd.startsWith('openssl req')) {
-      fs.writeFileSync(path.join(tmp, 'key.pem'), 'KEY');
-      fs.writeFileSync(path.join(tmp, 'cert.pem'), 'CERT');
-      return Buffer.from('');
-    }
-    return Buffer.from('');
-  });
+  mockOpenssl(tmp);
 
   expect(loadTls().source).toBe('generated');
   // Same SANs → cached, no regeneration
   expect(loadTls().source).toBe('cached');
-  // Extra SAN → must regenerate (cert would otherwise fail hostname check)
+
+  // Extra SAN → must re-issue the leaf (cert would otherwise fail hostname check)
+  child_process.execSync.mockClear();
   process.env.FG_TLS_EXTRA_SAN = '59.66.234.26';
   expect(loadTls().source).toBe('generated');
-  // And the openssl command carried the extra SAN
-  const cmd = child_process.execSync.mock.calls
-    .map(c => c[0]).filter(c => typeof c === 'string' && c.startsWith('openssl req')).pop();
-  expect(cmd).toContain('IP:59.66.234.26');
+
+  const cmds = child_process.execSync.mock.calls.map(c => c[0]).filter(c => typeof c === 'string');
+  // CA is NOT re-created (phone keeps trusting the same CA)
+  expect(cmds.some(c => c.includes('CN=FilmGallery Local CA'))).toBe(false);
+  // Leaf IS re-issued and carries the extra SAN in its extfile
+  expect(cmds.some(c => c.startsWith('openssl x509 -req'))).toBe(true);
+  const ext = fs.readFileSync(path.join(tmp, 'leaf-ext.cnf'), 'utf-8');
+  expect(ext).toContain('IP:59.66.234.26');
 
   delete process.env.FG_TLS_EXTRA_SAN;
   delete process.env.FG_TLS_CERT_DIR;

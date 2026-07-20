@@ -3,9 +3,13 @@
  *
  * Resolution order:
  *   1. env FG_TLS_CERT + FG_TLS_KEY (user-provided, e.g. Let's Encrypt + DDNS)
- *   2. cached files at <userDir>/.filmgallery/certs/{cert,key}.pem
- *   3. generate self-signed (RSA 2048, 365d, CN=localhost, SAN covers loopback)
- *      via the openssl CLI — available on Linux/macOS and Windows Git Bash.
+ *   2. cached leaf at <userDir>/.filmgallery/certs/{cert,key}.pem (SAN
+ *      signature still matches — see san.txt sidecar)
+ *   3. generate: long-lived local root CA (ca-cert.pem, 10y — the file a
+ *      phone installs ONCE as a user CA) + a CA-signed leaf (365d) whose
+ *      SAN covers the machine's current IPs. IP changes re-issue only the
+ *      leaf; the phone's trust is untouched.
+ *   via the openssl CLI — available on Linux/macOS and Windows Git Bash.
  *
  * Disable entirely with FG_TLS_DISABLE=1 (HTTP-only — for tests / opt-out).
  *
@@ -75,27 +79,65 @@ function loadCertFromEnv() {
   };
 }
 
+function run(cmd) {
+  return cp.execSync(cmd, { stdio: 'pipe' });
+}
+
+/**
+ * Two-tier PKI:
+ *   - a long-lived local ROOT CA (ca-cert.pem / ca-key.pem, 10 years) — this
+ *     is the ONE file the phone installs as a user CA, exactly once.
+ *   - a short-lived LEAF server cert (cert.pem / key.pem, 365d) signed by
+ *     that CA, whose SAN covers the machine's current IPs. IP changes only
+ *     re-issue the leaf; the CA (and the phone's trust) is untouched.
+ *
+ * The HTTPS server presents leaf+CA chain so a client that trusts the CA
+ * validates successfully even though the leaf rotates.
+ */
+function ensureCa(certDir, cnfPath) {
+  const caCertPath = path.join(certDir, 'ca-cert.pem');
+  const caKeyPath = path.join(certDir, 'ca-key.pem');
+  if (fs.existsSync(caCertPath) && fs.existsSync(caKeyPath)) {
+    return { caCertPath, caKeyPath };
+  }
+  run(
+    `openssl req -x509 -newkey rsa:2048 -nodes -days 3650 ` +
+    `-config "${cnfPath}" ` +
+    `-keyout "${caKeyPath}" -out "${caCertPath}" ` +
+    `-subj "/CN=FilmGallery Local CA" ` +
+    `-addext "basicConstraints=critical,CA:TRUE" ` +
+    `-addext "keyUsage=critical,keyCertSign,cRLSign"`
+  );
+  try { fs.chmodSync(caKeyPath, 0o600); } catch { /* best-effort */ }
+  return { caCertPath, caKeyPath };
+}
+
 function loadOrGenerateSelfSigned() {
   const certDir = getCertDir();
   const certPath = path.join(certDir, 'cert.pem');
   const keyPath = path.join(certDir, 'key.pem');
   const sanPath = path.join(certDir, 'san.txt');
+  const caCertPath = path.join(certDir, 'ca-cert.pem');
 
-  // The SAN list is part of the cache identity: if the machine's addresses
-  // changed (new LAN IP, FG_TLS_EXTRA_SAN added), the cached cert no longer
-  // covers them and must be regenerated. Pre-sidecar certs (no san.txt)
-  // are regenerated once on upgrade.
+  // The SAN list is part of the leaf cache identity: if the machine's
+  // addresses changed (new LAN IP, FG_TLS_EXTRA_SAN added), the leaf no
+  // longer covers them and must be re-issued. Pre-sidecar certs (no
+  // san.txt) are regenerated once on upgrade. Missing CA (upgrade from the
+  // self-signed-leaf era) also forces re-issue.
   const sanEntries = collectSanEntries();
   const sanSignature = sanEntries.join(',');
   let cachedSan = null;
   try { cachedSan = fs.readFileSync(sanPath, 'utf-8').trim(); } catch { /* no sidecar */ }
 
-  if (fs.existsSync(certPath) && fs.existsSync(keyPath) && cachedSan === sanSignature) {
+  if (fs.existsSync(certPath) && fs.existsSync(keyPath) &&
+      fs.existsSync(caCertPath) && cachedSan === sanSignature) {
     return {
-      cert: fs.readFileSync(certPath),
+      // Present leaf + CA so clients trusting only the CA still build a chain.
+      cert: Buffer.concat([fs.readFileSync(certPath), fs.readFileSync(caCertPath)]),
       key: fs.readFileSync(keyPath),
       source: 'cached',
       certPath,
+      caCertPath,
     };
   }
 
@@ -106,15 +148,30 @@ function loadOrGenerateSelfSigned() {
   // minimal -config we write ourselves — harmless on Linux/macOS.
   const cnfPath = path.join(certDir, 'openssl-minimal.cnf');
   fs.writeFileSync(cnfPath, '[req]\ndistinguished_name = dn\nprompt = no\n[dn]\n');
-  // openssl 1.1.1+ supports -addext; ships on all targeted platforms.
-  const cmd =
-    `openssl req -x509 -newkey rsa:2048 -nodes -days 365 ` +
-    `-config "${cnfPath}" ` +
-    `-keyout "${keyPath}" -out "${certPath}" ` +
-    `-subj "/CN=localhost" ` +
-    `-addext "subjectAltName=${sanEntries.join(',')}"`;
   try {
-    cp.execSync(cmd, { stdio: 'pipe' });
+    const { caKeyPath } = ensureCa(certDir, cnfPath);
+
+    // Leaf CSR + CA-signed cert. openssl 1.1.1+ syntax; ships on all
+    // targeted platforms.
+    const csrPath = path.join(certDir, 'leaf.csr');
+    const extPath = path.join(certDir, 'leaf-ext.cnf');
+    fs.writeFileSync(extPath,
+      `subjectAltName=${sanEntries.join(',')}\n` +
+      'basicConstraints=CA:FALSE\n' +
+      'keyUsage=digitalSignature,keyEncipherment\n' +
+      'extendedKeyUsage=serverAuth\n');
+    run(
+      `openssl req -newkey rsa:2048 -nodes ` +
+      `-config "${cnfPath}" ` +
+      `-keyout "${keyPath}" -out "${csrPath}" ` +
+      `-subj "/CN=localhost"`
+    );
+    run(
+      `openssl x509 -req -in "${csrPath}" ` +
+      `-CA "${caCertPath}" -CAkey "${caKeyPath}" -CAcreateserial ` +
+      `-days 365 -out "${certPath}" -extfile "${extPath}"`
+    );
+    try { fs.unlinkSync(csrPath); } catch { /* best-effort */ }
   } catch (err) {
     throw new Error(
       `TLS autocert generation failed (openssl not found or errored): ${err.message}`
@@ -125,10 +182,11 @@ function loadOrGenerateSelfSigned() {
   try { fs.chmodSync(keyPath, 0o600); } catch { /* best-effort */ }
   try { fs.writeFileSync(sanPath, sanSignature); } catch { /* best-effort */ }
   return {
-    cert: fs.readFileSync(certPath),
+    cert: Buffer.concat([fs.readFileSync(certPath), fs.readFileSync(caCertPath)]),
     key: fs.readFileSync(keyPath),
     source: 'generated',
     certPath,
+    caCertPath,
   };
 }
 
