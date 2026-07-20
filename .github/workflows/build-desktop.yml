@@ -50,7 +50,7 @@ jobs:
         shell: bash
         run: |
           cd client
-          rm -rf node_modules
+          rm -rf node_modules package-lock.json
           npm install --legacy-peer-deps
 
       - name: Build client
@@ -128,7 +128,7 @@ jobs:
         shell: bash
         run: |
           cd client
-          rm -rf node_modules
+          rm -rf node_modules package-lock.json
           npm install --legacy-peer-deps
 
       - name: Install server dependencies
