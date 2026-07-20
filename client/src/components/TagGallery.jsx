@@ -87,7 +87,7 @@ export default function TagGallery() {
   // View: Single Tag Gallery
   return (
     <div className="flex flex-col min-h-full bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-6 md:p-8">
-      {/* Header with Back Button */}}
+      {/* Header with Back Button */}
       <div className="flex items-center gap-4 mb-8">
         <Button 
           isIconOnly
