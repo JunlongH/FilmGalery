@@ -194,6 +194,12 @@ async function startServer(forceRestart = false) {
       env.DB_WRITE_THROUGH = '1';
       env.DB_ONEDRIVE_WRITE_THROUGH = '1';
     }
+    // Extra SAN entries for the self-signed TLS cert (e.g. a public IP behind
+    // NAT that isn't on any local interface). Set "tlsExtraSan" in config.json.
+    if (appConfig && typeof appConfig.tlsExtraSan === 'string' && appConfig.tlsExtraSan.trim()) {
+      env.FG_TLS_EXTRA_SAN = appConfig.tlsExtraSan.trim();
+      LOG('startServer: FG_TLS_EXTRA_SAN set to', env.FG_TLS_EXTRA_SAN);
+    }
     LOG('startServer: spawning with env DATA_ROOT=', env.DATA_ROOT, 'UPLOADS_ROOT=', env.UPLOADS_ROOT);
     
     // Create a promise to wait for port capture

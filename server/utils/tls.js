@@ -24,6 +24,43 @@ function getCertDir() {
   return path.join(base, '.filmgallery', 'certs');
 }
 
+/**
+ * Build the SAN list for the self-signed cert:
+ *   - loopback (always)
+ *   - every non-internal interface address (LAN/public IP of this machine),
+ *     so phones can connect by IP without hostname-validation failures
+ *   - FG_TLS_EXTRA_SAN: comma-separated extras for addresses NOT on a local
+ *     interface (e.g. NAT port-forwarded public IP or a DDNS name).
+ *     Accepts "1.2.3.4", "IP:1.2.3.4", "name.example.com", "DNS:name".
+ */
+function collectSanEntries() {
+  const entries = ['IP:127.0.0.1', 'IP:::1', 'DNS:localhost'];
+  try {
+    const ifaces = os.networkInterfaces();
+    for (const list of Object.values(ifaces)) {
+      for (const it of list || []) {
+        if (!it || it.internal || !it.address) continue;
+        const addr = String(it.address).split('%')[0]; // strip IPv6 zone id
+        const fam = it.family;
+        if (fam === 'IPv4' || fam === 4 || fam === 'IPv6' || fam === 6) {
+          entries.push(`IP:${addr}`);
+        }
+      }
+    }
+  } catch { /* best-effort */ }
+  const extra = process.env.FG_TLS_EXTRA_SAN;
+  if (extra) {
+    for (const raw of String(extra).split(',')) {
+      const t = raw.trim();
+      if (!t) continue;
+      if (/^(IP|DNS):/i.test(t)) entries.push(t);
+      else if (/^\d{1,3}(\.\d{1,3}){3}$/.test(t)) entries.push(`IP:${t}`);
+      else entries.push(`DNS:${t}`);
+    }
+  }
+  return [...new Set(entries)];
+}
+
 function loadCertFromEnv() {
   const cert = process.env.FG_TLS_CERT;
   const key = process.env.FG_TLS_KEY;
@@ -42,8 +79,18 @@ function loadOrGenerateSelfSigned() {
   const certDir = getCertDir();
   const certPath = path.join(certDir, 'cert.pem');
   const keyPath = path.join(certDir, 'key.pem');
+  const sanPath = path.join(certDir, 'san.txt');
 
-  if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+  // The SAN list is part of the cache identity: if the machine's addresses
+  // changed (new LAN IP, FG_TLS_EXTRA_SAN added), the cached cert no longer
+  // covers them and must be regenerated. Pre-sidecar certs (no san.txt)
+  // are regenerated once on upgrade.
+  const sanEntries = collectSanEntries();
+  const sanSignature = sanEntries.join(',');
+  let cachedSan = null;
+  try { cachedSan = fs.readFileSync(sanPath, 'utf-8').trim(); } catch { /* no sidecar */ }
+
+  if (fs.existsSync(certPath) && fs.existsSync(keyPath) && cachedSan === sanSignature) {
     return {
       cert: fs.readFileSync(certPath),
       key: fs.readFileSync(keyPath),
@@ -65,7 +112,7 @@ function loadOrGenerateSelfSigned() {
     `-config "${cnfPath}" ` +
     `-keyout "${keyPath}" -out "${certPath}" ` +
     `-subj "/CN=localhost" ` +
-    `-addext "subjectAltName=IP:127.0.0.1,IP:::1,DNS:localhost"`;
+    `-addext "subjectAltName=${sanEntries.join(',')}"`;
   try {
     cp.execSync(cmd, { stdio: 'pipe' });
   } catch (err) {
@@ -76,6 +123,7 @@ function loadOrGenerateSelfSigned() {
   // Tighten perms on the private key (Unix only; chmod is a no-op on Windows
   // but doesn't throw). Default umlaut leaves key files world-readable.
   try { fs.chmodSync(keyPath, 0o600); } catch { /* best-effort */ }
+  try { fs.writeFileSync(sanPath, sanSignature); } catch { /* best-effort */ }
   return {
     cert: fs.readFileSync(certPath),
     key: fs.readFileSync(keyPath),
@@ -107,4 +155,4 @@ function getDaysUntilExpiry(certPath) {
   }
 }
 
-module.exports = { loadTlsCredentials, getCertDir, getDaysUntilExpiry };
+module.exports = { loadTlsCredentials, getCertDir, getDaysUntilExpiry, collectSanEntries };

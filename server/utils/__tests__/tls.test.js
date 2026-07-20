@@ -112,3 +112,50 @@ test('getCertDir falls back to USER_DATA/.filmgallery/certs', () => {
   expect(getCertDir()).toBe(path.join('/user/data', '.filmgallery', 'certs'));
   delete process.env.USER_DATA;
 });
+
+test('collectSanEntries: always includes loopback', () => {
+  delete process.env.FG_TLS_EXTRA_SAN;
+  const sans = require('../tls').collectSanEntries();
+  expect(sans).toContain('IP:127.0.0.1');
+  expect(sans).toContain('IP:::1');
+  expect(sans).toContain('DNS:localhost');
+});
+
+test('collectSanEntries: FG_TLS_EXTRA_SAN accepts bare IP, prefixed entry, and DNS name', () => {
+  process.env.FG_TLS_EXTRA_SAN = '59.66.234.26, IP:10.0.0.2, nas.example.com';
+  const sans = require('../tls').collectSanEntries();
+  expect(sans).toContain('IP:59.66.234.26');
+  expect(sans).toContain('IP:10.0.0.2');
+  expect(sans).toContain('DNS:nas.example.com');
+  delete process.env.FG_TLS_EXTRA_SAN;
+});
+
+test('autocert: SAN change (FG_TLS_EXTRA_SAN added) → regenerates cert', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tls-san-'));
+  process.env.FG_TLS_CERT_DIR = tmp;
+  delete process.env.FG_TLS_EXTRA_SAN;
+
+  jest.spyOn(child_process, 'execSync').mockImplementation((cmd) => {
+    if (typeof cmd === 'string' && cmd.startsWith('openssl req')) {
+      fs.writeFileSync(path.join(tmp, 'key.pem'), 'KEY');
+      fs.writeFileSync(path.join(tmp, 'cert.pem'), 'CERT');
+      return Buffer.from('');
+    }
+    return Buffer.from('');
+  });
+
+  expect(loadTls().source).toBe('generated');
+  // Same SANs → cached, no regeneration
+  expect(loadTls().source).toBe('cached');
+  // Extra SAN → must regenerate (cert would otherwise fail hostname check)
+  process.env.FG_TLS_EXTRA_SAN = '59.66.234.26';
+  expect(loadTls().source).toBe('generated');
+  // And the openssl command carried the extra SAN
+  const cmd = child_process.execSync.mock.calls
+    .map(c => c[0]).filter(c => typeof c === 'string' && c.startsWith('openssl req')).pop();
+  expect(cmd).toContain('IP:59.66.234.26');
+
+  delete process.env.FG_TLS_EXTRA_SAN;
+  delete process.env.FG_TLS_CERT_DIR;
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
