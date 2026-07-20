@@ -1,17 +1,17 @@
 {
   "name": "film-gallery",
-    "version": "3.2.0",
+    "version": "3.3.0",
   "description": "Film Manager desktop app (Electron + Express backend + React frontend)",
   "main": "server.js",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "start:server": "node server.js",
     "start:server:dev": "nodemon --watch . --ext js,json --exec \"node server.js\"",
     "rebuild:dev": "npm rebuild",
-    "rebuild:electron": "npx @electron/rebuild -v 26.6.10 -m .",
-    "rebuild:libraw": "cd ../packages/@filmgallery/libraw-native && npx @electron/rebuild -v 26.6.10",
+    "rebuild:electron": "npx @electron/rebuild -m .",
+    "rebuild:libraw": "cd ../packages/@filmgallery/libraw-native && npx @electron/rebuild",
     "init-db": "node init-db.js",
     "seed-db": "if [ -f ./seed.sql ]; then sqlite3 ./film.db < ./seed.sql; else echo 'no seed.sql'; fi",
     "migrate-roll-folders": "node migrate-roll-folders.js",
@@ -41,9 +41,9 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.1",
+    "@electron/rebuild": "^4.2.0",
     "cross-env": "^7.0.3",
-    "electron-builder": "^24.6.0",
+    "electron-builder": "^26.15.3",
     "nodemon": "^2.0.22"
   },
   "keywords": []

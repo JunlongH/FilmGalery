@@ -1,13 +1,13 @@
 {
   "name": "film-gallery-desktop",
-    "version": "3.2.0",
+  "version": "3.3.0",
   "private": true,
   "description": "Film Gallery — Electron desktop wrapper for the Film Manager app",
   "main": "electron-main.js",
   "author": "FilmGallery",
   "license": "MIT",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.12.0"
   },
   "workspaces": [
     "packages/shared",
@@ -15,15 +15,16 @@
   ],
   "scripts": {
     "postinstall": "cd client && npm install --legacy-peer-deps && cd ../server && npm install --legacy-peer-deps",
-    "dev:client": "cd client && cross-env PORT=3000 REACT_APP_API_BASE=http://127.0.0.1:3000 npm start",
+    "dev:client": "cd client && npm start",
     "dev:server": "cd server && npm start",
     "dev:electron": "cross-env ELECTRON_DEV=true electron .",
     "dev:web": "concurrently -k -n SERVER,CLIENT \"npm:dev:server\" \"npm:dev:client\"",
     "dev:full": "concurrently -k -n SERVER,CLIENT,ELECTRON \"npm:dev:server\" \"npm:dev:client\" \"wait-on http://localhost:3000 && npm run dev:electron\"",
     "dev": "concurrently -k -n CLIENT,ELECTRON \"npm:dev:client\" \"wait-on http://localhost:3000 && npm run dev:electron\"",
     "build-client": "cd client && npm run build",
-    "build": "npm run build-client",
-    "rebuild:electron": "cd server && npm run rebuild:electron && cd ../packages/@filmgallery/libraw-native && npx @electron/rebuild -v 26.6.10",
+    "build:gpu": "node electron-gpu/build.js",
+    "build": "npm run build-client && npm run build:gpu",
+    "rebuild:electron": "cd server && npm run rebuild:electron && cd ../packages/@filmgallery/libraw-native && npx @electron/rebuild",
     "pack": "npm run build && npm run rebuild:electron && electron-builder --dir",
     "dist": "npm run build && npm run rebuild:electron && electron-builder",
     "start": "electron .",
@@ -32,11 +33,12 @@
     "lint": "eslint server packages tests tools"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.1",
+    "@electron/rebuild": "^4.2.0",
     "concurrently": "^8.2.0",
     "cross-env": "^7.0.3",
-    "electron": "26.6.10",
-    "electron-builder": "^24.6.0",
+    "electron": "43.1.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
     "eslint": "^9.39.5",
     "globals": "^17.7.0",
     "jest": "^30.2.0",
@@ -65,8 +67,23 @@
         "to": "server",
         "filter": [
           "**/*",
+          "!node_modules/**",
           "!**/film.db",
-          "!uploads/**"
+          "!uploads/**",
+          "!**/.cache/**",
+          "!**/*.log"
+        ]
+      },
+      {
+        "from": "server/node_modules",
+        "to": "server/node_modules",
+        "filter": [
+          "**/*",
+          "!**/.bin/**",
+          "!**/.cache/**",
+          "!**/test/**",
+          "!**/tests/**",
+          "!**/.github/**"
         ]
       },
       {
@@ -93,6 +110,23 @@
       ],
       "icon": "assets/icon.png"
     },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.plist",
+      "notarize": false
+    },
     "linux": {
       "target": [
         "AppImage",
@@ -102,14 +136,7 @@
       "category": "Graphics",
       "synopsis": "Film Photography Management Tool",
       "maintainer": "FilmGallery <filmgallery@example.com>",
-      "executableName": "filmgallery",
-      "desktop": {
-        "Name": "FilmGallery",
-        "Comment": "Film Photography Management Tool",
-        "Categories": "Graphics;Photography;",
-        "Icon": "filmgallery",
-        "StartupWMClass": "film-gallery-desktop"
-      }
+      "executableName": "filmgallery"
     },
     "nsis": {
       "oneClick": false,
