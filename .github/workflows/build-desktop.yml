@@ -41,29 +41,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
       - name: Install root dependencies
         run: npm install --legacy-peer-deps --ignore-scripts
 
       - name: Install client dependencies
+        shell: bash
         run: |
           cd client
           rm -rf node_modules
           npm install --legacy-peer-deps
 
       - name: Build client
-        run: npm run build
+        run: npm run build-client
 
       - name: Build Electron app (Client-Only)
         run: npx electron-builder --${{ matrix.platform }} --config electron-builder-client-only.json --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Electron binary mirror — faster & more reliable than github.com
-          # releases in CI (matches the build-linux.yml convention).
-          ELECTRON_MIRROR: "https://registry.npmmirror.com/-/binary/electron/"
-          # Force IPv4 — some CI runners have flaky IPv6 to cloudfront.
-          NODE_OPTIONS: "--dns-result-order=ipv4first"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -100,7 +96,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
       # node-gyp needs Python to compile native modules. The Windows runner
       # image ships Python but node-gyp sometimes can't find it, which then
@@ -129,6 +125,7 @@ jobs:
         run: npm install --legacy-peer-deps --ignore-scripts
 
       - name: Install client dependencies
+        shell: bash
         run: |
           cd client
           rm -rf node_modules
@@ -140,7 +137,7 @@ jobs:
           npm install --legacy-peer-deps --ignore-scripts
 
       - name: Build client
-        run: npm run build
+        run: npm run build-client
 
       # libraw-native's prepare script (npm run download-libraw) was skipped
       # by --ignore-scripts above. It's required for rebuild:electron to
@@ -157,9 +154,6 @@ jobs:
           # the linker where to find it. LIBRARY_PATH is clang/gcc's
           # link-time search path env var (analogous to CPATH for includes).
           LIBRARY_PATH: "${{ matrix.platform == 'mac' && '/opt/homebrew/lib' || '' }}"
-          # Electron header mirror (matches install step).
-          ELECTRON_MIRROR: "https://registry.npmmirror.com/-/binary/electron/"
-          NODE_OPTIONS: "--dns-result-order=ipv4first"
         run: npm run rebuild:electron
 
       # --publish never: electron-builder auto-publishes to GH releases when
@@ -169,8 +163,6 @@ jobs:
         run: npx electron-builder --${{ matrix.platform }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ELECTRON_MIRROR: "https://registry.npmmirror.com/-/binary/electron/"
-          NODE_OPTIONS: "--dns-result-order=ipv4first"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
