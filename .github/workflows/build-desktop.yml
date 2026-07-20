@@ -56,6 +56,13 @@ jobs:
       - name: Build client
         run: npm run build-client
 
+      # vite.config.js was once left uncommitted, so CI's `vite build` fell
+      # back to the default outDir (client/dist) while electron-builder packs
+      # client/build/**/* — producing installers with no frontend. Fail fast.
+      - name: Verify client build output
+        shell: bash
+        run: test -f client/build/index.html || { echo "::error::client/build/index.html missing — check vite.config.js outDir"; exit 1; }
+
       - name: Build Electron app (Client-Only)
         run: npx electron-builder --${{ matrix.platform }} --config electron-builder-client-only.json --publish never
         env:
@@ -138,6 +145,10 @@ jobs:
 
       - name: Build client
         run: npm run build-client
+
+      - name: Verify client build output
+        shell: bash
+        run: test -f client/build/index.html || { echo "::error::client/build/index.html missing — check vite.config.js outDir"; exit 1; }
 
       # libraw-native's prepare script (npm run download-libraw) was skipped
       # by --ignore-scripts above. It's required for rebuild:electron to
