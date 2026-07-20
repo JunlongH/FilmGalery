@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       # 安装 Linux 系统依赖 (关键步骤)
@@ -37,7 +37,7 @@ jobs:
       - name: Install Dependencies
         run: |
           npm install --legacy-peer-deps
-          cd client && npm install --legacy-peer-deps && cd ..
+          cd client && npm ci --legacy-peer-deps && cd ..
           cd server && npm install --legacy-peer-deps && cd ..
 
       # 构建前端
