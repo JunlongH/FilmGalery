@@ -34,9 +34,12 @@ jobs:
           sudo apt-get install -y build-essential python3 libraw-dev libvips-dev libarchive-tools
 
       # 安装项目依赖
+      # Root install uses --ignore-scripts to skip the postinstall chain
+      # (cd client && npm install ...) — the explicit sub-installs below
+      # handle client (via npm ci for clean lockfile install) and server.
       - name: Install Dependencies
         run: |
-          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps --ignore-scripts
           cd client && npm ci --legacy-peer-deps && cd ..
           cd server && npm install --legacy-peer-deps && cd ..
 
