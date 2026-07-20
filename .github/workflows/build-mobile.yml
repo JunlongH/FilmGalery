@@ -20,7 +20,9 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android' || startsWith(github.ref, 'refs/tags/v') }}
-    
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,6 +31,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Setup Java 17 (for Gradle)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
       - name: Setup Expo
         uses: expo/expo-github-action@v8
@@ -39,22 +47,56 @@ jobs:
       - name: Install dependencies
         run: |
           cd mobile
-          npm install
+          npm install --legacy-peer-deps
 
-      - name: Build Android APK (EAS Cloud)
+      # ── Attempt EAS Cloud build first (fast, offloaded) ──
+      # Falls back to local gradle build when EAS quota is exhausted.
+      - name: Build Android APK (EAS Cloud — may hit free-plan quota)
+        id: eas
+        continue-on-error: true
         run: |
           cd mobile
           npx eas build -p android --profile preview --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # Note: EAS cloud build artifacts are downloaded from expo.dev
-      # The build URL will be printed in the logs
+      # ── Fallback: local gradle build on the runner ──
+      - name: Build Android APK locally (EAS fallback)
+        if: steps.eas.outcome == 'failure'
+        working-directory: mobile
+        run: |
+          echo "EAS Cloud build failed (quota exhausted?), falling back to local gradle build..."
+          # Ensure native Android project is up to date
+          npx expo prebuild --platform android --clean --no-install
+          cd android
+          # Point Gradle at the runner's pre-installed SDK
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          # Debug build (no keystore needed; fine for sideloading)
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        if: steps.eas.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: mobile/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+
+      # If local build produced an APK, also attach to the release
+      - name: Attach APK to release
+        if: steps.eas.outcome == 'failure' && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          APK=$(find mobile/android/app/build/outputs -name "*.apk" | head -1)
+          if [ -n "$APK" ]; then
+            gh release upload "${{ github.ref_name }}" "$APK" --repo "${{ github.repository }}" --clobber || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-ios:
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios' || startsWith(github.ref, 'refs/tags/v') }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -73,7 +115,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd mobile
-          npm install
+          npm install --legacy-peer-deps
 
       - name: Build iOS (EAS Cloud)
         run: |
