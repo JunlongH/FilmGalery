@@ -61,7 +61,11 @@ jobs:
       # client/build/**/* — producing installers with no frontend. Fail fast.
       - name: Verify client build output
         shell: bash
-        run: test -f client/build/index.html || { echo "::error::client/build/index.html missing — check vite.config.js outDir"; exit 1; }
+        run: |
+          test -f client/build/index.html || { echo "::error::client/build/index.html missing — check vite.config.js outDir"; exit 1; }
+          # A missing <script type="module"> entry in client/index.html makes
+          # vite emit ONLY index.html (no JS bundle) → packaged app black-screens.
+          ls client/build/assets/*.js >/dev/null 2>&1 || { echo "::error::client/build has no JS bundle — check index.html module entry"; exit 1; }
 
       - name: Build Electron app (Client-Only)
         run: npx electron-builder --${{ matrix.platform }} --config electron-builder-client-only.json --publish never
@@ -148,7 +152,11 @@ jobs:
 
       - name: Verify client build output
         shell: bash
-        run: test -f client/build/index.html || { echo "::error::client/build/index.html missing — check vite.config.js outDir"; exit 1; }
+        run: |
+          test -f client/build/index.html || { echo "::error::client/build/index.html missing — check vite.config.js outDir"; exit 1; }
+          # A missing <script type="module"> entry in client/index.html makes
+          # vite emit ONLY index.html (no JS bundle) → packaged app black-screens.
+          ls client/build/assets/*.js >/dev/null 2>&1 || { echo "::error::client/build has no JS bundle — check index.html module entry"; exit 1; }
 
       # libraw-native's prepare script (npm run download-libraw) was skipped
       # by --ignore-scripts above. It's required for rebuild:electron to

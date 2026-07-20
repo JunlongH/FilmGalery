@@ -7,5 +7,12 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Vite entry — type="module" is required for ESM graph construction.
+      The previous CRA convention loaded a bundled main.<hash>.js via
+      <script defer>; Vite takes the source entry and dev-serves or
+      build-bundles from there.
+    -->
+    <script type="module" src="/src/index.jsx"></script>
   </body>
 </html>

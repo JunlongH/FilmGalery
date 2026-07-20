@@ -53,9 +53,16 @@ function loadOrGenerateSelfSigned() {
   }
 
   fs.mkdirSync(certDir, { recursive: true });
+  // Git-for-Windows' openssl is compiled with a default OPENSSL_CONF pointing
+  // at a build-machine path (Z:/extlib/.../openssl.cnf) that doesn't exist on
+  // end-user machines, making `openssl req` fail. Always pass an explicit
+  // minimal -config we write ourselves — harmless on Linux/macOS.
+  const cnfPath = path.join(certDir, 'openssl-minimal.cnf');
+  fs.writeFileSync(cnfPath, '[req]\ndistinguished_name = dn\nprompt = no\n[dn]\n');
   // openssl 1.1.1+ supports -addext; ships on all targeted platforms.
   const cmd =
     `openssl req -x509 -newkey rsa:2048 -nodes -days 365 ` +
+    `-config "${cnfPath}" ` +
     `-keyout "${keyPath}" -out "${certPath}" ` +
     `-subj "/CN=localhost" ` +
     `-addext "subjectAltName=IP:127.0.0.1,IP:::1,DNS:localhost"`;
