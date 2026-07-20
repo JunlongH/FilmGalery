@@ -21,7 +21,15 @@ let windowState = null;
 
 // Dynamic port allocated by the server (default 4000 for dev mode)
 let actualServerPort = 4000;
+// Plaintext loopback port when the server runs HTTPS on the main port
+// (server prints SERVER_HTTP_PORT:<port>; null when server is plain HTTP).
+let actualServerHttpPort = null;
 let serverPortResolve = null; // Promise resolver for port capture
+
+// Port the renderer/probes/shutdown should talk to (always plain HTTP).
+function loopbackHttpPort() {
+  return actualServerHttpPort || actualServerPort;
+}
 
 function getWindowStatePath() {
   try { return path.join(app.getPath('userData'), 'window-state.json'); } catch (_) { return path.join(__dirname, 'window-state.json'); }
@@ -156,6 +164,7 @@ async function startServer(forceRestart = false) {
 
   const serverDir = path.join(process.resourcesPath || __dirname, 'server');
   LOG('startServer, serverDir=', serverDir);
+  actualServerHttpPort = null; // reset; re-captured from SERVER_HTTP_PORT marker
 
   const serverEntry = path.join(serverDir, 'server.js');
   if (!fs.existsSync(serverEntry)) {
@@ -216,6 +225,13 @@ async function startServer(forceRestart = false) {
           serverPortResolve = null;
         }
       }
+      // Parse SERVER_HTTP_PORT:xxxx marker (plaintext loopback mirror when
+      // TLS is enabled on the main port)
+      const httpMatch = str.match(/SERVER_HTTP_PORT:(\d+)/);
+      if (httpMatch) {
+        actualServerHttpPort = parseInt(httpMatch[1], 10);
+        LOG(`Captured server HTTP loopback port: ${actualServerHttpPort}`);
+      }
     });
     serverProcess.stderr && serverProcess.stderr.on('data', d => fs.appendFileSync(errLog, d));
     serverProcess.on('error', e => {
@@ -252,7 +268,7 @@ function stopServer() {
       // Try graceful shutdown via HTTP endpoint (use dynamic port)
       const req = http.request({
         hostname: '127.0.0.1',
-        port: actualServerPort,
+        port: loopbackHttpPort(),
         path: '/api/shutdown',
         method: 'POST',
         timeout: 2000
@@ -613,8 +629,10 @@ function createWindow() {
     try {
       if (needsLocalBackend) {
         await startServer();
-        // Use dynamic port for health check
-        const apiHealthUrl = `http://127.0.0.1:${actualServerPort}/api/rolls`;
+        // SERVER_HTTP_PORT marker arrives in a stdout chunk right after
+        // SERVER_PORT; give it a moment so loopbackHttpPort() is correct.
+        await new Promise(r => setTimeout(r, 300));
+        const apiHealthUrl = `http://127.0.0.1:${loopbackHttpPort()}/api/rolls`;
         LOG('waiting for backend', apiHealthUrl);
         // wait for backend up (15s), if no health endpoint change to a reachable endpoint
         await waitForUrl(apiHealthUrl, 15000).catch(() => {
@@ -910,8 +928,8 @@ _ipcMainAlias.on('filmlab-gpu:result', async (_e, result) => {
         
         const mode = appConfig.serverMode || 'local';
         const API_BASE = (mode === 'local') 
-          ? `http://127.0.0.1:${actualServerPort}`
-          : (appConfig.apiBase || `http://127.0.0.1:${actualServerPort}`);
+          ? `http://127.0.0.1:${loopbackHttpPort()}`
+          : (appConfig.apiBase || `http://127.0.0.1:${loopbackHttpPort()}`);
           
         LOG('[GPU-RESULT] Using API_BASE:', API_BASE);
 
@@ -980,18 +998,18 @@ const DEFAULT_API_BASE = 'http://127.0.0.1:4000';
 // IPC handlers for dynamic port retrieval
 // Synchronous handler for preload script initialization
 ipcMain.on('get-server-port-sync', (event) => {
-  LOG('get-server-port-sync: returning', actualServerPort);
-  event.returnValue = actualServerPort;
+  LOG('get-server-port-sync: returning', loopbackHttpPort());
+  event.returnValue = loopbackHttpPort();
 });
 
 // Async handler for runtime port retrieval
 ipcMain.handle('get-server-port', () => {
-  return actualServerPort;
+  return loopbackHttpPort();
 });
 
 // Get full API base URL with dynamic port
 ipcMain.handle('get-api-base-dynamic', () => {
-  return `http://127.0.0.1:${actualServerPort}`;
+  return `http://127.0.0.1:${loopbackHttpPort()}`;
 });
 
 // IPC for API_BASE configuration (used by client-only mode)
@@ -1007,10 +1025,10 @@ ipcMain.on('config-get-api-base-sync', (event) => {
   let apiBase;
   if (mode === 'local') {
     // Local mode: always use dynamic port from embedded server
-    apiBase = `http://127.0.0.1:${actualServerPort}`;
+    apiBase = `http://127.0.0.1:${loopbackHttpPort()}`;
   } else {
     // Remote/Hybrid mode: use saved apiBase or fallback to local port
-    apiBase = appConfig.apiBase || `http://127.0.0.1:${actualServerPort}`;
+    apiBase = appConfig.apiBase || `http://127.0.0.1:${loopbackHttpPort()}`;
   }
   LOG('config-get-api-base-sync: mode=' + mode + ', returning', apiBase);
   event.returnValue = apiBase;
@@ -1020,9 +1038,9 @@ ipcMain.on('config-get-api-base-sync', (event) => {
 ipcMain.handle('config-get-api-base', () => {
   const mode = appConfig.serverMode || 'local';
   if (mode === 'local') {
-    return `http://127.0.0.1:${actualServerPort}`;
+    return `http://127.0.0.1:${loopbackHttpPort()}`;
   }
-  return appConfig.apiBase || `http://127.0.0.1:${actualServerPort}`;
+  return appConfig.apiBase || `http://127.0.0.1:${loopbackHttpPort()}`;
 });
 
 ipcMain.handle('config-set-api-base', async (e, url) => {
@@ -1075,10 +1093,10 @@ ipcMain.handle('config-get-server-mode', () => {
   let apiBase;
   if (mode === 'local') {
     // Local mode: always use dynamic port
-    apiBase = `http://127.0.0.1:${actualServerPort}`;
+    apiBase = `http://127.0.0.1:${loopbackHttpPort()}`;
   } else {
     // Remote/Hybrid mode: use saved apiBase or fallback
-    apiBase = appConfig.apiBase || `http://127.0.0.1:${actualServerPort}`;
+    apiBase = appConfig.apiBase || `http://127.0.0.1:${loopbackHttpPort()}`;
   }
   return {
     mode: mode,

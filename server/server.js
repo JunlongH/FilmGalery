@@ -664,6 +664,11 @@ const seedLocations = async () => {
 		// Output special marker for electron-main.js to parse
 		// This MUST be the first line of output to ensure reliable parsing
 		console.log(`SERVER_PORT:${actualPort}`);
+		if (httpLoopbackPort) {
+			// electron-main uses this plaintext loopback port for the webview and
+			// health probes; the main port speaks HTTPS when TLS is enabled.
+			console.log(`SERVER_HTTP_PORT:${httpLoopbackPort}`);
+		}
 		const scheme = tlsCreds ? 'https' : 'http';
 		console.log(`Server running on ${scheme}://0.0.0.0:${actualPort}`);
 		if (httpLoopbackPort) {
