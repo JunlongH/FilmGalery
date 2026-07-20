@@ -1152,6 +1152,27 @@ ipcMain.handle('config-set-write-through', async (e, flag) => {
   return { ok:true, config: appConfig };
 });
 
+// Remote-mode TLS trust: the embedded server uses a self-signed LOCAL CA
+// ("FilmGallery Local CA") whose SAN covers the host's IPs. Electron's
+// Chromium network stack does not use the OS trust store on Linux (and the
+// CA is not a public root anyway), so remote desktop clients would reject
+// every HTTPS call ("Test Connection" fails, pairing unreachable). Accept
+// certificates issued by our CA; reject everything else with default rules.
+// Note: an attacker could mint a CA with the same CN — token auth still
+// gates the API; this trades perfect MITM resistance for zero-config
+// single-user remote access.
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  const issuerCN = certificate && certificate.issuer && certificate.issuer.commonName;
+  if (issuerCN === 'FilmGallery Local CA') {
+    LOG('certificate-error: accepting cert issued by FilmGallery Local CA for', url);
+    event.preventDefault();
+    callback(true);
+  } else {
+    LOG('certificate-error: rejecting', url, 'issuer=', issuerCN, 'error=', error);
+    callback(false);
+  }
+});
+
 app.on('ready', async () => {
   LOG('app ready, isDev=', isDev);
   appConfig = loadConfig();
