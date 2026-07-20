@@ -28,6 +28,7 @@ config.resolver.blockList = [
   new RegExp(`^${repoRoot}/(dist_v9|docker|tmp|docs|tests|tools|server|client|electron-gpu|watch-app|assets)/.*`),
   /.*\/android\/\.gradle\/.*/,
   /.*\/android\/app\/build\/.*/,
+  /.*\/node_modules\/[^/]+\/android\/build\/.*/,
 ];
 // Condition names used when resolving package `exports` maps. `react-native`
 // first (RN-specific entry), then generic ones.

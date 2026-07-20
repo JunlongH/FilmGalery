@@ -5,7 +5,7 @@ const { uploadTmp } = require('../config/multer');
 // New endpoint: upload multiple files to tmp (for preview)
 // POST /api/uploads  (multipart form, field name "files")
 // returns { ok:true, files: [{ originalName, tmpName, url }] }
-router.post('/', uploadTmp.array('files', 100), (req, res) => {
+router.post('/', uploadTmp.array('files', 100), (req, res, next) => {
   try {
     const uploaded = (req.files || []).map(f => ({
       originalName: f.originalname,
@@ -16,7 +16,7 @@ router.post('/', uploadTmp.array('files', 100), (req, res) => {
     res.json({ ok: true, files: uploaded });
   } catch (err) {
     console.error('POST /api/uploads error', err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 

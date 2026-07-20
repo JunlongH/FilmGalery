@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const conflictResolver = require('../conflict-resolver');
+const { asyncHandler } = require('../utils/async-handler');
 
 // Get data directory from db.js logic
 function getDataDir() {
@@ -15,28 +16,18 @@ function getDataDir() {
 }
 
 // GET /api/conflicts - Check for database conflicts
-router.get('/', async (req, res) => {
-  try {
-    const dataDir = getDataDir();
-    const status = await conflictResolver.getConflictStatus(dataDir);
-    res.json(status);
-  } catch (err) {
-    console.error('[CONFLICTS API] Error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+router.get('/', asyncHandler(async (req, res) => {
+  const dataDir = getDataDir();
+  const status = await conflictResolver.getConflictStatus(dataDir);
+  res.json(status);
+}));
 
 // POST /api/conflicts/resolve - Trigger auto-merge
-router.post('/resolve', async (req, res) => {
-  try {
-    const dataDir = getDataDir();
-    console.log('[CONFLICTS API] Triggering auto-cleanup...');
-    const count = await conflictResolver.autoCleanup(dataDir);
-    res.json({ ok: true, conflictsProcessed: count });
-  } catch (err) {
-    console.error('[CONFLICTS API] Error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+router.post('/resolve', asyncHandler(async (req, res) => {
+  const dataDir = getDataDir();
+  console.log('[CONFLICTS API] Triggering auto-cleanup...');
+  const count = await conflictResolver.autoCleanup(dataDir);
+  res.json({ ok: true, conflictsProcessed: count });
+}));
 
 module.exports = router;

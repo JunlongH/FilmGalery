@@ -12,10 +12,8 @@ const fs = require('fs');
 sharp.cache(false);
 const { uploadsDir, tmpUploadDir, localTmpDir, rollsDir } = require('./config/paths');
 const { getDbPath } = require('./config/db-config');
-const { runMigration } = require('./utils/migration');
-const { runSchemaMigration } = require('./utils/schema-migration');
-const { runEquipmentMigration } = require('./utils/equipment-migration');
-const { runFilmStructMigration } = require('./utils/film-struct-migration');
+// Schema migration imports moved into runAllMigrations() — the unified
+// runner (server/utils/run-all-migrations.js) is the only entry point now.
 const { cacheSeconds } = require('./utils/cache');
 const { isPathConfined } = require('./utils/path-security');
 const { requestProfiler, getProfilerStats, scheduleProfilerLog } = require('./utils/profiler');
@@ -488,38 +486,23 @@ const seedLocations = async () => {
 (async () => {
 	try {
 		// ========================================
-		// MIGRATIONS DISABLED - Database is up to date
-		// Uncomment these sections if you need to run migrations on older databases
+		// Unified migration runner (activated 2C.1).
+		// - Idempotent: every step is CREATE/ALTER IF NOT EXISTS or try/catch.
+		// - Tracked via _migrations table (migration-tracker.js).
+		// - Backs up film.db before running (3-copy rotation).
+		// - The legacy ad-hoc migration scripts in server/migrations/ are
+		//   fully consolidated into schema-migration.js and have no callers.
 		// ========================================
-		
-		/*
-		// 1. Run Migration BEFORE loading DB
-		console.log('[SERVER] Starting migration check...');
-		await runMigration();
-		console.log('[SERVER] Migration check complete.');
+		const { runAllMigrations } = require('./utils/run-all-migrations');
+		await runAllMigrations();
 
-        // 2. Run Schema Migration (Systematic Update)
-        console.log('[SERVER] Starting schema migration...');
-        await runSchemaMigration();
-        console.log('[SERVER] Schema migration complete.');
-
-        // 2b. Run Equipment Migration (Cameras, Lenses, Flashes, Film Formats)
-        console.log('[SERVER] Starting equipment migration...');
-        await runEquipmentMigration();
-        console.log('[SERVER] Equipment migration complete.');
-
-        // 2c. Run Film Structure Migration (Brand, Format, Process)
-        console.log('[SERVER] Starting film structure migration...');
-        await runFilmStructMigration();
-        console.log('[SERVER] Film structure migration complete.');
-		*/
-		
-		console.log('[SERVER] Migrations skipped (database is up to date)');
-
-		// 3. Load DB now that file is ready
+		// Load DB now that schema is confirmed.
 		const db = require('./db');
 
-		// 4. Ensure Schema (Legacy check, kept for safety but mostly handled by schema-migration)
+		// Last-resort CREATE TABLE IF NOT EXISTS for the base tables. Mirrors
+		// schema-migration.js but kept as a no-op safety net for exotic states
+		// (e.g. migration disabled historically). Does not include indexes —
+		// those live only in schema-migration.js now.
 		await new Promise((resolve, reject) => {
 			db.exec(schemaSQL, (err) => {
 				if (err) reject(err);
@@ -528,7 +511,9 @@ const seedLocations = async () => {
 		});
 		console.log('DB schema ensured');
 
-        // 5. Recompute roll sequence on startup
+        // Recompute roll display_seq on startup. Now a single window-function
+        // UPDATE (2C.1.3); the legacy ensureXxxColumn runtime fallbacks are
+        // gone — schema-migration.js owns the columns.
         console.log('[SERVER] Recomputing roll sequence...');
         const { recomputeRollSequence } = require('./services/roll-service');
         await recomputeRollSequence();

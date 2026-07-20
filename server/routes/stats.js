@@ -3,7 +3,7 @@ const router = express.Router();
 const { allAsync, getAsync } = require('../utils/db-helpers');
 
 // GET /api/stats/summary
-router.get('/summary', async (req, res) => {
+router.get('/summary', async (req, res, next) => {
   try {
     const sql = `
       SELECT 
@@ -25,13 +25,13 @@ router.get('/summary', async (req, res) => {
     const row = await getAsync(sql);
     res.json(row);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /api/stats/gear
 // Statistics are based on PHOTO count (not roll count)
-router.get('/gear', async (req, res) => {
+router.get('/gear', async (req, res, next) => {
   try {
     // Camera statistics - count photos per camera
     // Priority: photo.camera > roll.camera (equipment or text)
@@ -135,12 +135,12 @@ router.get('/gear', async (req, res) => {
       films: films.sort((a, b) => b.count - a.count).slice(0, 10)
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /api/stats/activity
-router.get('/activity', async (req, res) => {
+router.get('/activity', async (req, res, next) => {
   try {
     const sql = `
       SELECT strftime('%Y-%m', start_date) as month, COUNT(*) as count 
@@ -152,12 +152,12 @@ router.get('/activity', async (req, res) => {
     const rows = await allAsync(sql);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /api/stats/costs
-router.get('/costs', async (req, res) => {
+router.get('/costs', async (req, res, next) => {
   try {
     const summary = `
       SELECT 
@@ -262,12 +262,12 @@ router.get('/costs', async (req, res) => {
       byFilm: filmRows
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /api/stats/ratings
-router.get('/ratings', async (req, res) => {
+router.get('/ratings', async (req, res, next) => {
   try {
     const distribution = `
       SELECT rating, COUNT(*) as count
@@ -312,12 +312,12 @@ router.get('/ratings', async (req, res) => {
       byCamera: cameraRows
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /api/stats/locations
-router.get('/locations', async (req, res) => {
+router.get('/locations', async (req, res, next) => {
   try {
     // Combine locations from both:
     // 1. photos linked to locations table (via location_id)
@@ -370,7 +370,7 @@ router.get('/locations', async (req, res) => {
 });
 
 // GET /api/stats/temporal
-router.get('/temporal', async (req, res) => {
+router.get('/temporal', async (req, res, next) => {
   try {
     const dayOfWeek = `
       SELECT 
@@ -402,12 +402,12 @@ router.get('/temporal', async (req, res) => {
       byHour: hourRows
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /api/stats/themes
-router.get('/themes', async (req, res) => {
+router.get('/themes', async (req, res, next) => {
   try {
     const sql = `
       SELECT 
@@ -424,12 +424,12 @@ router.get('/themes', async (req, res) => {
     const rows = await allAsync(sql);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /api/stats/inventory
-router.get('/inventory', async (req, res) => {
+router.get('/inventory', async (req, res, next) => {
   try {
     const sqlValue = `
       SELECT 
@@ -470,7 +470,7 @@ router.get('/inventory', async (req, res) => {
       channels: channelRows
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 

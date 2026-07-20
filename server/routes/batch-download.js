@@ -61,7 +61,7 @@ async function getPhotoIdsByScope(rollId, scope, photoIds = []) {
  * POST /api/batch-download
  * 创建批量下载任务
  */
-router.post('/', async (req, res) => {
+router.post('/', async (req, res, next) => {
   try {
     const { 
       rollId, 
@@ -148,7 +148,7 @@ router.post('/', async (req, res) => {
     });
   } catch (e) {
     console.error('[BatchDownload] Create job error:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
@@ -195,7 +195,7 @@ async function executeDownloadJob(job) {
  * GET /api/batch-download/:jobId/progress
  * 查询任务进度
  */
-router.get('/:jobId/progress', (req, res) => {
+router.get('/:jobId/progress', (req, res, next) => {
   const { jobId } = req.params;
   const job = activeDownloadJobs.get(jobId);
   
@@ -220,7 +220,7 @@ router.get('/:jobId/progress', (req, res) => {
  * POST /api/batch-download/:jobId/cancel
  * 取消任务
  */
-router.post('/:jobId/cancel', (req, res) => {
+router.post('/:jobId/cancel', (req, res, next) => {
   const { jobId } = req.params;
   const job = activeDownloadJobs.get(jobId);
   
@@ -236,7 +236,7 @@ router.post('/:jobId/cancel', (req, res) => {
  * GET /api/batch-download/availability
  * 检查某类型文件的可用性
  */
-router.get('/availability', async (req, res) => {
+router.get('/availability', async (req, res, next) => {
   try {
     const { rollId, scope, photoIds, type = 'positive' } = req.query;
     
@@ -260,7 +260,7 @@ router.get('/availability', async (req, res) => {
     });
   } catch (e) {
     console.error('[BatchDownload] Availability check error:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
@@ -268,7 +268,7 @@ router.get('/availability', async (req, res) => {
  * DELETE /api/batch-download/:jobId
  * 删除任务记录
  */
-router.delete('/:jobId', (req, res) => {
+router.delete('/:jobId', (req, res, next) => {
   const { jobId } = req.params;
   const job = activeDownloadJobs.get(jobId);
   
@@ -292,7 +292,7 @@ router.delete('/:jobId', (req, res) => {
  * GET /api/photos/:id/download
  * 单张照片下载
  */
-router.get('/single/:id', async (req, res) => {
+router.get('/single/:id', async (req, res, next) => {
   try {
     const photoId = parseInt(req.params.id);
     const { type = 'positive', exif = 'false' } = req.query;
@@ -322,7 +322,7 @@ router.get('/single/:id', async (req, res) => {
     stream.on('error', (err) => {
       console.error('[BatchDownload] Stream error:', err);
       if (!res.headersSent) {
-        res.status(500).json({ error: 'Failed to send file' });
+        next(err);
       }
       if (result.isTemp) {
         cleanupTempFile(result.filePath);
@@ -330,7 +330,7 @@ router.get('/single/:id', async (req, res) => {
     });
   } catch (e) {
     console.error('[BatchDownload] Single download error:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 

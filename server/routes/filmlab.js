@@ -24,7 +24,7 @@ const {
 
 // POST /api/filmlab/preview
 // Body: { photoId, params, maxWidth, sourceType }
-router.post('/preview', async (req, res) => {
+router.post('/preview', async (req, res, next) => {
   const { photoId, params, maxWidth, sourceType } = req.body || {};
   if (!photoId) return res.status(400).json({ error: 'photoId required' });
   try {
@@ -117,13 +117,13 @@ router.post('/preview', async (req, res) => {
     res.end(buf);
   } catch (e) {
     console.error('[FILMLAB] preview error', e);
-    res.status(500).json({ error: e && e.message });
+    next(e);
   }
 });
 
 // POST /api/filmlab/render
 // Body: { photoId, params, sourceType }
-router.post('/render', async (req, res) => {
+router.post('/render', async (req, res, next) => {
   const { photoId, params, sourceType } = req.body || {};
   if (!photoId) return res.status(400).json({ error: 'photoId required' });
   try {
@@ -251,13 +251,13 @@ router.post('/render', async (req, res) => {
     res.json({ ok: true, path: relOut });
   } catch (e) {
     console.error('[FILMLAB] render error', e);
-    res.status(500).json({ error: e && e.message });
+    next(e);
   }
 });
 
 // POST /api/filmlab/export
 // Body: { photoId, params, sourceType }
-router.post('/export', async (req, res) => {
+router.post('/export', async (req, res, next) => {
   const { photoId, params, sourceType } = req.body || {};
   if (!photoId) return res.status(400).json({ error: 'photoId required' });
   try {
@@ -391,7 +391,7 @@ router.post('/export', async (req, res) => {
     res.json({ ok: true, path: relOut });
   } catch (e) {
     console.error('[FILMLAB] export error', e);
-    res.status(500).json({ error: e && e.message });
+    next(e);
   }
 });
 

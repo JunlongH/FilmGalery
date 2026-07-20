@@ -67,7 +67,7 @@ function TimelineStackScreen() {
         name="TimelineHome"
         component={HomeScreen}
         options={{
-          title: '时间线',
+          title: t('tab.timeline'),
           headerTitle: 'Film Gallery',
           headerRight: () => <HeaderRight showQuickMeter={true} showSettings={true} showAI={true} />,
         }}
@@ -85,8 +85,8 @@ function MapStackScreen() {
         name="MapHome"
         component={MapScreen}
         options={{
-          title: '地图',
-          headerTitle: '照片地图',
+          title: t('tab.map'),
+          headerTitle: t('title.photoMap'),
           headerRight: () => <HeaderRight showQuickMeter={false} showSettings={true} />,
         }}
       />
@@ -103,65 +103,65 @@ function LibraryStackScreen() {
         name="LibraryHome"
         component={LibraryScreen}
         options={{
-          title: '图库',
-          headerTitle: '我的图库',
+          title: t('tab.library'),
+          headerTitle: t('title.myLibrary'),
           headerRight: () => <HeaderRight showQuickMeter={false} showSettings={true} />,
         }}
       />
       <LibraryStack.Screen
         name="Favorites"
         component={FavoritesScreen}
-        options={{ title: '收藏' }}
+        options={{ title: t('title.favorites') }}
       />
       <LibraryStack.Screen
         name="Collections"
         component={ThemesScreen}
-        options={{ title: '合集' }}
+        options={{ title: t('title.collections') }}
       />
       <LibraryStack.Screen
         name="TagDetail"
         component={TagDetailScreen}
-        options={({ route }) => ({ title: (route.params as any)?.tagName || '标签详情' })}
+        options={({ route }) => ({ title: (route.params as any)?.tagName || t('title.tagDetails') })}
       />
       <LibraryStack.Screen
         name="Equipment"
         component={EquipmentScreen}
-        options={{ title: '器材' }}
+        options={{ title: t('title.equipment') }}
       />
       <LibraryStack.Screen
         name="EquipmentRolls"
         component={EquipmentRollsScreen}
-        options={({ route }) => ({ title: (route.params as any)?.name || '器材胶卷' })}
+        options={({ route }) => ({ title: (route.params as any)?.name || t('title.equipmentRolls') })}
       />
       <LibraryStack.Screen
         name="Inventory"
         component={InventoryScreen}
-        options={{ title: '库存' }}
+        options={{ title: t('title.inventory') }}
       />
       <LibraryStack.Screen
         name="Stats"
         component={StatsScreen}
-        options={{ title: '统计' }}
+        options={{ title: t('title.stats') }}
       />
       <LibraryStack.Screen
         name="Films"
         component={FilmsScreen}
-        options={{ title: '胶卷目录' }}
+        options={{ title: t('title.filmCatalog') }}
       />
       <LibraryStack.Screen
         name="FilmRolls"
         component={FilmRollsScreen}
-        options={({ route }) => ({ title: (route.params as any)?.filmName || '胶卷' })}
+        options={({ route }) => ({ title: (route.params as any)?.filmName || t('title.filmRolls') })}
       />
       <LibraryStack.Screen
         name="FilmItemDetail"
         component={FilmItemDetailScreen}
-        options={{ title: '胶卷详情' }}
+        options={{ title: t('title.rollDetails') }}
       />
       <LibraryStack.Screen
         name="Negatives"
         component={NegativeScreen}
-        options={{ title: '底片' }}
+        options={{ title: t('title.negatives') }}
       />
     </LibraryStack.Navigator>
   );
@@ -217,13 +217,13 @@ function HomeTabs() {
         headerShown: false,
       })}
     >
-      <Tab.Screen name="Timeline" component={TimelineStackScreen} options={{ title: '时间线' }} />
+      <Tab.Screen name="Timeline" component={TimelineStackScreen} options={{ title: t('tab.timeline') }} />
       <Tab.Screen
         name="Map"
         component={MapStackScreen}
-        options={{ freezeOnBlur: true, title: '地图' }}
+        options={{ freezeOnBlur: true, title: t('tab.map') }}
       />
-      <Tab.Screen name="Library" component={LibraryStackScreen} options={{ title: '图库' }} />
+      <Tab.Screen name="Library" component={LibraryStackScreen} options={{ title: t('tab.library') }} />
     </Tab.Navigator>
   );
 }
@@ -316,18 +316,18 @@ export default function App() {
             <RootStack.Screen
               name="RollDetail"
               component={RollDetailScreen}
-              options={({ route }) => ({ title: (route.params as any)?.rollName || '胶卷详情' })}
+              options={({ route }) => ({ title: (route.params as any)?.rollName || t('title.rollDetails') })}
             />
             {/* Full-screen / modal flows */}
             <RootStack.Screen
               name="PhotoView"
               component={PhotoViewScreen}
-              options={{ title: '照片', headerShown: false, presentation: 'fullScreenModal' }}
+              options={{ title: t('title.photo'), headerShown: false, presentation: 'fullScreenModal' }}
             />
             <RootStack.Screen
               name="ShotLog"
               component={ShotLogScreen}
-              options={{ title: '拍摄记录', presentation: 'fullScreenModal' }}
+              options={{ title: t('title.shotLog'), presentation: 'fullScreenModal' }}
             />
             {/* Settings group */}
             <RootStack.Screen

@@ -12,7 +12,7 @@ const db = require('../db');
  * GET /api/health
  * Returns current storage configuration (useful for Settings verification)
  */
-router.get('/', (req, res) => {
+router.get('/', (req, res, next) => {
   const dbPath = getDbPath();
   res.json({
     ok: true,
@@ -31,7 +31,7 @@ router.get('/', (req, res) => {
  * GET /api/health/database
  * Returns database health status including WAL file info
  */
-router.get('/database', (req, res) => {
+router.get('/database', (req, res, next) => {
   const dbPath = getDbPath();
   const walPath = dbPath + '-wal';
   const shmPath = dbPath + '-shm';
@@ -123,7 +123,7 @@ router.get('/database', (req, res) => {
  * POST /api/health/checkpoint
  * Manually trigger WAL checkpoint
  */
-router.post('/checkpoint', async (req, res) => {
+router.post('/checkpoint', async (req, res, next) => {
   try {
     const db = require('../db');
     const result = await db.walCheckpoint();
@@ -133,10 +133,7 @@ router.post('/checkpoint', async (req, res) => {
       changes: result.changes
     });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
+    next(err);
   }
 });
 

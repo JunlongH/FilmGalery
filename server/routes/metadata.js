@@ -5,7 +5,7 @@ const db = require('../db');
 // GET /api/metadata/options
 // Returns distinct cameras, lenses, and photographers
 // Lenses come from: 1) equip_lenses table, 2) fixed-lens cameras (virtual lenses)
-router.get('/options', async (req, res) => {
+router.get('/options', async (req, res, next) => {
   const queries = {
     cameras: `
       SELECT DISTINCT camera as value FROM rolls WHERE camera IS NOT NULL AND camera != "" AND camera NOT IN ('-','--','—')
@@ -82,7 +82,7 @@ router.get('/options', async (req, res) => {
     });
   } catch (err) {
     console.error('[metadata] Error fetching options', err);
-    res.status(500).json({ error: 'Failed to load metadata options' });
+    next(err);
   }
 });
 

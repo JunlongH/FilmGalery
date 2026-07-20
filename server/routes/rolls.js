@@ -39,11 +39,11 @@ const photoUploadService = require('../services/photo-upload-service');
 // ============================================================================
 
 const cpUpload = uploadTmp.array('files', 200);
-router.post('/', (req, res) => {
+router.post('/', (req, res, next) => {
   cpUpload(req, res, async (err) => { 
     if (err) {
       console.error('Upload error', err);
-      return res.status(500).json({ error: err.message });
+      return next(err);
     }
     try {
       const body = req.body || {};
@@ -491,7 +491,7 @@ router.post('/', (req, res) => {
         // Cleanup created roll folder/files (best-effort)
         await rollFileService.rollbackCreatedFiles({ rollFolderPath, createdPaths });
 
-        return res.status(500).json({ ok: false, error: err.message || 'Create roll failed', details: err.fileInfo || err.operation });
+        return next(err);
       } finally {
         // Always finalize the prepared statement to avoid lingering locks.
         if (stmtToFinalize) {
@@ -507,57 +507,55 @@ router.post('/', (req, res) => {
       console.error('POST /api/rolls (multipart) handler error:');
       console.error('Error:', err);
       console.error('Stack:', err.stack);
-      res.status(500).json({ ok: false, error: err.message || 'Internal server error' });
+      next(err);
     }
   });
 });
 
 // GET /api/rolls
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
   try {
     const rows = await rollService.listRolls(req.query);
     res.json(rows);
   } catch (err) {
-    console.error('[GET] rolls error', err.message);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /api/rolls/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req, res, next) => {
   try {
     const row = await rollService.getRollByIdWithDetails(req.params.id);
     if (!row) return res.status(404).json({ error: 'Not found' });
     res.json(row);
   } catch (err) {
-    console.error('[GET] roll error', err.message);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /api/rolls/:id/locations
-router.get('/:id/locations', async (req, res) => {
+router.get('/:id/locations', async (req, res, next) => {
   try {
     const rows = await rollService.getRollLocations(req.params.id);
     res.json(rows);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
 // GET /api/rolls/:id/preset - return stored preset JSON (parsed)
-router.get('/:id/preset', async (req, res) => {
+router.get('/:id/preset', async (req, res, next) => {
   const id = req.params.id;
   try {
     const preset = await rollService.getRollPreset(id);
     res.json({ rollId: id, preset });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // POST /api/rolls/:id/preset - set/overwrite preset_json
-router.post('/:id/preset', async (req, res) => {
+router.post('/:id/preset', async (req, res, next) => {
   const id = req.params.id;
   const body = req.body || {};
   if (!body || !body.params) return res.status(400).json({ error: 'params required' });
@@ -565,23 +563,23 @@ router.post('/:id/preset', async (req, res) => {
     const result = await rollService.setRollPreset(id, body.name, body.params);
     res.json({ ok: true, ...result });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // DELETE /api/rolls/:id/preset - clear preset_json
-router.delete('/:id/preset', async (req, res) => {
+router.delete('/:id/preset', async (req, res, next) => {
   const id = req.params.id;
   try {
     const result = await rollService.clearRollPreset(id);
     res.json({ ok: true, ...result });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // PUT /api/rolls/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req, res, next) => {
   const id = req.params.id;
   let { locations, camera_equip_id, lens_equip_id, camera, lens, photographer, ...restFields } = req.body;
   
@@ -664,12 +662,12 @@ router.put('/:id', async (req, res) => {
     
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
 // DELETE /api/rolls/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req, res, next) => {
   const id = Number(req.params.id);
   console.log(`[DELETE] Request to delete roll id: ${id}`);
 
@@ -686,7 +684,7 @@ router.delete('/:id', async (req, res) => {
     res.json({ deleted });
   } catch (err) {
     console.error('[DELETE] Failed to delete roll', err.message || err);
-    res.status(500).json({ error: err.message || 'Delete failed' });
+    next(err);
   }
 });
 
@@ -697,13 +695,12 @@ router.delete('/:id', async (req, res) => {
 const photoService = require('../services/photo-service');
 
 // GET /api/rolls/:rollId/photos - List photos in a roll
-router.get('/:rollId/photos', async (req, res) => {
+router.get('/:rollId/photos', async (req, res, next) => {
   try {
     const photos = await photoService.listByRoll(req.params.rollId);
     res.json(photos);
   } catch (err) {
-    console.error('[GET] roll photos error', err.message);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
@@ -715,7 +712,7 @@ router.get('/:rollId/photos', async (req, res) => {
 // Uses photoUploadService for processing (shared with POST / route).
 // ============================================================================
 
-router.post('/:rollId/photos', uploadDefault.single('image'), async (req, res) => {
+router.post('/:rollId/photos', uploadDefault.single('image'), async (req, res, next) => {
   const rollId = req.params.rollId;
   
   if (!req.file) {
@@ -741,12 +738,12 @@ router.post('/:rollId/photos', uploadDefault.single('image'), async (req, res) =
     res.status(201).json(result);
   } catch (err) {
     console.error('Upload photo error', err);
-    return res.status(500).json({ error: err.message });
+    return next(err);
   }
 });
 
 // set roll cover
-router.post('/:id/cover', async (req, res) => {
+router.post('/:id/cover', async (req, res, next) => {
   const { photoId, filename } = req.body;
   if (!photoId && !filename) {
     return res.status(400).json({ error: 'photoId or filename required' });
@@ -759,12 +756,12 @@ router.post('/:id/cover', async (req, res) => {
     if (err.message === 'Photo not found') {
       return res.status(404).json({ error: err.message });
     }
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // Contact Sheet Export
-router.post('/:id/contact-sheet', async (req, res) => {
+router.post('/:id/contact-sheet', async (req, res, next) => {
   const rollId = req.params.id;
   const { 
     style = 'kodak',
@@ -883,7 +880,7 @@ router.post('/:id/contact-sheet', async (req, res) => {
     
     // Send error as JSON if possible
     if (!res.headersSent) {
-      res.status(500).json({ error: error.message });
+      next(error);
     } else {
       res.write(JSON.stringify({ type: 'error', message: error.message }) + '\n');
       res.end();

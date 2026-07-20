@@ -18,6 +18,7 @@ import {
 
 export default function SettingsScreen({ navigation }: any) {
   const theme = useTheme();
+  const t = useT();
   const { baseUrl, setBaseUrl, backupUrl, setBackupUrl, darkMode, setDarkMode, mapProvider, setMapProvider, amapKey, setAmapKey } = useContext(ApiContext);
   const [url, setUrl] = useState(baseUrl);
   const [backup, setBackup] = useState(backupUrl || '');
@@ -55,7 +56,7 @@ export default function SettingsScreen({ navigation }: any) {
   const handleAutoDiscover = async () => {
     setDiscovering(true);
     setDiscoveredServices([]);
-    setDiscoveryStatus('正在扫描局域网...');
+    setDiscoveryStatus(t('settings.scanningLan'));
     
     try {
       const options = {
@@ -64,9 +65,9 @@ export default function SettingsScreen({ navigation }: any) {
         timeout: 5000,
         onProgress: (progress: any) => {
           if (progress.step === 'mdns') {
-            setDiscoveryStatus(progress.status === 'scanning' ? '正在通过 mDNS 发现服务...' : `mDNS 发现完成`);
+            setDiscoveryStatus(progress.status === 'scanning' ? t('settings.mdnsScanning') : t('settings.mdnsDone'));
           } else if (progress.step === 'portscan') {
-            setDiscoveryStatus(progress.status === 'scanning' ? `正在扫描端口 (${progress.ip})...` : '端口扫描完成');
+            setDiscoveryStatus(progress.status === 'scanning' ? t('settings.portScanning', { ip: progress.ip }) : t('settings.portScanDone'));
           }
         }
       };
@@ -75,7 +76,7 @@ export default function SettingsScreen({ navigation }: any) {
       
       if (result.services.length > 0) {
         setDiscoveredServices(result.services);
-        setDiscoveryStatus(`发现 ${result.services.length} 个服务`);
+        setDiscoveryStatus(t('settings.foundCount', { count: result.services.length }));
         
         // 自动选择第一个服务
         if (result.primaryService) {
@@ -83,20 +84,20 @@ export default function SettingsScreen({ navigation }: any) {
         }
         
         Alert.alert(
-          '发现服务',
-          `已找到 ${result.services.length} 个 FilmGallery 服务\n` +
+          t('settings.foundTitle'),
+          t('settings.foundBody', { count: result.services.length }) + '\n' +
           result.services.map((s: any) => `• ${s.device || s.ip}: ${s.fullUrl}`).join('\n')
         );
       } else {
-        setDiscoveryStatus('未找到服务');
+        setDiscoveryStatus(t('settings.noneFound'));
         Alert.alert(
-          '未找到服务',
-          '在局域网内未发现 FilmGallery 服务。\n\n请检查:\n1. 电脑上的 FilmGallery 是否已启动\n2. 手机和电脑是否在同一网络\n3. 防火墙是否允许连接\n\n如果是公网服务器，请输入 IP 地址后使用"端口扫描"模式'
+          t('settings.noneFound'),
+          t('settings.noneFoundBody')
         );
       }
     } catch (e) {
-      setDiscoveryStatus('发现失败');
-      Alert.alert('错误', (e as Error).message || '发现过程出错');
+      setDiscoveryStatus(t('settings.discoverFailed'));
+      Alert.alert(t('settings.error'), (e as Error).message || t('settings.discoverFailed'));
     } finally {
       setDiscovering(false);
     }
@@ -105,7 +106,7 @@ export default function SettingsScreen({ navigation }: any) {
   // 选择已发现的服务
   const selectService = (service: any) => {
     setUrl(service.fullUrl);
-    Alert.alert('已选择', `服务器地址已设为: ${service.fullUrl}`);
+    Alert.alert(t('settings.selected'), t('settings.urlSetTo', { url: service.fullUrl }));
   };
 
   const save = async () => {
@@ -131,7 +132,7 @@ export default function SettingsScreen({ navigation }: any) {
       setAmapKey(localAmapKey.trim());
     }
     setMapProvider(localMapProvider);
-    Alert.alert('已保存', '地图设置已保存，重新进入地图页即可生效');
+    Alert.alert(t('settings.savedTitle'), t('settings.mapSaved'));
   };
 
   const toggleDark = async (val: any) => {
@@ -143,18 +144,18 @@ export default function SettingsScreen({ navigation }: any) {
   const testConnection = async (targetUrl: any) => {
     const clean = cleanUrlString(targetUrl);
     if (!clean) {
-      alert('请输入 URL');
+      alert(t('settings.enterUrl'));
       return;
     }
     try {
       const res = await fetch(`${clean}/api/rolls`);
       if (res.ok) {
-        alert(`连接成功：${clean}`);
+        alert(t('settings.connectOk', { url: clean }));
       } else {
-        alert(`已连接 ${clean}，但服务器返回 ${res.status}`);
+        alert(t('settings.connectStatus', { url: clean, status: res.status }));
       }
     } catch (e) {
-      alert(`连接失败 ${clean}：${(e as Error).message}`);
+      alert(t('settings.connectFail', { url: clean, message: (e as Error).message }));
     }
   };
 
@@ -166,9 +167,9 @@ export default function SettingsScreen({ navigation }: any) {
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Auto Discovery Section */}
-      <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>🔍 自动发现</Text>
+      <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>🔍 {t('settings.autoDiscovery')}</Text>
       <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
-        自动发现局域网内的 FilmGallery 服务，或通过 IP 地址扫描端口
+        {t('settings.autoDiscoveryHint')}
       </Text>
       
       {/* Discovery Mode Selection */}
@@ -177,16 +178,16 @@ export default function SettingsScreen({ navigation }: any) {
           value={discoveryMode}
           onValueChange={setDiscoveryMode}
           buttons={[
-            { value: 'auto', label: '自动' },
-            { value: 'mdns', label: '局域网 (mDNS)' },
-            { value: 'portscan', label: '端口扫描' },
+            { value: 'auto', label: t('settings.modeAuto') },
+            { value: 'mdns', label: t('settings.modeMdns') },
+            { value: 'portscan', label: t('settings.modePortScan') },
           ]}
           style={{ marginBottom: 8 }}
         />
         <Text style={[styles.modeHint, { color: theme.colors.onSurfaceVariant }]}>
-          {discoveryMode === 'auto' && '自动模式：优先使用 mDNS 发现，然后端口扫描'}
-          {discoveryMode === 'mdns' && 'mDNS 模式：零配置发现局域网内的服务'}
-          {discoveryMode === 'portscan' && '端口扫描：输入 IP 地址扫描常用端口（适用于公网）'}
+          {discoveryMode === 'auto' && t('settings.autoMode')}
+          {discoveryMode === 'mdns' && t('settings.mdnsMode')}
+          {discoveryMode === 'portscan' && t('settings.portscanMode')}
         </Text>
       </View>
       
@@ -197,12 +198,12 @@ export default function SettingsScreen({ navigation }: any) {
             mode="outlined"
             value={ipAddress}
             onChangeText={setIpAddress}
-            placeholder="192.168.1.100 (可选)"
+            placeholder={t('settings.ipOptional')}
             autoCapitalize="none"
             keyboardType="numeric"
             activeOutlineColor={theme.colors.primary}
             style={{ backgroundColor: theme.colors.surface }}
-            label="服务器 IP 地址"
+            label={t('settings.serverIp')}
           />
         </View>
       )}
@@ -216,13 +217,13 @@ export default function SettingsScreen({ navigation }: any) {
         icon="magnify"
         style={{ marginBottom: 12 }}
       >
-        {discovering ? discoveryStatus : '开始发现'}
+        {discovering ? discoveryStatus : t('settings.startDiscovery')}
       </Button>
       
       {/* Discovered Services List */}
       {discoveredServices.length > 0 && (
         <View style={{ marginBottom: 16 }}>
-          <Text style={[styles.label, { color: theme.colors.primary }]}>发现的服务:</Text>
+          <Text style={[styles.label, { color: theme.colors.primary }]}>{t('settings.discovered')}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {discoveredServices.map((service, index) => (
               <Chip
@@ -240,10 +241,10 @@ export default function SettingsScreen({ navigation }: any) {
       )}
       
       {/* Manual Configuration Section */}
-      <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>手动配置</Text>
-      <Text style={[styles.label, { color: theme.colors.primary }]}>主服务器 URL</Text>
+      <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>{t('settings.manualConfig')}</Text>
+      <Text style={[styles.label, { color: theme.colors.primary }]}>{t('settings.primaryUrl')}</Text>
       <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
-        完整服务器地址（自动发现后会自动填入）
+        {t('settings.primaryHint')}
       </Text>
       <TextInput
         mode="outlined"
@@ -263,13 +264,13 @@ export default function SettingsScreen({ navigation }: any) {
           onPress={handleSwap} 
           icon="swap-vertical" 
         >
-          交换主备地址
+          {t('settings.swap')}
         </Button>
       </View>
       
-      <Text style={[styles.label, { color: theme.colors.primary }]}>备用服务器 URL（可选）</Text>
+      <Text style={[styles.label, { color: theme.colors.primary }]}>{t('settings.backupUrl')}</Text>
       <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
-        当主服务器无法连接时使用的备用地址。
+        {t('settings.backupHint')}
       </Text>
       <TextInput
         mode="outlined"
@@ -284,20 +285,20 @@ export default function SettingsScreen({ navigation }: any) {
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Button mode="outlined" onPress={() => testConnection(url)} style={[styles.button, { flex: 1, marginRight: 8 }]}>
-          测试主服务器
+          {t('settings.testPrimary')}
         </Button>
         <Button mode="outlined" onPress={() => testConnection(backup)} style={[styles.button, { flex: 1, marginLeft: 8 }]}>
-          测试备用服务器
+          {t('settings.testBackup')}
         </Button>
       </View>
 
       <Button mode="contained" onPress={save} style={styles.button}>
-        保存设置
+        {t('settings.saveSettings')}
       </Button>
       <View style={{ marginTop: 24 }}>
-        <Text style={[styles.label, { color: theme.colors.primary }]}>深色模式</Text>
+        <Text style={[styles.label, { color: theme.colors.primary }]}>{t('settings.darkMode')}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant, marginBottom: 0 }]}>使用深色界面减轻眼睛疲劳</Text>
+          <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant, marginBottom: 0 }]}>{t('settings.darkModeHint')}</Text>
           <Switch value={isDark} onValueChange={toggleDark} />
         </View>
       </View>
@@ -320,8 +321,8 @@ export default function SettingsScreen({ navigation }: any) {
 
       
       <View style={{ marginTop: 24 }}>
-        <Text style={[styles.label, { color: theme.colors.primary }]}>位置诊断</Text>
-        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>调试 HyperOS/MIUI 设备上的定位问题</Text>
+        <Text style={[styles.label, { color: theme.colors.primary }]}>{t('settings.locationDiag')}</Text>
+        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>{t('settings.locationDiagHint')}</Text>
         <Button 
           mode="outlined" 
           onPress={() => navigation.navigate('LocationDiagnostic')} 
@@ -329,42 +330,42 @@ export default function SettingsScreen({ navigation }: any) {
           textColor="#f59e0b"
           style={{ marginTop: 8 }}
         >
-          打开位置诊断
+          {t('settings.openLocationDiag')}
         </Button>
       </View>
 
       {/* Map Settings */}
       <View style={{ marginTop: 24 }}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>地图设置</Text>
-        <Text style={[styles.label, { color: theme.colors.primary }]}>地图服务商</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>{t('settings.mapSettings')}</Text>
+        <Text style={[styles.label, { color: theme.colors.primary }]}>{t('settings.mapProvider')}</Text>
         <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
-          选择地图底图和地理编码服务
+          {t('settings.mapProviderHint')}
         </Text>
         <SegmentedButtons
           value={localMapProvider}
           onValueChange={setLocalMapProvider as any}
           buttons={[
-            { value: 'osm', label: '开源地图', icon: 'map-outline' },
-            { value: 'amap', label: '高德地图', icon: 'map' },
+            { value: 'osm', label: t('settings.osm'), icon: 'map-outline' },
+            { value: 'amap', label: t('settings.amap'), icon: 'map' },
           ]}
           style={{ marginBottom: 12 }}
         />
         {localMapProvider === 'osm' && (
           <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
-            使用 CartoDB 底图，无需 API Key，全球覆盖
+            {t('settings.osmHint')}
           </Text>
         )}
         {localMapProvider === 'amap' && (
           <View>
-            <Text style={[styles.label, { color: theme.colors.primary }]}>高德 Web 服务 API Key</Text>
+            <Text style={[styles.label, { color: theme.colors.primary }]}>{t('settings.amapKeyLabel')}</Text>
             <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
-              在高德开放平台创建「Web 服务」应用获取 Key，用于地图底图和地址搜索
+              {t('settings.amapKeyHint')}
             </Text>
             <TextInput
               mode="outlined"
               value={localAmapKey}
               onChangeText={setLocalAmapKey}
-              placeholder="请输入高德 Web 服务 Key（32位）"
+              placeholder={t('settings.amapKeyPlaceholder')}
               autoCapitalize="none"
               autoCorrect={false}
               activeOutlineColor={theme.colors.primary}
@@ -378,14 +379,14 @@ export default function SettingsScreen({ navigation }: any) {
           buttonColor="#3E6B64"
           style={{ marginTop: 4 }}
         >
-          保存地图设置
+          {t('settings.saveMap')}
         </Button>
       </View>
       
       {/* AI 助手 */}
       <View style={{ marginTop: 24 }}>
-        <Text style={[styles.label, { color: theme.colors.primary }]}>AI 助手</Text>
-        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>配置 AI 助手 API Key 和模型，支持 OpenAI / DeepSeek / 本地 Ollama</Text>
+        <Text style={[styles.label, { color: theme.colors.primary }]}>{t('settings.aiAssistant')}</Text>
+        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>{t('settings.aiHint')}</Text>
         <Button
           mode="outlined"
           onPress={() => navigation.navigate('AISettings')}
@@ -393,14 +394,14 @@ export default function SettingsScreen({ navigation }: any) {
           textColor={theme.colors.primary}
           style={{ marginTop: 8 }}
         >
-          AI 助手设置
+          {t('settings.aiSettings')}
         </Button>
       </View>
 
       {/* 设备配对 */}
       <View style={{ marginTop: 24 }}>
-        <Text style={[styles.label, { color: theme.colors.primary }]}>设备配对</Text>
-        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>连接到服务器（远程模式需要配对码）</Text>
+        <Text style={[styles.label, { color: theme.colors.primary }]}>{t('settings.pairing')}</Text>
+        <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>{t('settings.pairingHint')}</Text>
         <Button
           mode="outlined"
           onPress={() => navigation.navigate('Pairing')}
@@ -408,7 +409,7 @@ export default function SettingsScreen({ navigation }: any) {
           textColor={theme.colors.primary}
           style={{ marginTop: 8 }}
         >
-          设备配对
+          {t('settings.pairing')}
         </Button>
       </View>
 

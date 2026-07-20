@@ -1,9 +1,12 @@
 /**
  * Roll Service
- * 
+ *
  * Business logic and database operations for rolls.
  * Separates concerns from the controller layer (routes/rolls.js).
- * 
+ *
+ * Schema (display_seq, start_date) is owned by schema-migration.js; this
+ * module no longer performs runtime ensure-column checks.
+ *
  * @module server/services/roll-service
  */
 
@@ -13,70 +16,44 @@ const { runAsync, allAsync, getAsync } = require('../utils/db-helpers');
 // DISPLAY SEQUENCE MANAGEMENT
 // ============================================================================
 
-async function ensureDisplaySeqColumn() {
-  // Check if column exists using PRAGMA
-  const cols = await allAsync(`PRAGMA table_info(rolls)`);
-  const hasCol = cols.some(c => c.name === 'display_seq');
-  
-  if (!hasCol) {
-    try {
-      await runAsync(`ALTER TABLE rolls ADD COLUMN display_seq INTEGER NOT NULL DEFAULT 0`);
-      console.log('[MIGRATION] display_seq column created via ALTER TABLE');
-    } catch (e) {
-      console.error('[MIGRATION] Failed to add display_seq column:', e.message);
-      throw e;
-    }
-  }
-}
-
-// Ensure the `start_date` column exists on rolls (added by a migration that is
-// currently disabled — without this the server crashes on a fresh database at
-// first run). Idempotent; backfills from date_loaded when added.
-async function ensureStartDateColumn() {
-  const cols = await allAsync(`PRAGMA table_info(rolls)`);
-  if (cols.some(c => c.name === 'start_date')) return;
-  try {
-    await runAsync(`ALTER TABLE rolls ADD COLUMN start_date DATE`);
-    await runAsync(`UPDATE rolls SET start_date = date_loaded WHERE start_date IS NULL AND date_loaded IS NOT NULL`);
-    console.log('[MIGRATION] start_date column created via ALTER TABLE');
-  } catch (e) {
-    console.error('[MIGRATION] Failed to add start_date column:', e.message);
-    throw e;
-  }
-}
-
+/**
+ * Recompute rolls.display_seq in deterministic chronological order using a
+ * single window-function UPDATE (SQLite ≥ 3.25; bundled is 3.44.2).
+ *
+ * Order: start_date ASC (NULLs last) → created_at ASC → id ASC.
+ * Wrapped in BEGIN/COMMIT so a partial update is impossible.
+ *
+ * @returns {Promise<{count: number}>}
+ */
 async function recomputeRollSequence() {
-  await ensureDisplaySeqColumn();
-  await ensureStartDateColumn();
-  
-  const rows = await allAsync(`
-    SELECT id
-    FROM rolls
-    ORDER BY 
-      CASE WHEN start_date IS NULL THEN 1 ELSE 0 END,
-      start_date ASC,
-      CASE WHEN created_at IS NULL THEN 1 ELSE 0 END,
-      created_at ASC,
-      id ASC
-  `);
-
-  if (rows.length === 0) return { count: 0 };
+  const { count } = await getAsync('SELECT COUNT(*) AS count FROM rolls');
+  if (count === 0) return { count: 0 };
 
   await runAsync('BEGIN');
   try {
-    let seq = 1;
-    for (const r of rows) {
-      await runAsync(`UPDATE rolls SET display_seq = ? WHERE id = ?`, [seq, r.id]);
-      seq++;
-    }
+    await runAsync(`
+      UPDATE rolls SET display_seq = (
+        SELECT new_seq FROM (
+          SELECT id, ROW_NUMBER() OVER (
+            ORDER BY
+              CASE WHEN start_date IS NULL THEN 1 ELSE 0 END,
+              start_date ASC,
+              CASE WHEN created_at IS NULL THEN 1 ELSE 0 END,
+              created_at ASC,
+              id ASC
+          ) AS new_seq
+          FROM rolls
+        ) s WHERE s.id = rolls.id
+      )
+    `);
     await runAsync('COMMIT');
-    console.log(`[MIGRATION] Recomputed display_seq for ${rows.length} rolls`);
+    console.log(`[ROLL] Recomputed display_seq for ${count} rolls`);
   } catch (e) {
-    try { await runAsync('ROLLBACK'); } catch(_) {}
+    try { await runAsync('ROLLBACK'); } catch (_) { /* swallow secondary error */ }
     throw e;
   }
 
-  return { count: rows.length };
+  return { count };
 }
 
 // ============================================================================
@@ -626,8 +603,6 @@ async function setRollCover(rollId, { photoId, filename }) {
 module.exports = {
   // Display sequence
   recomputeRollSequence,
-  ensureDisplaySeqColumn,
-  ensureStartDateColumn,
   
   // CRUD operations
   listRolls,

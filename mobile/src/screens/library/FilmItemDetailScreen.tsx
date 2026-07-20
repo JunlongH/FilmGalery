@@ -9,18 +9,11 @@ import { parseISODate, toISODateString } from '../../utils/date';
 import { getFilmItem, updateFilmItem, deleteFilmItem } from '../../api/filmItems';
 import { FILM_ITEM_STATUSES } from '../../constants/filmItemStatus';
 import { spacing } from '../../theme';
-
-const FILM_ITEM_STATUS_LABELS_ZH: Record<string, string> = {
-  in_stock: '库存中',
-  loaded: '已装卷',
-  shot: '已拍完',
-  sent_to_lab: '已送冲',
-  developed: '已冲洗',
-  archived: '已归档',
-};
+import { useT } from '../../i18n';
 
 export default function FilmItemDetailScreen({ route, navigation }: any) {
   const theme = useTheme();
+  const t = useT();
   const { itemId, filmName } = route.params;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,7 +42,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
   );
 
   useEffect(() => {
-    navigation.setOptions({ title: filmName || `胶卷 #${itemId}` });
+    navigation.setOptions({ title: filmName || t('home.rollFallback', { id: itemId }) });
   }, [navigation, filmName, itemId]);
 
   useEffect(() => {
@@ -89,7 +82,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
         });
       } catch (err) {
         console.log('Failed to load film item', err);
-        if (mounted) setError('加载胶卷信息失败');
+        if (mounted) setError(t('item.loadFailed'));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -136,7 +129,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       setItem(updated.item || updated);
     } catch (err) {
       console.log('Failed to update film item', err);
-      setError('保存失败');
+      setError(t('item.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -148,7 +141,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       navigation.goBack();
     } catch (err) {
       console.log('Delete failed', err);
-      setError('删除失败');
+      setError(t('item.deleteFailed'));
     }
   };
 
@@ -163,7 +156,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
   if (!item) {
     return (
       <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
-        <Text>未找到该胶卷。</Text>
+        <Text>{t('item.notFound')}</Text>
       </View>
     );
   }
@@ -176,15 +169,15 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text variant="titleMedium" numberOfLines={1}>
-            {filmName || '胶卷'} (#{item.id})
+            {filmName || t('title.filmRolls')} (#{item.id})
           </Text>
           <Text variant="bodySmall" numberOfLines={1}>
-            {(FILM_ITEM_STATUS_LABELS_ZH as any)[item.status] || item.status}
-            {item.expiry_date ? ` • 有效期 ${item.expiry_date}` : ''}
+            {t(('status.' + item.status) as any)}
+            {item.expiry_date ? ` • ${t('inventory.expiry', { date: item.expiry_date })}` : ''}
           </Text>
         </View>
         <Button mode="outlined" onPress={() => setEditMode(v => !v)}>
-          {editMode ? '完成' : '编辑'}
+          {editMode ? t('item.done') : t('item.edit')}
         </Button>
       </View>
 
@@ -193,7 +186,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
         {item.status === 'in_stock' && (
           <View style={styles.actionColumn}>
             <DatePickerField 
-              label="装卷日期" 
+              label={t('item.loadDate')} 
               value={parseISODate(actionDate) || new Date()} 
               onChange={(d) => setActionDate(toISODateString(d))} 
             />
@@ -204,8 +197,8 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
                 setLoadCameraId(id);
                 setLoadCameraName(cam ? `${cam.brand} ${cam.model}` : '');
               }}
-              label="相机（可选）"
-              placeholder="选择相机..."
+              label={t('item.cameraOptional')}
+              placeholder={t('item.selectCamera')}
             />
             <Button
               mode="contained"
@@ -223,12 +216,12 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
                   setItem(updated.item || updated);
                 } finally { setSaving(false); }
               }}
-            >装卷</Button>
+            >{t('item.load')}</Button>
           </View>
         )}
         {item.status === 'loaded' && (
           <View style={styles.actionRow}>
-            <DatePickerField label="退卷日期" value={parseISODate(actionDate) || new Date()} onChange={(d) => setActionDate(toISODateString(d))} />
+            <DatePickerField label={t('item.unloadDate')} value={parseISODate(actionDate) || new Date()} onChange={(d) => setActionDate(toISODateString(d))} />
             <Button
               mode="contained"
               onPress={async () => {
@@ -239,12 +232,12 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
                   setItem(updated.item || updated);
                 } finally { setSaving(false); }
               }}
-            >退卷</Button>
+            >{t('item.unload')}</Button>
           </View>
         )}
         {item.status === 'shot' && (
           <View style={styles.actionRow}>
-            <DatePickerField label="送冲日期" value={parseISODate(actionDate) || new Date()} onChange={(d) => setActionDate(toISODateString(d))} />
+            <DatePickerField label={t('item.sendToLabDate')} value={parseISODate(actionDate) || new Date()} onChange={(d) => setActionDate(toISODateString(d))} />
             <Button
               mode="contained"
               onPress={async () => {
@@ -255,7 +248,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
                   setItem(updated.item || updated);
                 } finally { setSaving(false); }
               }}
-            >送冲</Button>
+            >{t('item.sendToLab')}</Button>
           </View>
         )}
         {/* Note: exclude create-roll for sent_to_lab on mobile */}
@@ -263,9 +256,9 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="状态"
+        label={t('item.status')}
         mode="outlined"
-        value={(FILM_ITEM_STATUS_LABELS_ZH as any)[form.status] || form.status}
+        value={t(('status.' + form.status) as any)}
         right={<TextInput.Icon icon="chevron-down" />}
         onPressIn={() => {
           // Simple status cycle for now; can be replaced with proper picker
@@ -279,7 +272,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="标签"
+        label={t('item.label')}
         mode="outlined"
         value={form.label}
         onChangeText={v => updateField('label', v)}
@@ -289,12 +282,12 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       {/* Purchase Info Section */}
       {editMode && (
       <Text style={{ marginTop: spacing.md, marginBottom: spacing.sm }} variant="titleSmall">
-        购买信息
+        {t('item.purchaseInfo')}
       </Text>)}
 
       {editMode && (
       <TextInput
-        label="购买价格"
+        label={t('item.purchasePrice')}
         mode="outlined"
         keyboardType="numeric"
         value={form.purchase_price}
@@ -304,7 +297,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="分摊运费"
+        label={t('item.shippingShare')}
         mode="outlined"
         keyboardType="numeric"
         value={form.purchase_shipping_share}
@@ -315,7 +308,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       {editMode && (
       <View style={styles.input}>
         <DatePickerField
-          label="购买日期"
+          label={t('item.purchaseDate')}
           value={parseISODate(form.purchase_date) || new Date()}
           onChange={(d) => updateField('purchase_date', toISODateString(d))}
         />
@@ -324,7 +317,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       {editMode && (
       <View style={styles.input}>
         <DatePickerField
-          label="过期日期"
+          label={t('item.expiryDate')}
           value={parseISODate(form.expiry_date) || new Date()}
           onChange={(d) => updateField('expiry_date', toISODateString(d))}
         />
@@ -332,7 +325,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="批次号"
+        label={t('item.batchNumber')}
         mode="outlined"
         value={form.batch_number}
         onChangeText={v => updateField('batch_number', v)}
@@ -341,7 +334,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="订单号"
+        label={t('item.orderId')}
         mode="outlined"
         value={form.purchase_order_id}
         onChangeText={v => updateField('purchase_order_id', v)}
@@ -350,7 +343,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="购买渠道"
+        label={t('item.purchaseChannel')}
         mode="outlined"
         value={form.purchase_channel}
         onChangeText={v => updateField('purchase_channel', v)}
@@ -359,7 +352,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="商家"
+        label={t('item.vendor')}
         mode="outlined"
         value={form.purchase_vendor}
         onChangeText={v => updateField('purchase_vendor', v)}
@@ -368,7 +361,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="购买备注"
+        label={t('item.purchaseNote')}
         mode="outlined"
         multiline
         value={form.purchase_note}
@@ -379,13 +372,13 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       {/* Usage Info Section */}
       {editMode && (
       <Text style={{ marginTop: spacing.md, marginBottom: spacing.sm }} variant="titleSmall">
-        使用信息
+        {t('item.usageInfo')}
       </Text>)}
 
       {editMode && (
       <View style={styles.input}>
         <DatePickerField
-          label="装卷日期"
+          label={t('item.loadDate')}
           value={parseISODate(form.loaded_date) || new Date()}
           onChange={(d) => updateField('loaded_date', toISODateString(d))}
         />
@@ -394,7 +387,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       {editMode && (
       <View style={styles.input}>
         <DatePickerField
-          label="拍完日期"
+          label={t('item.finishedDate')}
           value={parseISODate(form.finished_date) || new Date()}
           onChange={(d) => updateField('finished_date', toISODateString(d))}
         />
@@ -403,12 +396,12 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       {/* Development Section */}
       {editMode && (
       <Text style={{ marginTop: spacing.md, marginBottom: spacing.sm }} variant="titleSmall">
-        冲洗信息
+        {t('item.developInfo')}
       </Text>)}
 
       {editMode && (
       <TextInput
-        label="冲印店"
+        label={t('item.lab')}
         mode="outlined"
         value={form.develop_lab}
         onChangeText={v => updateField('develop_lab', v)}
@@ -417,7 +410,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="冲洗工艺"
+        label={t('item.process')}
         mode="outlined"
         value={form.develop_process}
         onChangeText={v => updateField('develop_process', v)}
@@ -426,7 +419,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="冲洗价格"
+        label={t('item.developPrice')}
         mode="outlined"
         keyboardType="numeric"
         value={form.develop_price}
@@ -436,7 +429,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="冲洗运费"
+        label={t('item.developShipping')}
         mode="outlined"
         keyboardType="numeric"
         value={form.develop_shipping}
@@ -446,7 +439,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="冲洗渠道"
+        label={t('item.developChannel')}
         mode="outlined"
         value={form.develop_channel}
         onChangeText={v => updateField('develop_channel', v)}
@@ -456,7 +449,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       {editMode && (
       <View style={styles.input}>
         <DatePickerField
-          label="送冲日期"
+          label={t('item.sendToLabDate')}
           value={parseISODate(form.sent_to_lab_at) || new Date()}
           onChange={(d) => updateField('sent_to_lab_at', toISODateString(d))}
         />
@@ -465,7 +458,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       {editMode && (
       <View style={styles.input}>
         <DatePickerField
-          label="冲洗日期"
+          label={t('item.developDate')}
           value={parseISODate(form.develop_date) || new Date()}
           onChange={(d) => updateField('develop_date', toISODateString(d))}
         />
@@ -474,7 +467,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       {editMode && (
       <View style={styles.input}>
         <DatePickerField
-          label="扫描日期"
+          label={t('item.scanDate')}
           value={parseISODate(form.scan_date) || new Date()}
           onChange={(d) => updateField('scan_date', toISODateString(d))}
         />
@@ -482,7 +475,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
 
       {editMode && (
       <TextInput
-        label="冲洗备注"
+        label={t('item.developNote')}
         mode="outlined"
         multiline
         value={form.develop_note}
@@ -493,7 +486,7 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       {editMode && (
       <View style={styles.buttonRow}>
         <Button mode="contained" onPress={onSave} loading={saving} disabled={saving}>
-          保存
+          {t('common.save')}
         </Button>
       </View>)}
 
@@ -501,14 +494,14 @@ export default function FilmItemDetailScreen({ route, navigation }: any) {
       {item.status === 'loaded' && (
         <View style={[styles.buttonRow, { marginTop: spacing.sm }]}> 
           <Button mode="outlined" onPress={() => navigation.navigate('ShotLog', { itemId, filmName })}>
-            拍摄记录
+            {t('item.shotLog')}
           </Button>
         </View>
       )}
 
       <View style={[styles.buttonRow, { marginTop: spacing.sm }]}>
         <Button mode="text" textColor={theme.colors.error} onPress={onDelete}>
-          删除（软删除）
+          {t('item.softDelete')}
         </Button>
       </View>
     </ScrollView>

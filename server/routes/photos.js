@@ -1,6 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
+const fsPromises = require('fs').promises;
+
+// Promise-based existence check (replaces fs.existsSync — idempotent under
+// async, no event-loop blocking). Returns false on ENOENT, propagates other
+// errors. Used on hot request paths in photos.js where blocking sync I/O
+// would stall concurrent renders.
+async function pathExists(p) {
+  try { await fsPromises.access(p); return true; }
+  catch (e) { if (e.code === 'ENOENT') return false; throw e; }
+}
 const path = require('path');
 const sharp = require('sharp');
 sharp.cache(false);
@@ -12,12 +22,13 @@ const { uploadDefault } = require('../config/multer');
 const { moveFileSync } = require('../utils/file-helpers');
 const PreparedStmt = require('../utils/prepared-statements');
 const { generatePositiveThumb, cleanupOldThumb } = require('../services/thumb-service');
+const renderPool = require('../services/render-worker-pool');
 
 // Film Curve support
 const { applyFilmCurve, FILM_CURVE_PROFILES } = require('../../packages/shared/filmLabCurve');
 
 // 使用统一渲染核心
-const { RenderCore, getEffectiveInverted } = require('../../packages/shared');
+const { getEffectiveInverted } = require('../../packages/shared');
 
 // 使用统一源路径解析器
 const { getStrictSourcePath, SOURCE_TYPE } = require('../../packages/shared/sourcePathResolver');
@@ -87,7 +98,7 @@ function buildCurveLUT(points) {
 }
 
 // Get all photos with optional filtering
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
   const { camera, lens, photographer, location_id, film, year, month, ym, q, favorite } = req.query;
 
   const toArray = (v) => {
@@ -124,8 +135,9 @@ router.get('/', async (req, res) => {
   const yms = toArray(ym);
   const films = toArray(film);
 
-  // Check if locations table exists
-  const locationsTableExists = await getAsync("SELECT name FROM sqlite_master WHERE type='table' AND name='locations'", []);
+  try {
+    // Check if locations table exists
+    const locationsTableExists = await getAsync("SELECT name FROM sqlite_master WHERE type='table' AND name='locations'", []);
 
   let sql = locationsTableExists ? `
     SELECT p.*, r.title as roll_title, l.city_name, l.country_name, COALESCE(f.name, r.film_type) AS film_name,
@@ -279,26 +291,25 @@ router.get('/', async (req, res) => {
 
   sql += ` ORDER BY p.date_taken DESC, p.id DESC`;
 
-  try {
-    const rows = await allAsync(sql, params);
-    // Normalize paths: prefer positive_rel_path when present
-    const normalized = (rows || []).map(r => {
-      const fullPath = r.positive_rel_path || r.full_rel_path || null;
-      const thumbPath = r.positive_thumb_rel_path || r.thumb_rel_path || null;
-      return Object.assign({}, r, {
-        full_rel_path: fullPath,
-        thumb_rel_path: thumbPath,
-      });
+  const rows = await allAsync(sql, params);
+  // Normalize paths: prefer positive_rel_path when present
+  const normalized = (rows || []).map(r => {
+    const fullPath = r.positive_rel_path || r.full_rel_path || null;
+    const thumbPath = r.positive_thumb_rel_path || r.thumb_rel_path || null;
+    return Object.assign({}, r, {
+      full_rel_path: fullPath,
+      thumb_rel_path: thumbPath,
     });
-    const withTags = await attachTagsToPhotos(normalized);
-    res.json(withTags);
+  });
+  const withTags = await attachTagsToPhotos(normalized);
+  res.json(withTags);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // Get random photos for hero section
-router.get('/random', async (req, res) => {
+router.get('/random', async (req, res, next) => {
   const limit = parseInt(req.query.limit) || 10;
   const sql = `
     SELECT p.*, 
@@ -328,12 +339,12 @@ router.get('/random', async (req, res) => {
     const rows = await allAsync(sql, [limit]);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // Get single photo by ID
-router.get('/single/:id', async (req, res) => {
+router.get('/single/:id', async (req, res, next) => {
   const { id } = req.params;
   console.log('[GET] /api/photos/single/' + id);
   try {
@@ -351,13 +362,12 @@ router.get('/single/:id', async (req, res) => {
     const withTags = await attachTagsToPhotos([photo]);
     res.json(withTags[0]);
   } catch (err) {
-    console.error('[GET] Photo by ID error:', err.message);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // Get liked photos
-router.get('/favorites', async (req, res) => {
+router.get('/favorites', async (req, res, next) => {
   console.log('[GET] /api/photos/favorites');
   const sql = `
     SELECT p.*, COALESCE(f.name, r.film_type) AS film_name, r.title AS roll_title
@@ -373,13 +383,12 @@ router.get('/favorites', async (req, res) => {
     const withTags = await attachTagsToPhotos(rows);
     res.json(withTags);
   } catch (err) {
-    console.error('[GET] Favorites error:', err.message);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // Get negative source photos (original scanned negatives)
-router.get('/negatives', async (req, res) => {
+router.get('/negatives', async (req, res, next) => {
   console.log('[GET] /api/photos/negatives');
   const sql = `
     SELECT p.*, COALESCE(f.name, r.film_type) AS film_name, r.title AS roll_title
@@ -394,13 +403,12 @@ router.get('/negatives', async (req, res) => {
     const withTags = await attachTagsToPhotos(rows);
     res.json(withTags);
   } catch (err) {
-    console.error('[GET] Negatives error:', err.message);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // update photo (adds tags support)
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req, res, next) => {
   const id = req.params.id;
   const { frame_number, caption, taken_at, rating, tags, date_taken, time_taken, location_id, detail_location, latitude, longitude, altitude, location_name, country, city, camera, lens, photographer, aperture, shutter_speed, iso, focal_length, camera_equip_id, lens_equip_id, flash_equip_id, scanner_equip_id, scan_resolution, scan_software, scan_lab, scan_date, scan_cost, scan_notes } = req.body;
   console.log(`[PUT] Update photo ${id}`, req.body);
@@ -491,12 +499,12 @@ router.put('/:id', async (req, res) => {
   } catch (err) {
     console.error('[PUT] Update photo error', err.message);
     console.error('[PUT] Stack trace:', err.stack);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // Update positive image from negative (FilmLab save)
-router.put('/:id/update-positive', uploadDefault.single('image'), async (req, res) => {
+router.put('/:id/update-positive', uploadDefault.single('image'), async (req, res, next) => {
   const id = req.params.id;
   if (!req.file) return res.status(400).json({ error: 'image file required' });
 
@@ -511,7 +519,7 @@ router.put('/:id/update-positive', uploadDefault.single('image'), async (req, re
     
     // Ensure full directory exists
     const fullDir = path.join(uploadsDir, 'rolls', folderName, 'full');
-    if (!fs.existsSync(fullDir)) fs.mkdirSync(fullDir, { recursive: true });
+    if (!(await pathExists(fullDir))) (await fsPromises.mkdir(fullDir, { recursive: true }));
 
     // Stable filename: rollID_frame.jpg
     const newFileName = `${rollId}_${frameNum}.jpg`;
@@ -524,21 +532,21 @@ router.put('/:id/update-positive', uploadDefault.single('image'), async (req, re
         moveFileSync(req.file.path, newFullPath);
     } catch (moveErr) {
         console.error('[UPDATE-POSITIVE] Move failed:', moveErr);
-        return res.status(500).json({ error: 'Failed to save file to disk: ' + moveErr.message });
+        return next(moveErr);
     }
 
     // Try to delete the old positive file if it existed and is different
     if (row.positive_rel_path && row.positive_rel_path !== newFullRelPath) {
         try {
             const oldFullPath = path.join(uploadsDir, row.positive_rel_path);
-            if (fs.existsSync(oldFullPath)) fs.unlinkSync(oldFullPath);
+            if ((await pathExists(oldFullPath))) (await fsPromises.unlink(oldFullPath));
         } catch (e) {
             console.warn('[UPDATE-POSITIVE] Could not delete old positive file:', e.message);
         }
     } else if (row.full_rel_path && row.full_rel_path !== newFullRelPath) {
         try {
             const oldFullPath = path.join(uploadsDir, row.full_rel_path);
-            if (fs.existsSync(oldFullPath)) fs.unlinkSync(oldFullPath);
+            if ((await pathExists(oldFullPath))) (await fsPromises.unlink(oldFullPath));
         } catch (e) {
             console.warn('[UPDATE-POSITIVE] Could not delete old full file:', e.message);
         }
@@ -567,19 +575,19 @@ router.put('/:id/update-positive', uploadDefault.single('image'), async (req, re
         await runAsync(sql, params);
     } catch (dbErr) {
         console.error('[UPDATE-POSITIVE] DB update failed:', dbErr);
-        return res.status(500).json({ error: 'Failed to update database: ' + dbErr.message });
+        return next(dbErr);
     }
 
     res.json({ ok: true, newPath: newFullRelPath, thumbPath: relThumb });
   } catch (err) {
     console.error('[UPDATE-POSITIVE] General error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // Ingest a positive JPEG (e.g., from GPU export) into roll storage and update DB
 // POST /api/photos/:id/ingest-positive  (multipart form field 'image')
-router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, res) => {
+router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, res, next) => {
   const id = req.params.id;
   console.log('[INGEST-POSITIVE] Request for photo ID:', id);
   console.log('[INGEST-POSITIVE] File received:', req.file ? 'yes' : 'no');
@@ -614,13 +622,13 @@ router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, r
     
     console.log('[INGEST-POSITIVE] Target directories:', { fullDir, thumbDir });
     
-    if (!fs.existsSync(fullDir)) {
+    if (!(await pathExists(fullDir))) {
       console.log('[INGEST-POSITIVE] Creating fullDir:', fullDir);
-      fs.mkdirSync(fullDir, { recursive: true });
+      (await fsPromises.mkdir(fullDir, { recursive: true }));
     }
-    if (!fs.existsSync(thumbDir)) {
+    if (!(await pathExists(thumbDir))) {
       console.log('[INGEST-POSITIVE] Creating thumbDir:', thumbDir);
-      fs.mkdirSync(thumbDir, { recursive: true });
+      (await fsPromises.mkdir(thumbDir, { recursive: true }));
     }
 
     // Use stable filename consistent with HQ Export (export-positive)
@@ -635,9 +643,9 @@ router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, r
     if (row.positive_rel_path && row.positive_rel_path !== newFullRelPath) {
       try {
         const oldPosAbs = path.join(uploadsDir, row.positive_rel_path);
-        if (fs.existsSync(oldPosAbs)) {
+        if ((await pathExists(oldPosAbs))) {
           console.log('[INGEST-POSITIVE] Removing old positive:', oldPosAbs);
-          fs.unlinkSync(oldPosAbs);
+          (await fsPromises.unlink(oldPosAbs));
         }
       } catch (e) { 
         console.warn('[INGEST-POSITIVE] Cleanup old positive failed', e.message); 
@@ -646,29 +654,28 @@ router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, r
     
     try {
       // Ensure target does not exist to avoid Windows file locking issues
-      if (fs.existsSync(newFullPath)) {
+      if ((await pathExists(newFullPath))) {
         console.log('[INGEST-POSITIVE] Target exists, removing:', newFullPath);
-        try { fs.unlinkSync(newFullPath); } catch(e) { console.warn('[INGEST-POSITIVE] Unlink target failed', e.message); }
+        try { (await fsPromises.unlink(newFullPath)); } catch(e) { console.warn('[INGEST-POSITIVE] Unlink target failed', e.message); }
       }
       
       // Direct overwrite
       moveFileSync(req.file.path, newFullPath);
       console.log('[INGEST-POSITIVE] File moved successfully');
     } catch (e) {
-      console.error('[INGEST-POSITIVE] Failed to move file:', e.message);
-      return res.status(500).json({ error: 'Failed to save file: ' + e.message });
+      return next(e);
     }
 
     // Verify file exists and has content
-    if (!fs.existsSync(newFullPath)) {
+    if (!(await pathExists(newFullPath))) {
       console.error('[INGEST-POSITIVE] File does not exist after move:', newFullPath);
-      return res.status(500).json({ error: 'File was not saved correctly' });
+      throw new Error('File was not saved correctly: missing after move');
     }
-    const stats = fs.statSync(newFullPath);
+    const stats = (await fsPromises.stat(newFullPath));
     console.log('[INGEST-POSITIVE] File verified at:', newFullPath, 'size:', stats.size);
     if (stats.size === 0) {
       console.error('[INGEST-POSITIVE] File size is 0!');
-      return res.status(500).json({ error: 'File was saved but has 0 size' });
+      throw new Error('File was saved but has 0 size');
     }
 
     // Generate/update positive thumbnail (consistent naming with HQ Export)
@@ -677,12 +684,12 @@ router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, r
     console.log('[INGEST-POSITIVE] Generating thumbnail:', thumbPath);
     
     try {
-      if (fs.existsSync(thumbPath)) { 
+      if ((await pathExists(thumbPath))) { 
         console.log('[INGEST-POSITIVE] Removing old thumbnail');
-        try { fs.unlinkSync(thumbPath); } catch(_){} 
+        try { (await fsPromises.unlink(thumbPath)); } catch(_){} 
       }
       // Read to buffer to avoid file lock
-      const fileBuf = fs.readFileSync(newFullPath);
+      const fileBuf = (await fsPromises.readFile(newFullPath));
       await sharp(fileBuf).resize({ width: 240, height: 240, fit: 'inside' }).jpeg({ quality: 40 }).toFile(thumbPath);
       console.log('[INGEST-POSITIVE] Thumbnail generated successfully');
     } catch (e) {
@@ -700,9 +707,9 @@ router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, r
     if (row.positive_thumb_rel_path && row.positive_thumb_rel_path !== relThumb) {
       try {
         const oldThumbAbs = path.join(uploadsDir, row.positive_thumb_rel_path);
-        if (fs.existsSync(oldThumbAbs)) {
+        if ((await pathExists(oldThumbAbs))) {
           console.log('[INGEST-POSITIVE] Removing old positive thumbnail:', oldThumbAbs);
-          fs.unlinkSync(oldThumbAbs);
+          (await fsPromises.unlink(oldThumbAbs));
         }
       } catch (e) { console.warn('[INGEST-POSITIVE] Cleanup old thumb failed', e.message); }
     }
@@ -719,7 +726,7 @@ router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, r
     });
   } catch (err) {
     console.error('[INGEST-POSITIVE] error', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
@@ -727,7 +734,7 @@ router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, r
 // POST /api/photos/:id/export-positive
 // Body: { params: { inverted, inversionMode, exposure, contrast, temp, tint, red, green, blue, rotation, orientation } }
 // NOTE: Initial implementation: applies inversion, WB gains, exposure, contrast, rotation. (Curves, tone sliders, LUTs deferred)
-router.post('/:id/export-positive', async (req, res) => {
+router.post('/:id/export-positive', async (req, res, next) => {
   console.log('[POST] /api/photos/:id/export-positive', req.params.id);
   const id = req.params.id;
   const body = req.body || {};
@@ -799,7 +806,7 @@ router.post('/:id/export-positive', async (req, res) => {
     
     console.log(`[EXPORT-POSITIVE] Using sourceType: ${sourceType}, actualType: ${sourceResult.actualType}, source: ${relSource}`);
     let sourceAbs = path.join(uploadsDir, relSource);
-    if (!fs.existsSync(sourceAbs)) {
+    if (!(await pathExists(sourceAbs))) {
       return res.status(404).json({ error: 'Source file missing on disk: ' + relSource });
     }
 
@@ -807,8 +814,8 @@ router.post('/:id/export-positive', async (req, res) => {
     const rollFolder = path.join(uploadsDir, 'rolls', String(row.roll_id));
     const fullDir = path.join(rollFolder, 'full');
     const thumbDir = path.join(rollFolder, 'thumb');
-    if (!fs.existsSync(fullDir)) fs.mkdirSync(fullDir, { recursive: true });
-    if (!fs.existsSync(thumbDir)) fs.mkdirSync(thumbDir, { recursive: true });
+    if (!(await pathExists(fullDir))) (await fsPromises.mkdir(fullDir, { recursive: true }));
+    if (!(await pathExists(thumbDir))) (await fsPromises.mkdir(thumbDir, { recursive: true }));
 
     const frameNumber = row.frame_number || '00';
     const baseName = `${row.roll_id}_${frameNumber}`;
@@ -840,32 +847,6 @@ router.post('/:id/export-positive', async (req, res) => {
     
     // 使用 getEffectiveInverted 计算有效反转状态，正片模式不需要反转
     const effectiveInverted = getEffectiveInverted(sourceType, inverted);
-    
-    // 使用 RenderCore 统一渲染
-    const core = new RenderCore({
-      exposure, contrast,
-      highlights: Number.isFinite(p.highlights) ? p.highlights : 0,
-      shadows: Number.isFinite(p.shadows) ? p.shadows : 0,
-      whites: Number.isFinite(p.whites) ? p.whites : 0,
-      blacks: Number.isFinite(p.blacks) ? p.blacks : 0,
-      curves: p.curves,
-      red: redGain, green: greenGain, blue: blueGain,
-      // 片基校正增益 (Pre-Inversion)
-      baseRed, baseGreen, baseBlue,
-      baseMode, baseDensityR, baseDensityG, baseDensityB,
-      // 密度色阶 (Density Levels)
-      densityLevelsEnabled, densityLevels,
-      temp, tint,
-      lut1: lut1Data,
-      lut2: lut2Data,
-      lut1Intensity: p.lut1Intensity ?? lut1Data?.intensity ?? 1.0,
-      lut2Intensity: p.lut2Intensity ?? lut2Data?.intensity ?? 1.0,
-      inverted: effectiveInverted, inversionMode,
-      filmCurveEnabled, filmCurveProfile,
-      hslParams: p.hslParams || null,
-      splitToning: p.splitToning || null,
-      saturation: Number.isFinite(p.saturation) ? p.saturation : 0
-    });
 
     // ── 全浮点管线：充分利用源数据色深和动态范围 ──
     // Pull raw pixels — sharp 会保留源数据的原始位深（8/16-bit）
@@ -879,110 +860,53 @@ router.post('/:id/export-positive', async (req, res) => {
       console.log(`[EXPORT-POSITIVE] High bit-depth source detected (${data.length} bytes, 16-bit), using float pipeline`);
     }
 
-    // 始终使用 processPixelFloat (全浮点管线) 保证最高精度
-    // 即使源为 8-bit，float 管线也比 int 管线精度更高（1024-entry Float32 LUT vs 256-entry Uint8 LUT）
-    core.prepareLUTs();
+    // Offload the per-pixel Float pipeline to the worker pool (2C.3). Both
+    // 'tiff16' and 'both' wantTiff16; 'jpeg' is JPEG-only. The thumbnail
+    // JPEG is derived from the canonical positive below, so we always
+    // produce jpeg8.
+    const wantTiff16 = format !== 'jpeg';
+    const { jpeg8, tiff16 } = await renderPool.processImage(data, {
+      width, height, channels, is16bit, wantTiff16,
+      params: {
+        exposure, contrast,
+        highlights: Number.isFinite(p.highlights) ? p.highlights : 0,
+        shadows: Number.isFinite(p.shadows) ? p.shadows : 0,
+        whites: Number.isFinite(p.whites) ? p.whites : 0,
+        blacks: Number.isFinite(p.blacks) ? p.blacks : 0,
+        curves: p.curves,
+        red: redGain, green: greenGain, blue: blueGain,
+        baseRed, baseGreen, baseBlue,
+        baseMode, baseDensityR, baseDensityG, baseDensityB,
+        densityLevelsEnabled, densityLevels,
+        temp, tint,
+        lut1: lut1Data,
+        lut2: lut2Data,
+        lut1Intensity: p.lut1Intensity ?? lut1Data?.intensity ?? 1.0,
+        lut2Intensity: p.lut2Intensity ?? lut2Data?.intensity ?? 1.0,
+        inverted: effectiveInverted, inversionMode,
+        filmCurveEnabled, filmCurveProfile,
+        hslParams: p.hslParams || null,
+        splitToning: p.splitToning || null,
+        saturation: Number.isFinite(p.saturation) ? p.saturation : 0,
+      },
+    });
 
-    if (format === 'jpeg' || format === 'both') {
-      // ── JPEG 输出: 全浮点处理 → 最终一步降到 8-bit ──
-      const out = Buffer.allocUnsafe(width * height * 3);
-      if (is16bit) {
-        // 16-bit 输入: 以 Uint16Array 读取，归一化到 0–1
-        const pixels = new Uint16Array(data.buffer, data.byteOffset, data.byteLength / 2);
-        for (let i = 0, j = 0; i < pixels.length; i += channels, j += 3) {
-          const [rF, gF, bF] = core.processPixelFloat(
-            pixels[i] / 65535, pixels[i + 1] / 65535, pixels[i + 2] / 65535
-          );
-          out[j]     = Math.min(255, Math.max(0, Math.round(rF * 255)));
-          out[j + 1] = Math.min(255, Math.max(0, Math.round(gF * 255)));
-          out[j + 2] = Math.min(255, Math.max(0, Math.round(bF * 255)));
-        }
-      } else {
-        // 8-bit 输入: 归一化到 0–1 → float 处理 → 回到 8-bit
-        for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
-          const [rF, gF, bF] = core.processPixelFloat(
-            data[i] / 255, data[i + 1] / 255, data[i + 2] / 255
-          );
-          out[j]     = Math.min(255, Math.max(0, Math.round(rF * 255)));
-          out[j + 1] = Math.min(255, Math.max(0, Math.round(gF * 255)));
-          out[j + 2] = Math.min(255, Math.max(0, Math.round(bF * 255)));
-        }
-      }
-      await sharp(out, { raw: { width, height, channels: 3 } }).jpeg({ quality: 95 }).toFile(destPath);
-    }
+    // JPEG output (always — canonical positive + thumbnail source).
+    await sharp(jpeg8, { raw: { width, height, channels: 3 } }).jpeg({ quality: 95 }).toFile(destPath);
 
-    // Optional: write 16-bit TIFF sidecar — 真正的 16-bit 精度
+    // Optional 16-bit TIFF sidecar.
     let tiffRelPath = null;
-    if (format === 'tiff16' || format === 'both') {
+    if (tiff16) {
       const tiffName = `${baseName}_exp_${timestamp}.tiff`;
       const tiffPath = path.join(fullDir, tiffName);
       try {
-        // ── TIFF16 输出: 全浮点处理 → 真 16-bit 输出 ──
-        const raw16 = Buffer.allocUnsafe(width * height * 3 * 2);
-        let j16 = 0;
-
-        if (is16bit) {
-          // 16-bit 源 → float → 16-bit 输出（保留完整动态范围）
-          const pixels = new Uint16Array(data.buffer, data.byteOffset, data.byteLength / 2);
-          for (let i = 0; i < pixels.length; i += channels) {
-            const [rF, gF, bF] = core.processPixelFloat(
-              pixels[i] / 65535, pixels[i + 1] / 65535, pixels[i + 2] / 65535
-            );
-            const r16 = Math.min(65535, Math.max(0, Math.round(rF * 65535)));
-            const g16 = Math.min(65535, Math.max(0, Math.round(gF * 65535)));
-            const b16 = Math.min(65535, Math.max(0, Math.round(bF * 65535)));
-            raw16[j16++] = r16 & 0xFF; raw16[j16++] = (r16 >> 8) & 0xFF;
-            raw16[j16++] = g16 & 0xFF; raw16[j16++] = (g16 >> 8) & 0xFF;
-            raw16[j16++] = b16 & 0xFF; raw16[j16++] = (b16 >> 8) & 0xFF;
-          }
-        } else {
-          // 8-bit 源 → float → 16-bit 输出（仍然比 bit-doubling 精度高）
-          for (let i = 0; i < data.length; i += channels) {
-            const [rF, gF, bF] = core.processPixelFloat(
-              data[i] / 255, data[i + 1] / 255, data[i + 2] / 255
-            );
-            const r16 = Math.min(65535, Math.max(0, Math.round(rF * 65535)));
-            const g16 = Math.min(65535, Math.max(0, Math.round(gF * 65535)));
-            const b16 = Math.min(65535, Math.max(0, Math.round(bF * 65535)));
-            raw16[j16++] = r16 & 0xFF; raw16[j16++] = (r16 >> 8) & 0xFF;
-            raw16[j16++] = g16 & 0xFF; raw16[j16++] = (g16 >> 8) & 0xFF;
-            raw16[j16++] = b16 & 0xFF; raw16[j16++] = (b16 >> 8) & 0xFF;
-          }
-        }
-
-        await sharp(raw16, { raw: { width, height, channels: 3, depth: 'ushort' } })
+        await sharp(tiff16, { raw: { width, height, channels: 3, depth: 'ushort' } })
           .tiff({ compression: 'lzw', bitdepth: 16 })
           .toFile(tiffPath);
         tiffRelPath = path.join('rolls', String(row.roll_id), 'full', tiffName).replace(/\\/g, '/');
       } catch (tErr) {
         console.error('[EXPORT-POSITIVE] TIFF16 generation failed', tErr.message);
       }
-    }
-
-    // 当 format 仅为 'tiff16' 时，仍需生成 JPEG 正片（用于缩略图和库显示）
-    if (format === 'tiff16') {
-      const out = Buffer.allocUnsafe(width * height * 3);
-      if (is16bit) {
-        const pixels = new Uint16Array(data.buffer, data.byteOffset, data.byteLength / 2);
-        for (let i = 0, j = 0; i < pixels.length; i += channels, j += 3) {
-          const [rF, gF, bF] = core.processPixelFloat(
-            pixels[i] / 65535, pixels[i + 1] / 65535, pixels[i + 2] / 65535
-          );
-          out[j]     = Math.min(255, Math.max(0, Math.round(rF * 255)));
-          out[j + 1] = Math.min(255, Math.max(0, Math.round(gF * 255)));
-          out[j + 2] = Math.min(255, Math.max(0, Math.round(bF * 255)));
-        }
-      } else {
-        for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
-          const [rF, gF, bF] = core.processPixelFloat(
-            data[i] / 255, data[i + 1] / 255, data[i + 2] / 255
-          );
-          out[j]     = Math.min(255, Math.max(0, Math.round(rF * 255)));
-          out[j + 1] = Math.min(255, Math.max(0, Math.round(gF * 255)));
-          out[j + 2] = Math.min(255, Math.max(0, Math.round(bF * 255)));
-        }
-      }
-      await sharp(out, { raw: { width, height, channels: 3 } }).jpeg({ quality: 95 }).toFile(destPath);
     }
 
     // Generate thumbnail (240px inside) with lower quality
@@ -1002,7 +926,7 @@ router.post('/:id/export-positive', async (req, res) => {
     if (row.positive_rel_path && row.positive_rel_path !== relDest) {
       try {
         const oldPosAbs = path.join(uploadsDir, row.positive_rel_path);
-        if (fs.existsSync(oldPosAbs)) fs.unlinkSync(oldPosAbs);
+        if ((await pathExists(oldPosAbs))) (await fsPromises.unlink(oldPosAbs));
       } catch (delErr) {
         console.warn('[EXPORT-POSITIVE] Could not delete previous positive file:', delErr.message);
       }
@@ -1011,7 +935,7 @@ router.post('/:id/export-positive', async (req, res) => {
     if (row.positive_thumb_rel_path && row.positive_thumb_rel_path !== relThumb) {
       try {
         const oldThumbAbs = path.join(uploadsDir, row.positive_thumb_rel_path);
-        if (fs.existsSync(oldThumbAbs)) fs.unlinkSync(oldThumbAbs);
+        if ((await pathExists(oldThumbAbs))) (await fsPromises.unlink(oldThumbAbs));
       } catch (delErr) {
         console.warn('[EXPORT-POSITIVE] Could not delete previous thumbnail file:', delErr.message);
       }
@@ -1026,7 +950,7 @@ router.post('/:id/export-positive', async (req, res) => {
     res.json({ ok: true, photo: updatedPhoto, tiff_rel_path: tiffRelPath });
   } catch (err) {
     console.error('[EXPORT-POSITIVE] Error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
@@ -1034,7 +958,7 @@ router.post('/:id/export-positive', async (req, res) => {
 // POST /api/photos/:id/render-positive
 // Body: { params: {...}, format: 'jpeg' | 'tiff16' }
 // Uses RenderCore for consistent processing including Film Curve gamma
-router.post('/:id/render-positive', async (req, res) => {
+router.post('/:id/render-positive', async (req, res, next) => {
   const id = req.params.id;
   const body = req.body || {};
   const p = body.params || {};
@@ -1097,10 +1021,11 @@ router.post('/:id/render-positive', async (req, res) => {
     console.log(`[RENDER-POSITIVE] Photo ${id}: sourceType=${sourceType}, actual=${sourceResult.actualType}, filmCurveEnabled=${filmCurveEnabled}`);
     
     const sourceAbs = path.join(uploadsDir, relSource);
-    if (!fs.existsSync(sourceAbs)) return res.status(404).json({ error: 'Source file missing on disk' });
+    if (!(await pathExists(sourceAbs))) return res.status(404).json({ error: 'Source file missing on disk' });
 
     // 使用 RenderCore 统一渲染（与 export-positive 保持一致）
-    const core = new RenderCore({
+    // RenderCore 实例化下沉到 render-worker-pool（2C.3）；此处只组装参数。
+    const renderParams = {
       exposure, contrast,
       highlights: Number.isFinite(p.highlights) ? p.highlights : 0,
       shadows: Number.isFinite(p.shadows) ? p.shadows : 0,
@@ -1118,9 +1043,8 @@ router.post('/:id/render-positive', async (req, res) => {
       filmCurveEnabled, filmCurveProfile,
       hslParams: p.hslParams || null,
       splitToning: p.splitToning || null,
-      saturation: Number.isFinite(p.saturation) ? p.saturation : 0
-    });
-    core.prepareLUTs();
+      saturation: Number.isFinite(p.saturation) ? p.saturation : 0,
+    };
 
     // Build base image with Sharp (geometry only, color ops deferred to RenderCore)
     const imgBase = await buildPipeline(sourceAbs, {
@@ -1140,37 +1064,15 @@ router.post('/:id/render-positive', async (req, res) => {
       console.log(`[RENDER-POSITIVE] High bit-depth source detected, using float pipeline`);
     }
 
-    if (format === 'tiff16') {
-      // ── 真 16-bit TIFF 输出：全浮点处理 → 16-bit ──
-      const raw16 = Buffer.allocUnsafe(width * height * 3 * 2);
-      let j16 = 0;
-      if (is16bit) {
-        const pixels = new Uint16Array(data.buffer, data.byteOffset, data.byteLength / 2);
-        for (let i = 0; i < pixels.length; i += channels) {
-          const [rF, gF, bF] = core.processPixelFloat(
-            pixels[i] / 65535, pixels[i + 1] / 65535, pixels[i + 2] / 65535
-          );
-          const r16 = Math.min(65535, Math.max(0, Math.round(rF * 65535)));
-          const g16 = Math.min(65535, Math.max(0, Math.round(gF * 65535)));
-          const b16 = Math.min(65535, Math.max(0, Math.round(bF * 65535)));
-          raw16[j16++] = r16 & 0xFF; raw16[j16++] = (r16 >> 8) & 0xFF;
-          raw16[j16++] = g16 & 0xFF; raw16[j16++] = (g16 >> 8) & 0xFF;
-          raw16[j16++] = b16 & 0xFF; raw16[j16++] = (b16 >> 8) & 0xFF;
-        }
-      } else {
-        for (let i = 0; i < data.length; i += channels) {
-          const [rF, gF, bF] = core.processPixelFloat(
-            data[i] / 255, data[i + 1] / 255, data[i + 2] / 255
-          );
-          const r16 = Math.min(65535, Math.max(0, Math.round(rF * 65535)));
-          const g16 = Math.min(65535, Math.max(0, Math.round(gF * 65535)));
-          const b16 = Math.min(65535, Math.max(0, Math.round(bF * 65535)));
-          raw16[j16++] = r16 & 0xFF; raw16[j16++] = (r16 >> 8) & 0xFF;
-          raw16[j16++] = g16 & 0xFF; raw16[j16++] = (g16 >> 8) & 0xFF;
-          raw16[j16++] = b16 & 0xFF; raw16[j16++] = (b16 >> 8) & 0xFF;
-        }
-      }
-      const buf = await sharp(raw16, { raw: { width, height, channels: 3, depth: 'ushort' } })
+    // Offload the per-pixel Float pipeline to the worker pool (2C.3). The
+    // response is the rendered buffer; sharp encode stays on the main thread.
+    const wantTiff16 = format === 'tiff16';
+    const { jpeg8, tiff16 } = await renderPool.processImage(data, {
+      width, height, channels, is16bit, wantTiff16, params: renderParams,
+    });
+
+    if (tiff16) {
+      const buf = await sharp(tiff16, { raw: { width, height, channels: 3, depth: 'ushort' } })
         .tiff({ compression: 'lzw', bitdepth: 16 })
         .toBuffer();
       res.setHeader('Content-Type', 'image/tiff');
@@ -1178,40 +1080,18 @@ router.post('/:id/render-positive', async (req, res) => {
       return res.send(buf);
     }
 
-    // ── JPEG 输出：全浮点处理 → 最终一步降到 8-bit ──
-    const out = Buffer.allocUnsafe(width * height * 3);
-    if (is16bit) {
-      const pixels = new Uint16Array(data.buffer, data.byteOffset, data.byteLength / 2);
-      for (let i = 0, j = 0; i < pixels.length; i += channels, j += 3) {
-        const [rF, gF, bF] = core.processPixelFloat(
-          pixels[i] / 65535, pixels[i + 1] / 65535, pixels[i + 2] / 65535
-        );
-        out[j]     = Math.min(255, Math.max(0, Math.round(rF * 255)));
-        out[j + 1] = Math.min(255, Math.max(0, Math.round(gF * 255)));
-        out[j + 2] = Math.min(255, Math.max(0, Math.round(bF * 255)));
-      }
-    } else {
-      for (let i = 0, j = 0; i < data.length; i += channels, j += 3) {
-        const [rF, gF, bF] = core.processPixelFloat(
-          data[i] / 255, data[i + 1] / 255, data[i + 2] / 255
-        );
-        out[j]     = Math.min(255, Math.max(0, Math.round(rF * 255)));
-        out[j + 1] = Math.min(255, Math.max(0, Math.round(gF * 255)));
-        out[j + 2] = Math.min(255, Math.max(0, Math.round(bF * 255)));
-      }
-    }
-    const jpegBuf = await sharp(out, { raw: { width, height, channels: 3 } }).jpeg({ quality: 95 }).toBuffer();
+    const jpegBuf = await sharp(jpeg8, { raw: { width, height, channels: 3 } }).jpeg({ quality: 95 }).toBuffer();
     res.setHeader('Content-Type', 'image/jpeg');
     res.setHeader('Content-Disposition', 'attachment; filename="render_positive_' + id + '_' + Date.now() + '.jpg"');
     return res.send(jpegBuf);
   } catch (err) {
     console.error('[RENDER-POSITIVE] Error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // delete photo (enhanced to remove file from disk if in rolls folder)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req, res, next) => {
   const id = req.params.id;
   try {
     const row = await getAsync('SELECT roll_id, filename, full_rel_path, thumb_rel_path, original_rel_path, negative_rel_path, positive_rel_path, positive_thumb_rel_path, negative_thumb_rel_path FROM photos WHERE id = ?', [id]);
@@ -1270,14 +1150,13 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ deleted: result?.changes || 0 });
   } catch (err) {
-    console.error('[DELETE] Photo error:', err.message);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // POST /api/photos/:id/download-with-exif
 // Returns JPEG with embedded EXIF metadata (camera, lens, ISO, aperture, shutter, GPS, tags, etc.)
-router.post('/:id/download-with-exif', async (req, res) => {
+router.post('/:id/download-with-exif', async (req, res, next) => {
   const id = req.params.id;
   console.log('[DOWNLOAD-WITH-EXIF] Request received for photo ID:', id);
   
@@ -1375,7 +1254,7 @@ router.post('/:id/download-with-exif', async (req, res) => {
     }
     
     const sourceAbs = path.join(uploadsDir, sourcePath);
-    if (!fs.existsSync(sourceAbs)) {
+    if (!(await pathExists(sourceAbs))) {
       console.error('[DOWNLOAD-WITH-EXIF] Source file not found:', sourceAbs);
       return res.status(404).json({ error: 'Image file not found on disk' });
     }
@@ -1393,7 +1272,7 @@ router.post('/:id/download-with-exif', async (req, res) => {
     
     // Create temp file for EXIF writing (avoid modifying original)
     const tempPath = path.join(os.tmpdir(), `filmgallery_exif_${Date.now()}.jpg`);
-    fs.copyFileSync(sourceAbs, tempPath);
+    (await fsPromises.copyFile(sourceAbs, tempPath));
     console.log('[DOWNLOAD-WITH-EXIF] Created temp file:', tempPath);
     
     // Build EXIF metadata object
@@ -1551,7 +1430,7 @@ router.post('/:id/download-with-exif', async (req, res) => {
     } catch (exifErr) {
       console.error('[DOWNLOAD-WITH-EXIF] exiftool write failed:', exifErr);
       // Clean up and return original file if EXIF write fails
-      try { fs.unlinkSync(tempPath); } catch(_) {}
+      try { (await fsPromises.unlink(tempPath)); } catch(_) {}
       const filename = photo.filename ? path.basename(photo.filename) : `photo_${id}.jpg`;
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       return res.sendFile(sourceAbs);
@@ -1561,7 +1440,8 @@ router.post('/:id/download-with-exif', async (req, res) => {
     const filename = photo.filename ? path.basename(photo.filename) : `photo_${id}.jpg`;
     console.log('[DOWNLOAD-WITH-EXIF] Sending file with EXIF:', filename);
     res.download(tempPath, filename, (err) => {
-      // Clean up temp file after download completes
+      // Clean up temp file after download completes (sync here — callback
+      // isn't async and unlink is fast on a temp file).
       try {
         fs.unlinkSync(tempPath);
       } catch (cleanupErr) {
@@ -1574,7 +1454,7 @@ router.post('/:id/download-with-exif', async (req, res) => {
     
   } catch (err) {
     console.error('[DOWNLOAD-WITH-EXIF] Error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
@@ -1592,7 +1472,7 @@ router.post('/:id/download-with-exif', async (req, res) => {
  *   - date_end: "YYYY-MM-DD" - filter by end date
  *   - limit: number - max photos to return (default: 2000)
  */
-router.get('/geo', async (req, res) => {
+router.get('/geo', async (req, res, next) => {
   try {
     const { bounds, roll_id, date_start, date_end, limit = 2000 } = req.query;
     
@@ -1680,7 +1560,7 @@ router.get('/geo', async (req, res) => {
     
   } catch (err) {
     console.error('[GET /api/photos/geo] Error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 

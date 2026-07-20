@@ -15,6 +15,7 @@ const fs = require('fs');
 const { uploadsDir } = require('../config/paths');
 const { CAMERA_TYPES, LENS_MOUNTS, SCANNER_TYPES, FILM_BACK_SUB_FORMATS, FILM_BACK_MOUNTS, FILM_FORMATS } = require('../utils/equipment-migration');
 const { FOCUS_TYPES, CONDITIONS, STATUSES, METER_TYPES, SHUTTER_TYPES } = require('../../packages/shared/constants/equipment');
+const { asyncHandler } = require('../utils/async-handler');
 
 // Service layer
 const equipmentService = require('../services/equipment-service');
@@ -35,11 +36,6 @@ const storage = multer.diskStorage({
   }
 });
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
-
-// Error wrapper for async routes
-const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
-};
 
 // ========================================
 // CONSTANTS

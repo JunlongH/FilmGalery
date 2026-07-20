@@ -12,7 +12,7 @@ const exportHistory = require('../services/export-history-service');
  * GET /api/export-history
  * 获取导出历史列表
  */
-router.get('/', (req, res) => {
+router.get('/', (req, res, next) => {
   try {
     const { limit, offset, rollId, jobType } = req.query;
     
@@ -26,7 +26,7 @@ router.get('/', (req, res) => {
     res.json({ history });
   } catch (e) {
     console.error('[ExportHistory] Get history error:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
@@ -34,13 +34,13 @@ router.get('/', (req, res) => {
  * GET /api/export-history/stats
  * 获取导出统计
  */
-router.get('/stats', (req, res) => {
+router.get('/stats', (req, res, next) => {
   try {
     const stats = exportHistory.getStats();
     res.json({ stats });
   } catch (e) {
     console.error('[ExportHistory] Get stats error:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
@@ -48,14 +48,14 @@ router.get('/stats', (req, res) => {
  * DELETE /api/export-history/cleanup
  * 清理旧历史
  */
-router.delete('/cleanup', (req, res) => {
+router.delete('/cleanup', (req, res, next) => {
   try {
     const { keepCount } = req.query;
     const result = exportHistory.cleanupOldHistory(keepCount ? parseInt(keepCount) : 100);
     res.json(result);
   } catch (e) {
     console.error('[ExportHistory] Cleanup error:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 

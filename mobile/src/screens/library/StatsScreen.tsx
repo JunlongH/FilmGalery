@@ -116,29 +116,29 @@ export default function StatsScreen({ navigation }: any) {
   return (
     <ScrollView style={{ backgroundColor: theme.colors.background }} contentContainerStyle={styles.content}>
       {queryError ? (
-        <Text style={{ color: theme.colors.error, marginBottom: spacing.sm }}>加载统计失败</Text>
+        <Text style={{ color: theme.colors.error, marginBottom: spacing.sm }}>{t('stats.loadFailed')}</Text>
       ) : null}
 
       {/* Overview cards */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>概览</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>{t('stats.overview')}</Text>
       <View style={styles.row}>
-        <StatCard label="胶卷总数" value={overview?.total_rolls ?? '-'} />
-        <StatCard label="照片总数" value={overview?.total_photos ?? '-'} />
+        <StatCard label={t('stats.totalRolls')} value={overview?.total_rolls ?? '-'} />
+        <StatCard label={t('stats.totalPhotos')} value={overview?.total_photos ?? '-'} />
       </View>
       <View style={styles.row}>
-        <StatCard label="总花费" value={overview ? `¥${Math.round(overview.total_cost || 0)}` : '-'} />
-        <StatCard label="平均每卷" value={costs && costs.summary ? `¥${Math.round((costs.summary.total_purchase + costs.summary.total_develop) / (costs.summary.roll_count || 1))}` : '-'} />
+        <StatCard label={t('stats.totalSpending')} value={overview ? `¥${Math.round(overview.total_cost || 0)}` : '-'} />
+        <StatCard label={t('stats.avgPerRoll')} value={costs && costs.summary ? `¥${Math.round((costs.summary.total_purchase + costs.summary.total_develop) / (costs.summary.roll_count || 1))}` : '-'} />
       </View>
 
       {/* Inventory */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>库存</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>{t('stats.inventory')}</Text>
       <View style={styles.row}>
-        <StatCard label="库存数量" value={inventory?.value?.total_count ?? 0} />
-        <StatCard label="库存价值" value={inventory ? `¥${Math.round(inventory.value?.total_value || 0)}` : '-'} />
+        <StatCard label={t('stats.inStock')} value={inventory?.value?.total_count ?? 0} />
+        <StatCard label={t('stats.inventoryValue')} value={inventory ? `¥${Math.round(inventory.value?.total_value || 0)}` : '-'} />
       </View>
 
       {/* Activity Chart */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>拍摄活动（近 6 个月）</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>{t('stats.activity')}</Text>
       {activity && activity.length > 0 ? (
         <View style={[styles.chartContainer, { backgroundColor: theme.colors.surface }]}>
           <BarChart
@@ -157,11 +157,11 @@ export default function StatsScreen({ navigation }: any) {
           />
         </View>
       ) : (
-        <Text style={styles.noData}>暂无活动数据</Text>
+        <Text style={styles.noData}>{t('stats.noActivity')}</Text>
       )}
 
       {/* Film Distribution */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>常用胶卷</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>{t('stats.topFilms')}</Text>
       {filmData.length > 0 ? (
         <View style={[styles.chartContainer, { backgroundColor: theme.colors.surface }]}>
           <PieChart
@@ -176,11 +176,11 @@ export default function StatsScreen({ navigation }: any) {
           />
         </View>
       ) : (
-        <Text style={styles.noData}>暂无胶卷数据</Text>
+        <Text style={styles.noData}>{t('stats.noFilmData')}</Text>
       )}
 
       {/* Camera Usage */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>常用相机</Text>
+      <Text variant="titleMedium" style={styles.sectionTitle}>{t('stats.topCameras')}</Text>
       {cameraData.length > 0 ? (
         <View style={[styles.chartContainer, { backgroundColor: theme.colors.surface }]}>
           <PieChart
@@ -195,7 +195,7 @@ export default function StatsScreen({ navigation }: any) {
           />
         </View>
       ) : (
-        <Text style={styles.noData}>暂无相机数据</Text>
+        <Text style={styles.noData}>{t('stats.noCameraData')}</Text>
       )}
 
       <View style={{ height: spacing.xl }} />

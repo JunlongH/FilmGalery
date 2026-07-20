@@ -4,12 +4,13 @@ import { ActivityIndicator, Chip, IconButton, Text, useTheme } from 'react-nativ
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import Markdown from 'react-native-markdown-display';
 import { ApiContext } from '../context/ApiContext';
+import { useT, getLanguage } from '../i18n';
 import { sendChatMessage } from '../api/aiApi';
 
 const TOOL_COLLAPSE_THRESHOLD = 3;
 
 // ─── Tool label map ───
-const TOOL_LABELS = {
+const TOOL_LABELS_ZH: Record<string, string> = {
   search_photos:    '搜索照片',
   get_photo_detail: '查看照片详情',
   get_roll_photos:  '获取胶卷照片',
@@ -21,9 +22,27 @@ const TOOL_LABELS = {
   list_tags:        '列出标签',
 };
 
+const TOOL_LABELS_EN: Record<string, string> = {
+  search_photos:    'Search photos',
+  get_photo_detail: 'View photo details',
+  get_roll_photos:  'Get roll photos',
+  list_rolls:       'List rolls',
+  get_roll_detail:  'View roll details',
+  get_stats:        'Read statistics',
+  search_equipment: 'Search equipment',
+  get_film_info:    'Look up film info',
+  list_tags:        'List tags',
+};
+
+function toolLabel(name: string): string {
+  const map = getLanguage() === 'en' ? TOOL_LABELS_EN : TOOL_LABELS_ZH;
+  return map[name] || name;
+}
+
 // ─── Message bubble ───
 function Bubble({ msg }: any) {
   const theme = useTheme();
+  const t = useT();
   const isUser = msg.role === 'user';
   const [toolsExpanded, setToolsExpanded] = useState(false);
 
@@ -104,13 +123,13 @@ function Bubble({ msg }: any) {
             icon={tc.status === 'running' ? 'loading' : tc.status === 'done' ? 'check-circle' : 'close-circle'}
             style={{ marginBottom: 4, alignSelf: 'flex-start' }}
           >
-            {(TOOL_LABELS as any)[tc.name] || tc.name}
+            {toolLabel(tc.name)}
           </Chip>
         ))}
         {shouldCollapse && (
           <TouchableOpacity onPress={() => setToolsExpanded(v => !v)} style={{ marginBottom: 4 }}>
             <Text style={{ fontSize: 12, color: theme.colors.primary }}>
-              {toolsExpanded ? '收起' : `还有 ${hiddenCount} 个工具调用`}
+              {toolsExpanded ? t('ai.collapse') : t('ai.moreTools', { count: hiddenCount })}
             </Text>
           </TouchableOpacity>
         )}
@@ -152,6 +171,7 @@ function Bubble({ msg }: any) {
  */
 export default function AIChatSheet({ visible, onClose, context }: any) {
   const theme = useTheme();
+  const t = useT();
   const { baseUrl } = useContext(ApiContext);
   const sheetRef = useRef<any>(null);
   const flatRef = useRef<any>(null);
@@ -245,7 +265,7 @@ export default function AIChatSheet({ visible, onClose, context }: any) {
               setIsLoading(false);
               break;
             case 'error':
-              upsertMessage(asstMsgId, (msg: any) => ({ ...msg, isStreaming: false, error: event.message || '未知错误' }));
+              upsertMessage(asstMsgId, (msg: any) => ({ ...msg, isStreaming: false, error: event.message || t('ai.unknownError') }));
               setIsLoading(false);
               break;
           }
@@ -254,7 +274,7 @@ export default function AIChatSheet({ visible, onClose, context }: any) {
       );
     } catch (err) {
       if ((err as Error)?.name !== 'AbortError') {
-        upsertMessage(asstMsgId, (msg: any) => ({ ...msg, isStreaming: false, error: (err as Error).message || '请求失败' }));
+        upsertMessage(asstMsgId, (msg: any) => ({ ...msg, isStreaming: false, error: (err as Error).message || t('ai.requestFailed') }));
         setIsLoading(false);
       }
     }
@@ -280,7 +300,7 @@ export default function AIChatSheet({ visible, onClose, context }: any) {
       <BottomSheetView style={{ flex: 1 }}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.colors.outline + '30' }]}>
-          <Text style={{ fontWeight: '600' as const, color: theme.colors.primary, flex: 1 }}>AI 助手</Text>
+          <Text style={{ fontWeight: '600' as const, color: theme.colors.primary, flex: 1 }}>{t('ai.assistant')}</Text>
           <IconButton icon="refresh" size={18} onPress={handleNewChat} />
           <IconButton icon="close" size={18} onPress={onClose} />
         </View>
@@ -295,7 +315,7 @@ export default function AIChatSheet({ visible, onClose, context }: any) {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', lineHeight: 22 }}>
-                你好！我可以帮你搜索照片、查询胶卷、分析统计数据。{'\n'}试试问我「最近拍了什么？」
+                {t('ai.greeting')}
               </Text>
             </View>
           }
@@ -308,7 +328,7 @@ export default function AIChatSheet({ visible, onClose, context }: any) {
             <TextInput
               value={inputText}
               onChangeText={setInputText}
-              placeholder="发送消息…"
+              placeholder={t('ai.inputPlaceholder')}
               placeholderTextColor={theme.colors.onSurfaceVariant}
               style={[styles.textInput, { color: theme.colors.onSurface }]}
               multiline

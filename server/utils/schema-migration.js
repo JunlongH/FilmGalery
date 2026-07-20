@@ -2,6 +2,7 @@ const sqlite3 = require('sqlite3');
 const path = require('path');
 const fs = require('fs');
 const { getDbPath } = require('../config/db-config');
+const { rollsDir } = require('../config/paths');
 
 function log(msg) {
   const logPath = path.join(path.dirname(getDbPath()), 'schema-migration.log');
@@ -117,7 +118,9 @@ function runSchemaMigration() {
           FOREIGN KEY(roll_id) REFERENCES rolls(id),
           FOREIGN KEY(location_id) REFERENCES locations(id)
         )`,
-        // Film items (inventory). Keep in sync with migrations/2025-12-02-add-film-items.js
+        // Film items (inventory). Columns defined here are the single source
+        // of truth — the legacy standalone migration scripts have been removed
+        // (consolidated into this file by 2C.1).
         `CREATE TABLE IF NOT EXISTS film_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           film_id INTEGER NOT NULL,
@@ -164,33 +167,11 @@ function runSchemaMigration() {
         await run(sql);
       }
 
-      // 1b. Helpful indexes (idempotent; ignore errors if columns missing)
-      const indexes = [
-        // Photo indexes
-        `CREATE INDEX IF NOT EXISTS idx_photos_roll ON photos(roll_id)`,
-        `CREATE INDEX IF NOT EXISTS idx_photos_date_taken ON photos(date_taken)`,
-        `CREATE INDEX IF NOT EXISTS idx_photos_rating ON photos(rating)`,
-        `CREATE INDEX IF NOT EXISTS idx_photo_tags_photo ON photo_tags(photo_id)`,
-        `CREATE INDEX IF NOT EXISTS idx_photo_tags_tag ON photo_tags(tag_id)`,
-        // Roll indexes
-        `CREATE INDEX IF NOT EXISTS idx_rolls_start ON rolls(start_date)`,
-        `CREATE INDEX IF NOT EXISTS idx_rolls_end ON rolls(end_date)`,
-        `CREATE INDEX IF NOT EXISTS idx_rolls_film ON rolls(filmId)`,
-        // Film items indexes (for inventory queries)
-        `CREATE INDEX IF NOT EXISTS idx_film_items_roll_id ON film_items(roll_id)`,
-        `CREATE INDEX IF NOT EXISTS idx_film_items_status ON film_items(status)`,
-        `CREATE INDEX IF NOT EXISTS idx_film_items_film_id ON film_items(film_id)`,
-        `CREATE INDEX IF NOT EXISTS idx_film_items_deleted ON film_items(deleted_at)`,
-        // Compound indexes for common filters/orderings
-        `CREATE INDEX IF NOT EXISTS idx_photos_date_id ON photos(date_taken, id)`,
-        `CREATE INDEX IF NOT EXISTS idx_photos_roll_date_id ON photos(roll_id, date_taken, id)`,
-        `CREATE INDEX IF NOT EXISTS idx_photos_rating_id ON photos(rating, id)`,
-        // Film items compound index for status queries
-        `CREATE INDEX IF NOT EXISTS idx_film_items_status_deleted ON film_items(status, deleted_at)`
-      ];
-      for (const idx of indexes) { await run(idx); }
-
-      // 2. Ensure Columns
+      // 1b. Columns added BEFORE indexes (2C bug found by migration test).
+      // Previously indexes ran before columns, so any index referencing an
+      // ALTER-added column (date_taken, location_id, rating-related, etc.)
+      // silently failed — the `run` helper resolves with err to keep going.
+      // Moving indexes after columns guarantees all referenced columns exist.
       const columns = [
         // Rolls - Basic
         { table: 'rolls', col: 'cover_photo', type: 'TEXT' },
@@ -250,6 +231,7 @@ function runSchemaMigration() {
         { table: 'photos', col: 'positive_thumb_rel_path', type: 'TEXT' },
         { table: 'photos', col: 'negative_thumb_rel_path', type: 'TEXT' },
         { table: 'photos', col: 'is_negative_source', type: 'INTEGER DEFAULT 0' },
+        { table: 'photos', col: 'positive_source', type: 'TEXT DEFAULT NULL' },
         // Photos - Metadata
         { table: 'photos', col: 'display_seq', type: 'INTEGER DEFAULT 0' },
         { table: 'photos', col: 'photographer', type: 'TEXT' },
@@ -305,6 +287,38 @@ function runSchemaMigration() {
       for (const { table, col, type } of columns) {
         await run(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
       }
+
+      // 2b. Indexes created AFTER columns (2C bug fix).
+      // Any index referencing an ALTER-added column now finds the column
+      // present. CREATE INDEX IF NOT EXISTS keeps this idempotent across
+      // re-runs. The `run` helper still swallows errors so an unexpected
+      // schema drift doesn't abort the whole migration.
+      const indexes = [
+        // Photo indexes
+        `CREATE INDEX IF NOT EXISTS idx_photos_roll ON photos(roll_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_photos_date_taken ON photos(date_taken)`,
+        `CREATE INDEX IF NOT EXISTS idx_photos_rating ON photos(rating)`,
+        `CREATE INDEX IF NOT EXISTS idx_photo_tags_photo ON photo_tags(photo_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_photo_tags_tag ON photo_tags(tag_id)`,
+        // Roll indexes
+        `CREATE INDEX IF NOT EXISTS idx_rolls_start ON rolls(start_date)`,
+        `CREATE INDEX IF NOT EXISTS idx_rolls_end ON rolls(end_date)`,
+        `CREATE INDEX IF NOT EXISTS idx_rolls_film ON rolls(filmId)`,
+        // Film items indexes (for inventory queries)
+        `CREATE INDEX IF NOT EXISTS idx_film_items_roll_id ON film_items(roll_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_film_items_status ON film_items(status)`,
+        `CREATE INDEX IF NOT EXISTS idx_film_items_film_id ON film_items(film_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_film_items_deleted ON film_items(deleted_at)`,
+        // Compound indexes for common filters/orderings
+        `CREATE INDEX IF NOT EXISTS idx_photos_date_id ON photos(date_taken, id)`,
+        `CREATE INDEX IF NOT EXISTS idx_photos_roll_date_id ON photos(roll_id, date_taken, id)`,
+        `CREATE INDEX IF NOT EXISTS idx_photos_rating_id ON photos(rating, id)`,
+        // Location filter (added 2026-02-15; previously missing — 2C.1.2)
+        `CREATE INDEX IF NOT EXISTS idx_photos_location ON photos(location_id)`,
+        // Film items compound index for status queries
+        `CREATE INDEX IF NOT EXISTS idx_film_items_status_deleted ON film_items(status, deleted_at)`
+      ];
+      for (const idx of indexes) { await run(idx); }
 
       // 3. Data Fixes
       await run(`UPDATE rolls SET filmId = film_id WHERE filmId IS NULL AND film_id IS NOT NULL`);
@@ -381,6 +395,14 @@ function runSchemaMigration() {
       // Standardize lens text format for PS cameras: "Brand Model Xmm f/Y"
       await repairFixedLensData(run, all, log);
 
+      // ========================================
+      // Backfill: original_rel_path + is_negative_source (2026-02-08)
+      // ========================================
+      // Photos added via single-upload (uploadSinglePhoto) had NULL
+      // original_rel_path. Re-derive from roll_id + frame_number by scanning
+      // the originals/ directory. Idempotent: only touches NULL rows.
+      await backfillOriginalRelPath(run, all, log);
+
       // Seed default presets if none exist
       await seedDefaultPresets(run, all, log);
 
@@ -397,6 +419,66 @@ function runSchemaMigration() {
 }
 
 module.exports = { runSchemaMigration };
+
+// ============================================================================
+// original_rel_path Backfill (2026-02-08, consolidated into schema-migration 2C.1)
+// ============================================================================
+// Photos added via uploadSinglePhoto left original_rel_path NULL. Re-derive
+// by scanning rolls/<id>/originals/ for the file matching {rollId}_{frame}_original*.
+// Also fixes is_negative_source NULLs by inferring from negative_rel_path.
+// Idempotent — only touches rows where the target column IS NULL.
+// ============================================================================
+async function backfillOriginalRelPath(run, all, log) {
+  try {
+    const nullOriginals = await all(
+      `SELECT id, roll_id, frame_number FROM photos WHERE original_rel_path IS NULL`
+    );
+    if (nullOriginals.length === 0) {
+      log('original_rel_path backfill: nothing to do.');
+      return;
+    }
+    log(`original_rel_path backfill: scanning ${nullOriginals.length} photos.`);
+
+    let updated = 0;
+    let skipped = 0;
+    for (const photo of nullOriginals) {
+      const frame = String(photo.frame_number).padStart(2, '0');
+      const originalsDir = path.join(rollsDir, String(photo.roll_id), 'originals');
+      if (!fs.existsSync(originalsDir)) { skipped++; continue; }
+
+      const prefix = `${photo.roll_id}_${frame}_original`;
+      let match = null;
+      try {
+        match = fs.readdirSync(originalsDir).find(f => f.startsWith(prefix));
+      } catch { /* unreadable dir — skip */ }
+
+      if (match) {
+        const relPath = `rolls/${photo.roll_id}/originals/${match}`;
+        await run('UPDATE photos SET original_rel_path = ? WHERE id = ?', [relPath, photo.id]);
+        updated++;
+      } else {
+        skipped++;
+      }
+    }
+    log(`original_rel_path backfill: ${updated} updated, ${skipped} skipped (no file on disk).`);
+
+    // Infer is_negative_source from negative_rel_path where NULL.
+    // Note: the `run` helper in this module resolves with null on success
+    // (it discards `this.changes`); we log presence only.
+    await run(`
+      UPDATE photos
+      SET is_negative_source = CASE
+        WHEN negative_rel_path IS NOT NULL THEN 1
+        ELSE 0
+      END
+      WHERE is_negative_source IS NULL
+    `);
+    log('is_negative_source NULLs inferred.');
+  } catch (e) {
+    log(`original_rel_path backfill note: ${e.message}`);
+    // Non-fatal — don't crash migration over a backfill.
+  }
+}
 
 // ============================================================================
 // Default FilmLab Presets (seeded on first run)

@@ -99,17 +99,17 @@ export default function FavoritesScreen({ navigation }: any) {
         <View style={styles.emptyContainer}>
           <Icon name="heart" size={64} color={theme.colors.onSurfaceVariant} />
           <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
-            暂无收藏
+            {t('favorites.emptyTitle')}
           </Text>
           <Text style={[styles.emptySubtext, { color: theme.colors.onSurfaceVariant }]}>
-            将照片加入收藏后会显示在这里
+            {t('favorites.emptySubtitle')}
           </Text>
         </View>
       ) : (
         <>
           <View style={[styles.countBar, { borderBottomColor: theme.colors.outlineVariant }]}>
             <Text style={[styles.countText, { color: theme.colors.onSurfaceVariant }]}>
-              {photos.length} 张收藏
+              {t('favorites.count', { count: photos.length })}
             </Text>
           </View>
           <FlatList

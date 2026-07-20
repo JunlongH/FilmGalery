@@ -70,7 +70,7 @@ export default function ThemesScreen({ navigation }: any) {
         <TagCard
           coverUri={coverUrl}
           title={item.name}
-          subtitle={`${item.photos_count} 张照片`}
+          subtitle={t('collections.photosCount', { count: item.photos_count })}
           style={styles.cardContainer}
           onPress={() => navigation.navigate('TagDetail', { tagId: item.id, tagName: item.name })}
         />
@@ -95,17 +95,17 @@ export default function ThemesScreen({ navigation }: any) {
         <View style={styles.emptyContainer}>
           <Icon name="tags" size={64} color={theme.colors.onSurfaceVariant} />
           <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
-            暂无合集
+            {t('collections.emptyTitle')}
           </Text>
           <Text style={[styles.emptySubtext, { color: theme.colors.onSurfaceVariant }]}>
-            创建标签来整理你的照片
+            {t('collections.emptySubtitle')}
           </Text>
         </View>
       ) : (
         <>
           <View style={styles.countBar}>
             <Text style={[styles.countText, { color: theme.colors.onSurfaceVariant }]}>
-              {tags.length} 个合集
+              {t('collections.count', { count: tags.length })}
             </Text>
           </View>
           <FlatList

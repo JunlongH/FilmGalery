@@ -30,10 +30,10 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
     },
   );
   const rolls = useMemo(() => data ?? [], [data]);
-  const error = rolls.length === 0 && queryError ? '加载胶卷失败。' : null;
+  const error = rolls.length === 0 && queryError ? t('equipment.loadFailed') : null;
 
   React.useEffect(() => {
-    navigation.setOptions({ title: name || '器材胶卷' });
+    navigation.setOptions({ title: name || t('title.equipmentRolls') });
   }, [navigation, name]);
 
   useLayoutEffect(() => {
@@ -51,11 +51,11 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
 
   const getTypeLabel = () => {
     switch (type) {
-      case 'camera': return '相机';
-      case 'lens': return '镜头';
-      case 'flash': return '闪光灯';
-      case 'film': return '胶卷';
-      default: return '器材';
+      case 'camera': return t('roll.camera');
+      case 'lens': return t('roll.lens');
+      case 'flash': return t('equipment.flashes');
+      case 'film': return t('equipment.films');
+      default: return t('title.equipment');
     }
   };
 
@@ -76,7 +76,7 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
         style={styles.card} 
         onPress={() => navigation.navigate('RollDetail', { 
           rollId: item.id, 
-          rollName: item.title || `胶卷 #${item.id}` 
+          rollName: item.title || t('home.rollFallback', { id: item.id }) 
         })}
         mode="elevated"
       >
@@ -84,16 +84,16 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
           <View style={styles.coverWrapper}>
             <CachedImage uri={coverUrl} style={styles.cover} contentFit="cover" />
             <CoverOverlay 
-              title={item.title || `胶卷 #${item.id}`}
-              leftText={item.film_name_joined || item.film_type || '未知胶卷'}
+              title={item.title || t('home.rollFallback', { id: item.id })}
+              leftText={item.film_name_joined || item.film_type || t('home.unknownFilm')}
               rightText={dateRange}
             />
           </View>
         ) : (
           <Card.Content style={styles.cardContent}>
-            <Title style={styles.cardTitle}>{item.title || `胶卷 #${item.id}`}</Title>
+            <Title style={styles.cardTitle}>{item.title || t('home.rollFallback', { id: item.id })}</Title>
             <Paragraph style={styles.meta}>
-              {item.film_name_joined || item.film_type || '未知胶卷'}
+              {item.film_name_joined || item.film_type || t('home.unknownFilm')}
             </Paragraph>
             {dateRange ? <Paragraph style={styles.dateText}>{dateRange}</Paragraph> : null}
           </Card.Content>
@@ -142,10 +142,10 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text variant="titleMedium" style={styles.emptyText}>
-              没有找到使用此{getTypeLabel()}的胶卷
+              {t('equipment.noRolls', { what: getTypeLabel() })}
             </Text>
             <Text variant="bodyMedium" style={styles.emptySubtext}>
-              使用此器材的胶卷会显示在这里
+              {t('equipment.noRollsHint')}
             </Text>
           </View>
         }

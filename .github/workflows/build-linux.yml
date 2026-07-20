@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: 'npm'
 
       # 安装 Linux 系统依赖 (关键步骤)
@@ -34,13 +34,10 @@ jobs:
           sudo apt-get install -y build-essential python3 libraw-dev libvips-dev libarchive-tools
 
       # 安装项目依赖
-      # Root install uses --ignore-scripts to skip the postinstall chain.
-      # Client install explicitly removes node_modules first to avoid stale
-      # CRA packages surviving from the GitHub Actions npm cache.
       - name: Install Dependencies
         run: |
-          npm install --legacy-peer-deps --ignore-scripts
-          cd client && rm -rf node_modules && npm install --legacy-peer-deps && cd ..
+          npm install --legacy-peer-deps
+          cd client && npm install --legacy-peer-deps && cd ..
           cd server && npm install --legacy-peer-deps && cd ..
 
       # 构建前端

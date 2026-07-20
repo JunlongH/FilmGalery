@@ -16,9 +16,9 @@ export default function ApiErrorSnackbar() {
       onDismiss={() => setError(null)}
       duration={3000}
       style={{ backgroundColor: theme.colors.errorContainer }}
-      action={{ label: '好', onPress: () => setError(null) }}
+      action={{ label: t('common.ok'), onPress: () => setError(null) }}
     >
-      {error ? `连接错误：${error.message}` : ''}
+      {error ? t('common.connectionError', { message: error.message }) : ''}
     </Snackbar>
   );
 }

@@ -39,7 +39,6 @@ export async function setLanguage(lang: Language): Promise<void> {
 export async function initLanguage(): Promise<void> {
   try {
     const saved = await AsyncStorage.getItem(STORAGE_KEY);
-    console.log('[i18n] init, saved =', saved);
     if ((saved === 'zh' || saved === 'en') && saved !== current) {
       current = saved;
       emit();
@@ -51,13 +50,11 @@ export async function initLanguage(): Promise<void> {
 
 const dictionaries: Record<Language, Record<TranslationKey, string>> = { zh, en };
 
-let logged = false;
 export function t(key: TranslationKey, vars?: Record<string, string | number>): string {
-  if (!logged) { logged = true; console.log('[i18n] first t() call, current =', current, '| en?', !!dictionaries.en); }
   let text = dictionaries[current][key] ?? dictionaries.zh[key] ?? key;
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {
-      text = text.replace(new RegExp(`\\{${k}\\`, 'g'), String(v));
+      text = text.split(`{${k}}`).join(String(v));
     }
   }
   return text;

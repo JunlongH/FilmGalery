@@ -256,6 +256,9 @@ function startWalCheckpoint() {
       }
     });
   }, WAL_CHECKPOINT_INTERVAL);
+  // Allow the Node process to exit even if the scheduler is still ticking
+  // (otherwise test workers and one-shot CLI scripts hang on shutdown).
+  checkpointInterval.unref();
   
   console.log('[DB] ✅ WAL checkpoint scheduler started (every 5 minutes)');
 }

@@ -336,3 +336,57 @@ RootStack (全屏/模态层)
 3. MapScreen JS 侧 O(n²) 聚类（当前 813 点约 66 万次比较/次，可接受；超 2k 点后建议换 supercluster 或只在列表展开时计算）。
 4. watch-app 未做视觉验证（无 Wear 模拟器镜像）;metro monorepo 配置待下次 `npm install` 转软链后生效验证。
 5. `userInterfaceStyle: automatic` 与移除 react-native-maps 需重新 prebuild 才进原生包。
+
+---
+
+## 十一、二期改造记录（2026-07-20 实施）
+
+针对第十节遗留问题，按 W1-W6 计划完成，并经模拟器视觉迭代验证。
+
+### W1. 中英双语 i18n（替代"统一中文"方案）
+
+- 新增 `mobile/src/i18n/`:`index.ts`（语言 store:`initLanguage/setLanguage/getLanguage/t/useT`,AsyncStorage `app_language` 持久化，默认中文，启动时随引导门一并 await)+ `zh.ts` / `en.ts` 各 174 键字典（支持 `{var}` 插值）。
+- 全 App 标题/Tab/按钮/空态/错误文案接入 `useT()`;Settings 新增「语言 / Language」分段选择器即时切换。
+- **踩坑记录**:`t()` 插值最初用 `new RegExp('\\{k\\')` 构造，语法不完整——任何带变量的调用必崩（渲染期 "Invalid RegExp: Incomplete escape")；改为 `split/join` 字面替换。期间还经历了：metro 转换缓存导致"屏幕代码陈旧"假象（t() 日志不触发）、用户一度改为硬编码中文，最终定位后恢复 t() 接线并实机双向验证：英文（All / 22 rolls / Timeline·Map·Library）↔ 中文（全部 / 22 卷 / 时间线·地图·图库）。
+
+### W2. 图片查看器替换
+
+- `react-native-image-zoom-viewer` → `react-native-image-viewing@0.2.2`（经 npmmirror 安装）;**patch-package 补丁**(`mobile/patches/react-native-image-viewing+0.2.2.patch`）让其 ImageItem 改用 expo-image 渲染并支持 `thumbUri` 渐进占位——手势（捏合缩放/下滑关闭/双击）与磁盘缓存、渐进加载兼得。
+- PhotoViewScreen 重写：HeaderComponent 承载六键控件行（底片切换/下载/收藏/备注/标签/关闭）,FooterComponent 承载 caption/tags;TagEdit/NoteEdit 双模态叠层正常。实机验证：**关闭按钮单击即关**（旧库单击被菜单切换吞掉的问题消除），出图即时。
+
+### W3. 地图聚类 O(n²)→O(n)
+
+- `MapScreen` 聚类改网格分桶（cell=clusterRadius 的 Map 键）,813 点下从约 66 万次比较降为单次散列。
+
+### W4. Watch 实机视觉验证（首次）
+
+- watch-app debug APK 构建成功（41MB)，安装于手机模拟器；metro 8088 + `debug_http_host` 直连。验证：黑底启动门 → 随机照片全屏（缩略图→全图升级）、上滑菜单、**合并后的 ShotLog 单屏向导**（选卷→参数→定位三步同屏，第 3 步按返回键正确回到第 2 步）、服务器配置后数据拉取正常。截图 `tmp/watch-*.png`。
+
+### W5. 原生与构建环境
+
+- `styles.xml` 已是 DayNight、Manifest 已含 `uiMode`——`userInterfaceStyle: automatic` 原生侧就绪。
+- 安装 `expo-secure-store@15.0.8`(Phase 2B 认证需要）并**全量重建 APK(45min)**验证通过。
+- metro 稳定性三连修：(1) blockList 屏蔽 dist_v9/server/client 等大目录解决 inotify ENOSPC;(2) 屏蔽 `node_modules/*/android/build/` 解决 gradle 构建删目录导致的 watcher ENOENT 崩溃；(3) `EXPO_OFFLINE=1` 解决 expo CLI 联网校验卡死。watch-app/metro.config.js 同步 blockList。
+
+### 验证
+
+- mobile tsc 0 错、jest 33/33、expo export bundle 成功；watch tsc 0 错、jest 通过。
+- 实机截图：`tmp/iter5-*.png`（中文 UI)、`tmp/iter7-*.png`（语言选择器/排错）、`tmp/iter8-*.png`（英文 UI、新查看器、单击关闭）、`tmp/watch-*.png`(Watch 全流程）。
+
+### 二期遗留
+
+1. i18n 未覆盖的长尾：ShotLog 相机 UI、AIChatSheet、LocationDiagnostic、Settings 深层选项、watch-app 全部文案（目前英文硬编码）。
+2. Settings 页中英文混合段落未接入 t()（主界面已覆盖）。
+3. watch-app 布局按手表尺寸设计，手机模拟器上仅功能验证，圆屏 SafeArea 适配仍待真机。
+
+---
+
+## 十二、i18n 全覆盖收尾 + Release 构建（2026-07-20)
+
+针对"英文版 Library 仍残留中文"的问题，将**全部用户可见硬编码文案**接入 `useT()`（数据内容如卷标题、标签名、照片备注保持原样，属用户数据）:
+
+- **字典扩容**:zh/en 各新增约 150 键，覆盖库存状态（`status.*`)、库存详情全部表单（`item.*`)、拍摄记录（`shot.*`)、设置全页（`settings.*`)、AI 设置与配对（`ai.*`/`pair.*`)、器材对话框（`equipment.*`)。
+- **接入屏幕**:LibraryScreen（用户反馈点，23 处）、Favorites/Themes/Negative/RollDetail/Home、StatsScreen(15 处）、EquipmentRollsScreen、InventoryScreen（状态标签改 `status.*` 键，删除本地 ZH 映射表）、FilmRollsScreen、EquipmentScreen（含添加/删除对话框全表单）、FilmItemDetailScreen(50 处，购买/使用/冲洗三段表单）、ShotLogScreen(36 处，镜头/地点/保存流）、SettingsScreen(60+ 处，自动发现/手动配置/地图/AI/配对）、AISettingsScreen、PairingScreen、ApiErrorSnackbar、QuickMeterSheet、AIChatSheet（工具名双语映射 `toolLabel()`)。
+- **实机验证**:`tmp/iter9-library-en.png` — 英文模式下 Library 全英文（Overview/Rolls/Photos/Favorites/See All/Collections/Equipment/Quick Access)，中文标签名（叠卷/城市）与照片备注（对镜自拍）作为数据正确保留。
+- **Release APK**:`mobile/android/app/build/outputs/apk/release/app-release.apk`(96.6MB,debug keystore 签名，minify+shrink 关闭沿用项目默认）。模拟器安装运行验证：首屏英文 UI、22 卷数据加载、图片加载全部正常（`tmp/release-home.png`、`tmp/release-data.png`)。
+- 未覆盖（有意跳过）:LocationDiagnosticScreen（调试页）、ShotModeModal 相机 UI（留待三期）、watch-app 全文。

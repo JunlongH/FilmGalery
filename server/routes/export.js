@@ -44,7 +44,7 @@ router.use((req, res, next) => {
  * @body {string} [presetId] - 应用的预设 ID
  * @body {Object} [processingParams] - 覆盖处理参数
  */
-router.post('/batch', async (req, res) => {
+router.post('/batch', async (req, res, next) => {
   try {
     const {
       rollId,
@@ -148,10 +148,7 @@ router.post('/batch', async (req, res) => {
     });
   } catch (err) {
     console.error('[Export API] Failed to create batch job:', err);
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
+    next(err);
   }
 });
 
@@ -161,7 +158,7 @@ router.post('/batch', async (req, res) => {
  * 
  * @query {string} [status] - 过滤状态
  */
-router.get('/jobs', (req, res) => {
+router.get('/jobs', (req, res, next) => {
   try {
     let jobs = exportQueue.getAllJobs();
     
@@ -175,10 +172,7 @@ router.get('/jobs', (req, res) => {
       jobs: jobs.map(j => j.toJSON()),
     });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
+    next(err);
   }
 });
 
@@ -186,7 +180,7 @@ router.get('/jobs', (req, res) => {
  * GET /api/export/jobs/:jobId
  * 获取单个任务详情
  */
-router.get('/jobs/:jobId', (req, res) => {
+router.get('/jobs/:jobId', (req, res, next) => {
   try {
     const job = exportQueue.getJob(req.params.jobId);
     
@@ -202,10 +196,7 @@ router.get('/jobs/:jobId', (req, res) => {
       job: job.toJSON(),
     });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
+    next(err);
   }
 });
 
@@ -213,7 +204,7 @@ router.get('/jobs/:jobId', (req, res) => {
  * DELETE /api/export/jobs/:jobId
  * 取消或删除任务
  */
-router.delete('/jobs/:jobId', (req, res) => {
+router.delete('/jobs/:jobId', (req, res, next) => {
   try {
     const job = exportQueue.getJob(req.params.jobId);
     
@@ -240,10 +231,7 @@ router.delete('/jobs/:jobId', (req, res) => {
       });
     }
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
+    next(err);
   }
 });
 
@@ -251,7 +239,7 @@ router.delete('/jobs/:jobId', (req, res) => {
  * POST /api/export/jobs/:jobId/pause
  * 暂停任务
  */
-router.post('/jobs/:jobId/pause', (req, res) => {
+router.post('/jobs/:jobId/pause', (req, res, next) => {
   try {
     const job = exportQueue.getJob(req.params.jobId);
     
@@ -275,10 +263,7 @@ router.post('/jobs/:jobId/pause', (req, res) => {
       status: 'paused',
     });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
+    next(err);
   }
 });
 
@@ -286,7 +271,7 @@ router.post('/jobs/:jobId/pause', (req, res) => {
  * POST /api/export/jobs/:jobId/resume
  * 恢复任务
  */
-router.post('/jobs/:jobId/resume', (req, res) => {
+router.post('/jobs/:jobId/resume', (req, res, next) => {
   try {
     const job = exportQueue.getJob(req.params.jobId);
     
@@ -310,10 +295,7 @@ router.post('/jobs/:jobId/resume', (req, res) => {
       status: 'processing',
     });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
+    next(err);
   }
 });
 
@@ -321,7 +303,7 @@ router.post('/jobs/:jobId/resume', (req, res) => {
  * DELETE /api/export/jobs
  * 清理所有已完成的任务
  */
-router.delete('/jobs', (req, res) => {
+router.delete('/jobs', (req, res, next) => {
   try {
     exportQueue.cleanupCompletedJobs();
     res.json({
@@ -329,10 +311,7 @@ router.delete('/jobs', (req, res) => {
       message: 'Completed jobs cleaned up',
     });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
+    next(err);
   }
 });
 

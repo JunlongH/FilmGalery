@@ -5,7 +5,7 @@ const { FILM_PROFILES } = require('../../packages/shared/filmLabConstants');
 const router = express.Router();
 
 // List all presets (optionally filter by category)
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
   try {
     const { category } = req.query;
     const queryParams = [];
@@ -31,12 +31,12 @@ router.get('/', async (req, res) => {
     res.json({ presets });
   } catch (err) {
     console.error('Failed to list presets', err.message);
-    res.status(500).json({ error: 'Failed to list presets' });
+    next(err);
   }
 });
 
 // Create a new preset
-router.post('/', async (req, res) => {
+router.post('/', async (req, res, next) => {
   try {
     const { name, category, description, params } = req.body || {};
     if (!name || !params) {
@@ -56,12 +56,12 @@ router.post('/', async (req, res) => {
     });
   } catch (err) {
     console.error('Failed to create preset', err.message);
-    res.status(500).json({ error: 'Failed to create preset' });
+    next(err);
   }
 });
 
 // Update an existing preset
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, category, description, params } = req.body || {};
@@ -75,12 +75,12 @@ router.put('/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('Failed to update preset', err.message);
-    res.status(500).json({ error: 'Failed to update preset' });
+    next(err);
   }
 });
 
 // Delete a preset
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const sql = 'DELETE FROM presets WHERE id = ?';
@@ -88,7 +88,7 @@ router.delete('/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('Failed to delete preset', err.message);
-    res.status(500).json({ error: 'Failed to delete preset' });
+    next(err);
   }
 });
 
@@ -105,7 +105,7 @@ function safeParseJSON(text, fallback) {
 // ============================================================================
 
 // List all film curve profiles (built-in from constants + custom from database)
-router.get('/film-curves', async (req, res) => {
+router.get('/film-curves', async (req, res, next) => {
   try {
     // 1. Built-in profiles from constants
     const builtinProfiles = Object.entries(FILM_PROFILES).map(([key, profile]) => ({
@@ -142,12 +142,12 @@ router.get('/film-curves', async (req, res) => {
     res.json(allProfiles);
   } catch (err) {
     console.error('Failed to list film curve profiles', err.message);
-    res.status(500).json({ error: 'Failed to list film curve profiles' });
+    next(err);
   }
 });
 
 // Create a new film curve profile
-router.post('/film-curves', async (req, res) => {
+router.post('/film-curves', async (req, res, next) => {
   try {
     const { name, gamma, dMin, dMax, category } = req.body || {};
     if (!name || gamma === undefined || dMin === undefined || dMax === undefined) {
@@ -174,12 +174,12 @@ router.post('/film-curves', async (req, res) => {
       return res.status(409).json({ error: 'A profile with this name already exists' });
     }
     console.error('Failed to create film curve profile', err.message);
-    res.status(500).json({ error: 'Failed to create film curve profile' });
+    next(err);
   }
 });
 
 // Update an existing film curve profile
-router.put('/film-curves/:id', async (req, res) => {
+router.put('/film-curves/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, gamma, dMin, dMax, category } = req.body || {};
@@ -200,12 +200,12 @@ router.put('/film-curves/:id', async (req, res) => {
       return res.status(409).json({ error: 'A profile with this name already exists' });
     }
     console.error('Failed to update film curve profile', err.message);
-    res.status(500).json({ error: 'Failed to update film curve profile' });
+    next(err);
   }
 });
 
 // Delete a film curve profile
-router.delete('/film-curves/:id', async (req, res) => {
+router.delete('/film-curves/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     // Only allow deleting non-builtin profiles
@@ -217,7 +217,7 @@ router.delete('/film-curves/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('Failed to delete film curve profile', err.message);
-    res.status(500).json({ error: 'Failed to delete film curve profile' });
+    next(err);
   }
 });
 

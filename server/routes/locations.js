@@ -5,18 +5,18 @@ const { allAsync, runAsync, getAsync } = require('../utils/db-helpers');
 const PreparedStmt = require('../utils/prepared-statements');
 
 // GET /api/locations/countries
-router.get('/countries', async (req, res) => {
+router.get('/countries', async (req, res, next) => {
   try {
     const sql = `SELECT DISTINCT country_code, country_name FROM locations WHERE country_code IS NOT NULL ORDER BY country_name`;
     const rows = await allAsync(sql);
     res.json(rows);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
 // GET /api/locations/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req, res, next) => {
   const { id } = req.params;
   if (!id || isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
   try {
@@ -24,12 +24,12 @@ router.get('/:id', async (req, res) => {
     if (!row) return res.status(404).json({ error: 'Not found' });
     res.json(row);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
 // GET /api/locations?country=CN&query=shang
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
   const { country, query, hasRecords, withCounts, includeUserCities } = req.query;
   const params = [];
   const where = [];
@@ -110,12 +110,12 @@ router.get('/', async (req, res) => {
     
     res.json(rows);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
 // POST /api/locations
-router.post('/', async (req, res) => {
+router.post('/', async (req, res, next) => {
   const { country_code, country_name, city_name, city_lat, city_lng } = req.body || {};
   if (!city_name) return res.status(400).json({ error: 'city_name required' });
   try {
@@ -128,7 +128,7 @@ router.post('/', async (req, res) => {
     });
     res.status(201).json({ id: result, ok: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 

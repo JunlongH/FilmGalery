@@ -18,7 +18,7 @@ router.get('/constants', (req, res) => {
 });
 
 // create a film
-router.post('/', uploadFilm.single('thumb'), async (req, res) => {
+router.post('/', uploadFilm.single('thumb'), async (req, res, next) => {
   try {
     const { name, iso, category, brand, format, process } = req.body || {};
     if (!name || !iso || !category) {
@@ -35,24 +35,24 @@ router.post('/', uploadFilm.single('thumb'), async (req, res) => {
     res.status(201).json(film);
   } catch (err) {
     console.error('POST /api/films error', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // list films (exclude soft-deleted)
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
   try {
     const includeDeleted = req.query.includeDeleted === 'true';
     const whereClause = includeDeleted ? '' : 'WHERE deleted_at IS NULL';
     const rows = await allAsync(`SELECT * FROM films ${whereClause} ORDER BY brand, name`);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // soft delete film (set deleted_at)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req, res, next) => {
   try {
     const id = req.params.id;
     const hard = req.query.hard === 'true';
@@ -73,12 +73,12 @@ router.delete('/:id', async (req, res) => {
       res.json({ deleted: result.changes, soft: true });
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // restore soft-deleted film
-router.post('/:id/restore', async (req, res) => {
+router.post('/:id/restore', async (req, res, next) => {
   try {
     const id = req.params.id;
     const result = await runAsync('UPDATE films SET deleted_at = NULL WHERE id = ?', [id]);
@@ -88,12 +88,12 @@ router.post('/:id/restore', async (req, res) => {
     const row = await getAsync('SELECT * FROM films WHERE id = ?', [id]);
     res.json(row);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // update film (name, iso, category, brand, format, process, optional new thumb)
-router.put('/:id', uploadFilm.single('thumb'), async (req, res) => {
+router.put('/:id', uploadFilm.single('thumb'), async (req, res, next) => {
   try {
     const id = req.params.id;
     const filmRow = await getAsync('SELECT * FROM films WHERE id = ?', [id]);
@@ -137,12 +137,12 @@ router.put('/:id', uploadFilm.single('thumb'), async (req, res) => {
     const updated = await getAsync('SELECT * FROM films WHERE id = ?', [id]);
     res.json(updated);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // Upload/update film thumbnail image (standalone endpoint)
-router.post('/:id/thumb', uploadFilm.single('thumb'), async (req, res) => {
+router.post('/:id/thumb', uploadFilm.single('thumb'), async (req, res, next) => {
   try {
     const id = req.params.id;
     const filmRow = await getAsync('SELECT * FROM films WHERE id = ?', [id]);
@@ -173,7 +173,7 @@ router.post('/:id/thumb', uploadFilm.single('thumb'), async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error('POST /api/films/:id/thumb error', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 

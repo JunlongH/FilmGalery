@@ -45,7 +45,7 @@ router.use(async (req, res, next) => {
 });
 
 // ─────────────── POST /chat — SSE 流式聊天 ───────────────
-router.post('/chat', async (req, res) => {
+router.post('/chat', async (req, res, next) => {
   const { message, context, conversation_id, attachments, template_id, model_id } = req.body;
   if (!message?.trim()) {
     return res.status(400).json({ error: 'message is required' });
@@ -114,7 +114,7 @@ router.post('/confirm/:confirmationId', (req, res) => {
 // ─────────────── 配置端点 ───────────────
 
 // GET /config — 脱敏返回
-router.get('/config', async (req, res) => {
+router.get('/config', async (req, res, next) => {
   try {
     const cfg = await getAIConfig();
     const result = { ...cfg };
@@ -132,12 +132,12 @@ router.get('/config', async (req, res) => {
     delete result.api_key;
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // PUT /config
-router.put('/config', async (req, res) => {
+router.put('/config', async (req, res, next) => {
   try {
     await updateAIConfig(req.body);
     res.json({ success: true });
@@ -147,7 +147,7 @@ router.put('/config', async (req, res) => {
 });
 
 // POST /config/test
-router.post('/config/test', async (req, res) => {
+router.post('/config/test', async (req, res, next) => {
   try {
     const result = await aiGateway.testConnection();
     res.json(result);
@@ -157,7 +157,7 @@ router.post('/config/test', async (req, res) => {
 });
 
 // GET /config/models
-router.get('/config/models', async (req, res) => {
+router.get('/config/models', async (req, res, next) => {
   try {
     const models = await aiGateway.listModels();
     res.json({ models: models || [] });
@@ -169,7 +169,7 @@ router.get('/config/models', async (req, res) => {
 // ─────────────── 对话管理 ───────────────
 
 // GET /conversations
-router.get('/conversations', async (req, res) => {
+router.get('/conversations', async (req, res, next) => {
   try {
     const convs = await allAsync(`
       SELECT c.id, c.title, c.platform, c.created_at, c.updated_at,
@@ -182,12 +182,12 @@ router.get('/conversations', async (req, res) => {
     `);
     res.json(convs);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /conversations/:id
-router.get('/conversations/:id', async (req, res) => {
+router.get('/conversations/:id', async (req, res, next) => {
   try {
     const messages = await allAsync(
       `SELECT id, role, content, model, image_refs, created_at
@@ -196,17 +196,17 @@ router.get('/conversations/:id', async (req, res) => {
     );
     res.json({ messages });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // DELETE /conversations/:id
-router.delete('/conversations/:id', async (req, res) => {
+router.delete('/conversations/:id', async (req, res, next) => {
   try {
     await runAsync('DELETE FROM ai_conversations WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
@@ -261,18 +261,18 @@ async function prepareImageAttachments(attachments) {
 // ─────────── 快捷提示 CRUD ───────────
 
 // GET /shortcuts — 列出所有快捷提示
-router.get('/shortcuts', async (req, res) => {
+router.get('/shortcuts', async (req, res, next) => {
   try {
     const rows = await allAsync('SELECT * FROM ai_prompt_shortcuts ORDER BY scope, sort_order');
     res.json(rows);
   } catch (err) {
     console.error('[AI] Shortcuts list error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // POST /shortcuts — 创建快捷提示
-router.post('/shortcuts', async (req, res) => {
+router.post('/shortcuts', async (req, res, next) => {
   try {
     const { label, prompt, icon, scope, sort_order } = req.body;
     if (!label?.trim() || !prompt?.trim()) {
@@ -286,12 +286,12 @@ router.post('/shortcuts', async (req, res) => {
     res.json(row);
   } catch (err) {
     console.error('[AI] Shortcut create error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // PUT /shortcuts/:id — 更新快捷提示
-router.put('/shortcuts/:id', async (req, res) => {
+router.put('/shortcuts/:id', async (req, res, next) => {
   try {
     const { label, prompt, icon, scope, sort_order } = req.body;
     const existing = await getAsync('SELECT * FROM ai_prompt_shortcuts WHERE id = ?', [req.params.id]);
@@ -312,12 +312,12 @@ router.put('/shortcuts/:id', async (req, res) => {
     res.json(row);
   } catch (err) {
     console.error('[AI] Shortcut update error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // DELETE /shortcuts/:id — 删除快捷提示
-router.delete('/shortcuts/:id', async (req, res) => {
+router.delete('/shortcuts/:id', async (req, res, next) => {
   try {
     const existing = await getAsync('SELECT * FROM ai_prompt_shortcuts WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Not found' });
@@ -325,36 +325,36 @@ router.delete('/shortcuts/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('[AI] Shortcut delete error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ─────────── 提示词模板 CRUD ───────────
 
 // GET /templates — 列出所有模板
-router.get('/templates', async (req, res) => {
+router.get('/templates', async (req, res, next) => {
   try {
     const rows = await allAsync('SELECT * FROM ai_prompt_templates ORDER BY sort_order, id');
     res.json(rows);
   } catch (err) {
     console.error('[AI] Templates list error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // GET /templates/:id
-router.get('/templates/:id', async (req, res) => {
+router.get('/templates/:id', async (req, res, next) => {
   try {
     const row = await getAsync('SELECT * FROM ai_prompt_templates WHERE id = ?', [req.params.id]);
     if (!row) return res.status(404).json({ error: 'Not found' });
     res.json(row);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // POST /templates — 创建模板
-router.post('/templates', async (req, res) => {
+router.post('/templates', async (req, res, next) => {
   try {
     const { name, icon, description, system_prompt, hidden_command, starter_prompt, sort_order } = req.body;
     if (!name?.trim() || !system_prompt?.trim()) {
@@ -371,12 +371,12 @@ router.post('/templates', async (req, res) => {
     res.json(row);
   } catch (err) {
     console.error('[AI] Template create error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // PUT /templates/:id — 更新模板
-router.put('/templates/:id', async (req, res) => {
+router.put('/templates/:id', async (req, res, next) => {
   try {
     const existing = await getAsync('SELECT * FROM ai_prompt_templates WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Not found' });
@@ -408,12 +408,12 @@ router.put('/templates/:id', async (req, res) => {
     res.json(row);
   } catch (err) {
     console.error('[AI] Template update error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // DELETE /templates/:id — 删除模板（内置模板不可删除）
-router.delete('/templates/:id', async (req, res) => {
+router.delete('/templates/:id', async (req, res, next) => {
   try {
     const existing = await getAsync('SELECT * FROM ai_prompt_templates WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Not found' });
@@ -422,14 +422,14 @@ router.delete('/templates/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('[AI] Template delete error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // ─────────── AI 模型配置 CRUD ───────────
 
 // GET /models/configured — 列出已配置的模型
-router.get('/models/configured', async (req, res) => {
+router.get('/models/configured', async (req, res, next) => {
   try {
     const rows = await allAsync('SELECT * FROM ai_models ORDER BY sort_order, id');
     // 脱敏 api_key
@@ -451,12 +451,12 @@ router.get('/models/configured', async (req, res) => {
     res.json(safe);
   } catch (err) {
     console.error('[AI] Models list error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // POST /models/configured — 添加模型
-router.post('/models/configured', async (req, res) => {
+router.post('/models/configured', async (req, res, next) => {
   try {
     const { name, model_id, provider, capabilities, api_base_url, api_key, enabled, is_default_text, is_default_vision, sort_order } = req.body;
     if (!name?.trim() || !model_id?.trim()) {
@@ -485,12 +485,12 @@ router.post('/models/configured', async (req, res) => {
     res.json(row);
   } catch (err) {
     console.error('[AI] Model create error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // PUT /models/configured/:id — 更新模型
-router.put('/models/configured/:id', async (req, res) => {
+router.put('/models/configured/:id', async (req, res, next) => {
   try {
     const existing = await getAsync('SELECT * FROM ai_models WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Not found' });
@@ -532,12 +532,12 @@ router.put('/models/configured/:id', async (req, res) => {
     res.json(row);
   } catch (err) {
     console.error('[AI] Model update error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
 // DELETE /models/configured/:id — 删除模型
-router.delete('/models/configured/:id', async (req, res) => {
+router.delete('/models/configured/:id', async (req, res, next) => {
   try {
     const existing = await getAsync('SELECT * FROM ai_models WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Not found' });
@@ -545,7 +545,7 @@ router.delete('/models/configured/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('[AI] Model delete error:', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 

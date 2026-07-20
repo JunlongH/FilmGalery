@@ -12,7 +12,7 @@ const {
 } = require('../services/film/film-item-service');
 
 // Batch purchase: create multiple film_items from a single order
-router.post('/purchase-batch', async (req, res) => {
+router.post('/purchase-batch', async (req, res, next) => {
   try {
     const batch = req.body || {};
     const created = await createFilmItemsFromPurchase(batch);
@@ -24,7 +24,7 @@ router.post('/purchase-batch', async (req, res) => {
 });
 
 // List film items
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
   const startTime = Date.now();
   try {
     const filters = {
@@ -71,12 +71,12 @@ router.get('/', async (req, res) => {
     res.json({ ok: true, items });
   } catch (err) {
     console.error('[film-items] list error', err);
-    res.status(500).json({ ok: false, error: 'Failed to list film items' });
+    next(err);
   }
 });
 
 // Get single film item
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     const item = await getFilmItemById(id);
@@ -101,12 +101,12 @@ router.get('/:id', async (req, res) => {
     res.json({ ok: true, item });
   } catch (err) {
     console.error('[film-items] get error', err);
-    res.status(500).json({ ok: false, error: 'Failed to get film item' });
+    next(err);
   }
 });
 
 // Export shot logs as CSV
-router.get('/:id/shot-logs/export', async (req, res) => {
+router.get('/:id/shot-logs/export', async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     const item = await getFilmItemById(id);
@@ -131,7 +131,7 @@ router.get('/:id/shot-logs/export', async (req, res) => {
       if (Array.isArray(parsed)) logs = parsed;
     } catch (e) {
       console.error('[film-items] export parse error', e.message);
-      return res.status(500).json({ ok: false, error: 'Invalid shot_logs format' });
+      return next(e);
     }
 
     const escapeCsv = (val) => {
@@ -181,12 +181,12 @@ router.get('/:id/shot-logs/export', async (req, res) => {
     res.end();
   } catch (err) {
     console.error('[film-items] export error', err);
-    res.status(500).json({ ok: false, error: 'Failed to export shot logs' });
+    next(err);
   }
 });
 
 // Update film item
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req, res, next) => {
   const startTime = Date.now();
   try {
     const id = Number(req.params.id);
@@ -204,7 +204,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete film item (soft by default, hard if ?hard=true)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     const hardDelete = req.query.hard === 'true';

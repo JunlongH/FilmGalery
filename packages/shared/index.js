@@ -7,6 +7,7 @@
 
 // 核心处理模块
 const RenderCore = require('./render/RenderCore');
+const { renderBuffer } = require('./render/render-buffer');
 const saturation = require('./filmLabSaturation');
 const constants = require('./filmLabConstants');
 const toneLUT = require('./filmLabToneLUT');
@@ -39,6 +40,9 @@ module.exports = {
   
   /** 统一渲染核心 (替代 legacy filmlab-core) */
   RenderCore,
+
+  /** 将 RenderCore 应用到整个像素缓冲区（消除 N 处重复 for-loop；2C.3） */
+  renderBuffer,
   
   // ============================================================================
   // 全局饱和度

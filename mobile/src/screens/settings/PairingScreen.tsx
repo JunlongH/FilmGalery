@@ -6,12 +6,14 @@
  * On 401 (revoked/expired), App.tsx navigates here automatically.
  */
 import React, { useState, useCallback } from 'react';
+import { useT } from '../../i18n';
 import { View, Text, TextInput, Button, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { api, saveAuthToken } from '../../api/client';
 import { getDeviceFingerprint } from '../../utils/deviceFp';
 
 export default function PairingScreen() {
+  const t = useT();
   const navigation = useNavigation<any>();
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,7 +21,7 @@ export default function PairingScreen() {
 
   const handlePair = useCallback(async () => {
     if (code.length !== 6) {
-      setError('请输入 6 位配对码');
+      setError(t('pair.enterCode'));
       return;
     }
     setLoading(true);
@@ -38,15 +40,15 @@ export default function PairingScreen() {
         await saveAuthToken(res.token);
         navigation.navigate('Main');
       } else {
-        setError('服务器未返回 token');
+        setError(t('pair.noToken'));
       }
     } catch (e: any) {
-      const msg = e?.body?.error || e?.message || '配对失败';
+      const msg = e?.body?.error || e?.message || t('pair.failed');
       const status = e?.status;
       if (status === 423) {
-        setError('配对码已锁定，请在服务器端重新生成');
+        setError(t('pair.locked'));
       } else if (status === 401) {
-        setError('配对码错误或已过期');
+        setError(t('pair.invalid'));
       } else {
         setError(msg);
       }
@@ -61,10 +63,9 @@ export default function PairingScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>设备配对</Text>
+      <Text style={styles.title}>{t('pair.title')}</Text>
       <Text style={styles.subtitle}>
-        在服务器端的 设置 → 安全 → 生成配对码，{'\n'}
-        然后在此输入 6 位数字
+        {t('pair.hint')}
       </Text>
 
       <TextInput
@@ -83,9 +84,9 @@ export default function PairingScreen() {
         <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
       ) : (
         <View style={styles.buttonRow}>
-          <Button title="取消" onPress={handleCancel} color="#999" />
+          <Button title={t('common.cancel')} onPress={handleCancel} color="#999" />
           <Button
-            title="配对"
+            title={t('pair.pair')}
             onPress={handlePair}
             disabled={code.length !== 6}
           />

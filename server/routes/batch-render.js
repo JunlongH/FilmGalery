@@ -177,7 +177,7 @@ async function executeBatchJob(job, mode, outputDir = null, outputOptions = {}) 
  * POST /api/batch-render/library
  * 创建批量渲染任务 (写入库)
  */
-router.post('/library', async (req, res) => {
+router.post('/library', async (req, res, next) => {
   try {
     const { rollId, scope, photoIds, paramsSource } = req.body;
     
@@ -240,7 +240,7 @@ router.post('/library', async (req, res) => {
     });
   } catch (e) {
     console.error('[BatchRender] Create library job error:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
@@ -248,7 +248,7 @@ router.post('/library', async (req, res) => {
  * POST /api/batch-render/download
  * 创建批量渲染任务 (下载到目录)
  */
-router.post('/download', async (req, res) => {
+router.post('/download', async (req, res, next) => {
   try {
     const { rollId, scope, photoIds, paramsSource, outputDir, format, quality, maxWidth, namingPattern } = req.body;
     
@@ -317,7 +317,7 @@ router.post('/download', async (req, res) => {
     });
   } catch (e) {
     console.error('[BatchRender] Create download job error:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
@@ -325,7 +325,7 @@ router.post('/download', async (req, res) => {
  * GET /api/batch-render/:jobId/progress
  * 查询任务进度
  */
-router.get('/:jobId/progress', (req, res) => {
+router.get('/:jobId/progress', (req, res, next) => {
   const { jobId } = req.params;
   const job = activeJobs.get(jobId);
   
@@ -349,7 +349,7 @@ router.get('/:jobId/progress', (req, res) => {
  * POST /api/batch-render/:jobId/cancel
  * 取消任务
  */
-router.post('/:jobId/cancel', (req, res) => {
+router.post('/:jobId/cancel', (req, res, next) => {
   const { jobId } = req.params;
   const job = activeJobs.get(jobId);
   
@@ -365,7 +365,7 @@ router.post('/:jobId/cancel', (req, res) => {
  * POST /api/batch-render/:jobId/pause
  * 暂停任务
  */
-router.post('/:jobId/pause', (req, res) => {
+router.post('/:jobId/pause', (req, res, next) => {
   const { jobId } = req.params;
   const job = activeJobs.get(jobId);
   
@@ -384,7 +384,7 @@ router.post('/:jobId/pause', (req, res) => {
  * POST /api/batch-render/:jobId/resume
  * 恢复任务
  */
-router.post('/:jobId/resume', (req, res) => {
+router.post('/:jobId/resume', (req, res, next) => {
   const { jobId } = req.params;
   const job = activeJobs.get(jobId);
   
@@ -403,7 +403,7 @@ router.post('/:jobId/resume', (req, res) => {
  * GET /api/batch-render/jobs
  * 获取所有活跃任务
  */
-router.get('/jobs', (req, res) => {
+router.get('/jobs', (req, res, next) => {
   const jobs = Array.from(activeJobs.values()).map(job => ({
     jobId: job.id,
     type: job.type,
@@ -421,7 +421,7 @@ router.get('/jobs', (req, res) => {
  * DELETE /api/batch-render/:jobId
  * 删除任务记录
  */
-router.delete('/:jobId', (req, res) => {
+router.delete('/:jobId', (req, res, next) => {
   const { jobId } = req.params;
   const job = activeJobs.get(jobId);
   

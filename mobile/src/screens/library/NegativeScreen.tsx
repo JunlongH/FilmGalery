@@ -31,7 +31,7 @@ export default function NegativeScreen({ navigation }: any) {
     },
   );
   const photos = useMemo(() => data ?? [], [data]);
-  const error = photos.length === 0 && queryError ? '加载底片失败' : null;
+  const error = photos.length === 0 && queryError ? t('negatives.loadFailed') : null;
 
   // Animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -80,7 +80,7 @@ export default function NegativeScreen({ navigation }: any) {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {error && <Text style={[styles.error, { color: theme.colors.error }]}>{error}</Text>}
       <View style={styles.filterBar}>
-        <Chip selected={!selectedFilm} onPress={() => setSelectedFilm(null)} style={styles.chip}>全部</Chip>
+        <Chip selected={!selectedFilm} onPress={() => setSelectedFilm(null)} style={styles.chip}>{t('common.all')}</Chip>
         {filmList.map(([film, count]) => (
           <Chip key={film} selected={selectedFilm === film} onPress={() => setSelectedFilm(film)} style={styles.chip}>{film}</Chip>
         ))}

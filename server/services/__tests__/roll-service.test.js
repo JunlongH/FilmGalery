@@ -1,19 +1,17 @@
 /**
- * Tests for the start_date column migration in server/services/roll-service.js
+ * Tests for recomputeRollSequence — Phase 2C.1.3 contract.
  *
- * Locks the Phase 0–1 fix: on a fresh install the `start_date` column is added
- * by a migration that is currently disabled, so `recomputeRollSequence`
- * (which ORDER BY start_date) crashed at first run. `ensureStartDateColumn`
- * makes that add idempotent and backfills from date_loaded.
+ * Locks the post-refactor behavior:
+ *   - Schema (display_seq, start_date) is owned by schema-migration.js, NOT
+ *     by runtime ensure-column checks. roll-service.js no longer exports
+ *     ensureDisplaySeqColumn / ensureStartDateColumn.
+ *   - recomputeRollSequence is a single window-function UPDATE wrapped in
+ *     BEGIN/COMMIT, replacing the previous N+1 JS loop.
  *
- * Tested at the logic level by stubbing the data-access layer (db-helpers).
- * This precisely pins the migration's decision contract:
- *   - PRAGMA table_info(rolls) is consulted first
- *   - when start_date is absent: ALTER + backfill UPDATE run exactly once
- *   - when start_date is present: no ALTER, no UPDATE (idempotent, no crash)
- *
- * A real-sqlite integration variant can be layered on once the server's native
- * deps are installed in CI; the logic contract above is what this guard locks.
+ * Tested at the logic level by stubbing db-helpers. The contract pinned:
+ *   - SELECT COUNT(*) gates the empty-table case
+ *   - BEGIN → UPDATE … ROW_NUMBER() OVER (…) → COMMIT sequence
+ *   - failure between BEGIN and COMMIT triggers ROLLBACK and re-throws
  */
 
 jest.mock('../../utils/db-helpers', () => ({
@@ -22,51 +20,67 @@ jest.mock('../../utils/db-helpers', () => ({
   getAsync: jest.fn(),
 }));
 
-const { runAsync, allAsync } = require('../../utils/db-helpers');
-const { ensureStartDateColumn } = require('../roll-service');
+const dbHelpers = require('../../utils/db-helpers');
+const { recomputeRollSequence } = require('../roll-service');
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('ensureStartDateColumn — Phase 0–1 first-install fix', () => {
-  test('adds start_date and backfills from date_loaded when absent', async () => {
-    // Fresh install: rolls exists but has no start_date column.
-    allAsync.mockResolvedValueOnce([{ name: 'id' }, { name: 'date_loaded' }]);
-    runAsync.mockResolvedValue({}); // ALTER + UPDATE both succeed
+describe('recomputeRollSequence — 2C.1.3 window-function contract', () => {
+  test('empty rolls table → no-op (no transaction started)', async () => {
+    dbHelpers.getAsync.mockResolvedValueOnce({ count: 0 });
 
-    await ensureStartDateColumn();
+    const result = await recomputeRollSequence();
 
-    expect(allAsync).toHaveBeenCalledWith('PRAGMA table_info(rolls)');
-    expect(runAsync).toHaveBeenCalledTimes(2);
-    expect(runAsync).toHaveBeenNthCalledWith(
-      1,
-      'ALTER TABLE rolls ADD COLUMN start_date DATE'
-    );
-    expect(runAsync).toHaveBeenNthCalledWith(
-      2,
-      'UPDATE rolls SET start_date = date_loaded WHERE start_date IS NULL AND date_loaded IS NOT NULL'
-    );
+    expect(result).toEqual({ count: 0 });
+    expect(dbHelpers.runAsync).not.toHaveBeenCalled();
   });
 
-  test('is a no-op when start_date already exists (idempotent — no crash on rerun)', async () => {
-    allAsync.mockResolvedValueOnce([
-      { name: 'id' },
-      { name: 'start_date' },
-      { name: 'date_loaded' },
-    ]);
+  test('non-empty table → BEGIN → window UPDATE → COMMIT', async () => {
+    dbHelpers.getAsync.mockResolvedValueOnce({ count: 42 });
+    dbHelpers.runAsync.mockResolvedValue();
 
-    await ensureStartDateColumn();
+    const result = await recomputeRollSequence();
 
-    expect(allAsync).toHaveBeenCalledWith('PRAGMA table_info(rolls)');
-    // No ALTER, no UPDATE — the guard short-circuits.
-    expect(runAsync).not.toHaveBeenCalled();
+    expect(result).toEqual({ count: 42 });
+    expect(dbHelpers.runAsync).toHaveBeenCalledTimes(3);
+    expect(dbHelpers.runAsync.mock.calls[0][0]).toBe('BEGIN');
+    expect(dbHelpers.runAsync.mock.calls[1][0]).toMatch(/ROW_NUMBER\(\)\s+OVER/);
+    expect(dbHelpers.runAsync.mock.calls[1][0]).toMatch(/PARTITION BY|ORDER BY/);
+    expect(dbHelpers.runAsync.mock.calls[2][0]).toBe('COMMIT');
   });
 
-  test('re-throws if the ALTER fails (does not silently swallow)', async () => {
-    allAsync.mockResolvedValueOnce([{ name: 'id' }]);
-    runAsync.mockRejectedValueOnce(new Error('ALTER failed: duplicate column'));
+  test('UPDATE failure → ROLLBACK + re-throw', async () => {
+    dbHelpers.getAsync.mockResolvedValueOnce({ count: 5 });
+    dbHelpers.runAsync
+      .mockResolvedValueOnce() // BEGIN
+      .mockRejectedValueOnce(new Error('disk I/O')); // UPDATE fails
+    dbHelpers.runAsync.mockResolvedValue(); // ROLLBACK
 
-    await expect(ensureStartDateColumn()).rejects.toThrow('ALTER failed');
+    await expect(recomputeRollSequence()).rejects.toThrow('disk I/O');
+
+    // Last run call must be ROLLBACK (best-effort recovery).
+    const lastCall = dbHelpers.runAsync.mock.calls.at(-1);
+    expect(lastCall[0]).toBe('ROLLBACK');
+  });
+
+  test('ROLLBACK itself failing is swallowed (primary error still propagates)', async () => {
+    dbHelpers.getAsync.mockResolvedValueOnce({ count: 5 });
+    dbHelpers.runAsync
+      .mockResolvedValueOnce() // BEGIN
+      .mockRejectedValueOnce(new Error('primary')) // UPDATE fails
+      .mockRejectedValueOnce(new Error('rollback failed')); // ROLLBACK fails too
+
+    await expect(recomputeRollSequence()).rejects.toThrow('primary');
+  });
+});
+
+describe('roll-service public surface (2C.1.3)', () => {
+  test('does NOT export runtime ensure-column fallbacks', () => {
+    const svc = require('../roll-service');
+    expect(svc.ensureDisplaySeqColumn).toBeUndefined();
+    expect(svc.ensureStartDateColumn).toBeUndefined();
+    expect(typeof svc.recomputeRollSequence).toBe('function');
   });
 });

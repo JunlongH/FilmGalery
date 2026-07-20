@@ -86,7 +86,7 @@ async function getLutInfo(filename) {
  * GET /api/luts
  * 获取所有 LUT 文件列表
  */
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
   try {
     const files = await fs.readdir(LUT_DIR);
     const luts = [];
@@ -109,7 +109,7 @@ router.get('/', async (req, res) => {
     res.json({ luts });
   } catch (e) {
     console.error('Failed to list LUTs:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
@@ -145,7 +145,7 @@ router.post('/upload', (req, res, next) => {
  * DELETE /api/luts/:name
  * 删除 LUT 文件
  */
-router.delete('/:name', async (req, res) => {
+router.delete('/:name', async (req, res, next) => {
   try {
     const { name } = req.params;
     const filepath = path.join(LUT_DIR, name);
@@ -160,7 +160,7 @@ router.delete('/:name', async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     console.error('Failed to delete LUT:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
@@ -168,7 +168,7 @@ router.delete('/:name', async (req, res) => {
  * GET /api/luts/:name
  * 获取 LUT 文件内容
  */
-router.get('/:name', async (req, res) => {
+router.get('/:name', async (req, res, next) => {
   try {
     const { name } = req.params;
     const filepath = path.join(LUT_DIR, name);
@@ -182,7 +182,7 @@ router.get('/:name', async (req, res) => {
     res.sendFile(filepath);
   } catch (e) {
     console.error('Failed to get LUT:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
@@ -190,14 +190,14 @@ router.get('/:name', async (req, res) => {
  * GET /api/luts/:name/info
  * 获取 LUT 文件详细信息
  */
-router.get('/:name/info', async (req, res) => {
+router.get('/:name/info', async (req, res, next) => {
   try {
     const { name } = req.params;
     const info = await getLutInfo(name);
     res.json(info);
   } catch (e) {
     console.error('Failed to get LUT info:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 

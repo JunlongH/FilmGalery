@@ -29,7 +29,7 @@ const {
  * GET /api/filesystem/roots
  * 获取可浏览的根目录列表
  */
-router.get('/roots', (req, res) => {
+router.get('/roots', (req, res, next) => {
   try {
     const roots = getAllowedPaths().map(p => ({
       path: p,
@@ -44,7 +44,7 @@ router.get('/roots', (req, res) => {
     });
   } catch (err) {
     console.error('[Filesystem] Error getting roots:', err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 
@@ -57,7 +57,7 @@ router.get('/roots', (req, res) => {
  * - showFiles: 是否显示文件 (默认 true)
  * - filter: 文件扩展名过滤 (如 "jpg,jpeg,tif,tiff")
  */
-router.get('/browse', (req, res) => {
+router.get('/browse', (req, res, next) => {
   try {
     const targetPath = req.query.path;
     const showFiles = req.query.showFiles !== 'false';
@@ -147,7 +147,7 @@ router.get('/browse', (req, res) => {
     });
   } catch (err) {
     console.error('[Filesystem] Error browsing:', err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 
@@ -155,7 +155,7 @@ router.get('/browse', (req, res) => {
  * POST /api/filesystem/validate
  * 验证路径是否有效且可访问
  */
-router.post('/validate', (req, res) => {
+router.post('/validate', (req, res, next) => {
   try {
     const { path: targetPath, mustBeDirectory = true, mustBeWritable = false } = req.body;
     
@@ -210,7 +210,7 @@ router.post('/validate', (req, res) => {
     });
   } catch (err) {
     console.error('[Filesystem] Error validating:', err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 
@@ -218,7 +218,7 @@ router.post('/validate', (req, res) => {
  * POST /api/filesystem/mkdir
  * 创建目录
  */
-router.post('/mkdir', (req, res) => {
+router.post('/mkdir', (req, res, next) => {
   try {
     const { path: targetPath } = req.body;
     
@@ -241,7 +241,7 @@ router.post('/mkdir', (req, res) => {
     res.json({ ok: true, path: targetPath });
   } catch (err) {
     console.error('[Filesystem] Error creating directory:', err);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 });
 

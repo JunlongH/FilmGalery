@@ -27,10 +27,10 @@ export default function FilmRollsScreen({ route, navigation }: any) {
     () => (data ?? []).filter((r: any) => r.filmId === filmId),
     [data, filmId],
   );
-  const error = rolls.length === 0 && queryError ? '无法连接服务器。' : null;
+  const error = rolls.length === 0 && queryError ? t('home.error') : null;
 
   React.useEffect(() => {
-    navigation.setOptions({ title: filmName || '胶卷' });
+    navigation.setOptions({ title: filmName || t('title.filmRolls') });
   }, [navigation, filmName]);
 
   // Header refresh button
@@ -58,22 +58,22 @@ export default function FilmRollsScreen({ route, navigation }: any) {
     return (
       <Card 
         style={[styles.card, { backgroundColor: theme.colors.surface }]} 
-        onPress={() => navigation.navigate('RollDetail', { rollId: item.id, rollName: item.title || `胶卷 #${item.id}` })}
+        onPress={() => navigation.navigate('RollDetail', { rollId: item.id, rollName: item.title || t('home.rollFallback', { id: item.id }) })}
         mode="elevated"
       >
         {coverUrl ? (
           <View style={styles.coverWrapper}>
             <CachedImage uri={coverUrl} style={styles.cover} contentFit="cover" />
             <CoverOverlay 
-              title={item.title || `胶卷 #${item.id}`}
-              leftText={(item.film_name_joined || item.film_type || '未知胶卷')}
+              title={item.title || t('home.rollFallback', { id: item.id })}
+              leftText={(item.film_name_joined || item.film_type || t('home.unknownFilm'))}
               rightText={`${item.start_date ? format(new Date(item.start_date), 'yyyy-MM-dd') : ''}${item.end_date ? ` - ${format(new Date(item.end_date), 'yyyy-MM-dd')}` : ''}`}
             />
           </View>
         ) : (
           <Card.Content style={styles.cardContent}>
-            <Title style={[styles.cardTitle, { color: theme.colors.onSurface }]}>{item.title || `胶卷 #${item.id}`}</Title>
-            <Paragraph style={[styles.meta, { color: theme.colors.onSurfaceVariant }]}>{item.film_name_joined || item.film_type || '未知胶卷'}</Paragraph>
+            <Title style={[styles.cardTitle, { color: theme.colors.onSurface }]}>{item.title || t('home.rollFallback', { id: item.id })}</Title>
+            <Paragraph style={[styles.meta, { color: theme.colors.onSurfaceVariant }]}>{item.film_name_joined || item.film_type || t('home.unknownFilm')}</Paragraph>
           </Card.Content>
         )}
       </Card>
@@ -103,7 +103,7 @@ export default function FilmRollsScreen({ route, navigation }: any) {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[theme.colors.primary]} />
           }
-          ListEmptyComponent={!loading ? <Text style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>暂无使用此胶卷拍摄的卷。</Text> : null}
+          ListEmptyComponent={!loading ? <Text style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>{t('films.noRolls')}</Text> : null}
           initialNumToRender={6}
           windowSize={7}
           maxToRenderPerBatch={6}

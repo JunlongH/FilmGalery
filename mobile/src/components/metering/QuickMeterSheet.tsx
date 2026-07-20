@@ -85,7 +85,7 @@ export default function QuickMeterSheet({ visible, onClose }: any) {
       setFilms(Array.isArray(filmsRes) ? filmsRes : []);
     } catch (e) {
       console.log('Failed to load film items', e);
-      setError('加载胶卷失败');
+      setError(t('shot.loadFailed'));
       setLoadedFilmItems([]);
       setFilms([]);
     } finally {
@@ -103,7 +103,7 @@ export default function QuickMeterSheet({ visible, onClose }: any) {
   const getFilmInfo = useCallback((item: any) => {
     const film = films.find((f: any) => f.id === item.film_id);
     return {
-      name: film?.name || item.film_name || item.film_type || `胶卷 #${item.film_id || ''}`,
+      name: film?.name || item.film_name || item.film_type || t('home.rollFallback', { id: item.film_id || '' }),
       iso: film?.iso || item.iso || 400,
       brand: film?.brand || '',
     };
@@ -178,7 +178,7 @@ export default function QuickMeterSheet({ visible, onClose }: any) {
                   const filmInfo = getFilmInfo(item);
                   const meta = [
                     item.label,
-                    item.loaded_camera ? `装于 ${item.loaded_camera}` : null,
+                    item.loaded_camera ? t('common.loadedOnCam', { camera: item.loaded_camera }) : null,
                   ].filter(Boolean).join(' • ');
                   
                   return (
@@ -213,7 +213,7 @@ export default function QuickMeterSheet({ visible, onClose }: any) {
               }}
             >
               <Icon name="package" size={18} color={theme.colors.onSurfaceVariant} />
-              <Text style={styles.footerButtonText}>管理库存</Text>
+              <Text style={styles.footerButtonText}>{t('common.manageInventory')}</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>

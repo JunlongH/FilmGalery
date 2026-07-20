@@ -71,11 +71,11 @@ export default function RollDetailScreen({ route, navigation }: any) {
       <Surface style={[styles.headerSurface, { backgroundColor: theme.colors.surface }]} elevation={1}>
         <View style={styles.headerContent}>
           <View style={styles.headerTopRow}>
-            <Text style={[styles.title, { color: theme.colors.onSurface }]}>{roll.title || `胶卷 #${roll.id}`}</Text>
+            <Text style={[styles.title, { color: theme.colors.onSurface }]}>{roll.title || t('home.rollFallback', { id: roll.id })}</Text>
             <View style={styles.headerActions}>
                 {hasNegatives && (
                     <View style={styles.toggleRow}>
-                        <Text style={[styles.toggleLabel, { color: theme.colors.onSurfaceVariant }]}>底片</Text>
+                        <Text style={[styles.toggleLabel, { color: theme.colors.onSurfaceVariant }]}>{t('roll.negatives')}</Text>
                         <Switch
                             value={showNegatives}
                             onValueChange={setShowNegatives}
@@ -87,7 +87,7 @@ export default function RollDetailScreen({ route, navigation }: any) {
                 <TouchableOpacity
                   style={{ padding: 8 }}
                   onPress={() => setExpanded(prev => !prev)}
-                  accessibilityLabel={expanded ? '收起详情' : '展开详情'}
+                  accessibilityLabel={expanded ? t('roll.collapse') : t('roll.expand')}
                 >
                   <Icon
                     name={expanded ? 'chevron-up' : 'chevron-down'}
@@ -99,7 +99,7 @@ export default function RollDetailScreen({ route, navigation }: any) {
           </View>
 
           <Text style={[styles.date, { color: theme.colors.onSurfaceVariant }]}>
-            {roll.start_date ? format(new Date(roll.start_date), 'MMMM d, yyyy') : '无日期'}
+            {roll.start_date ? format(new Date(roll.start_date), 'MMMM d, yyyy') : t('common.noDate')}
             {roll.end_date ? ` - ${format(new Date(roll.end_date), 'MMMM d, yyyy')}` : ''}
           </Text>
 
@@ -109,18 +109,18 @@ export default function RollDetailScreen({ route, navigation }: any) {
 
               <View style={styles.metaRow}>
                 <View style={styles.metaItem}>
-                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>相机</Text>
+                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>{t('roll.camera')}</Text>
                   <Text style={[styles.metaValue, { color: theme.colors.onSurface }]}>{roll.display_camera || '-'}</Text>
                 </View>
                 <View style={styles.metaItem}>
-                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>镜头</Text>
+                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>{t('roll.lens')}</Text>
                   <Text style={[styles.metaValue, { color: theme.colors.onSurface }]}>{roll.display_lens || '-'}</Text>
                 </View>
               </View>
 
               <View style={styles.metaRow}>
                 <View style={styles.metaItem}>
-                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>胶卷</Text>
+                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>{t('roll.filmStock')}</Text>
                   <Text style={[styles.metaValue, { color: theme.colors.onSurface }]}>{roll.film_name_joined || roll.film_type || '-'}</Text>
                 </View>
                 <View style={styles.metaItem}>
@@ -131,7 +131,7 @@ export default function RollDetailScreen({ route, navigation }: any) {
 
               {roll.notes ? (
                 <View style={styles.notesContainer}>
-                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>备注</Text>
+                  <Text style={[styles.metaLabel, { color: theme.colors.onSurfaceVariant }]}>{t('roll.notes')}</Text>
                   <Text style={[styles.notesText, { color: theme.colors.onSurface }]}>{roll.notes}</Text>
                 </View>
               ) : null}

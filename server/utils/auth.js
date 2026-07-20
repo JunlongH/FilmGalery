@@ -116,10 +116,13 @@ function createAuthMiddleware({ sessionsStore, softMode = false }) {
         }
         next();
       } else {
-        res.status(result.status || 401).json({
-          ok: false,
-          error: result.message || 'unauthorized',
-        });
+        // Funnel auth failures through errorHandler for a consistent response
+        // shape (ok/error/code/errorId). The `expose` flag is derived from
+        // status in classifyError: <500 → client message visible.
+        const err = new Error(result.message || 'Unauthorized');
+        err.status = result.status || 401;
+        err.code = result.status >= 500 ? 'AUTH_INTERNAL' : 'UNAUTHORIZED';
+        next(err);
       }
     }).catch((err) => next(err));
   }

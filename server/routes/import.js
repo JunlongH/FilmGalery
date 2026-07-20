@@ -47,7 +47,7 @@ function createJobId() {
  * POST /api/import/preview
  * 预览导入匹配结果
  */
-router.post('/preview', async (req, res) => {
+router.post('/preview', async (req, res, next) => {
   try {
     const { rollId, filePaths, strategy = 'filename' } = req.body;
     
@@ -68,7 +68,7 @@ router.post('/preview', async (req, res) => {
     res.json(result);
   } catch (e) {
     console.error('[Import] Preview error:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
@@ -76,7 +76,7 @@ router.post('/preview', async (req, res) => {
  * POST /api/import/manual-match
  * 更新手动匹配
  */
-router.post('/manual-match', async (req, res) => {
+router.post('/manual-match', async (req, res, next) => {
   try {
     const { rollId, matches, fileIndex, photoId } = req.body;
     
@@ -113,7 +113,7 @@ router.post('/manual-match', async (req, res) => {
     });
   } catch (e) {
     console.error('[Import] Manual match error:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 
@@ -121,7 +121,7 @@ router.post('/manual-match', async (req, res) => {
  * POST /api/import/execute
  * 执行导入
  */
-router.post('/execute', async (req, res) => {
+router.post('/execute', async (req, res, next) => {
   try {
     const { 
       rollId, 
@@ -196,7 +196,7 @@ router.post('/execute', async (req, res) => {
     });
   } catch (e) {
     console.error('[Import] Execute error:', e);
-    res.status(500).json({ error: e.message });
+    next(e);
   }
 });
 

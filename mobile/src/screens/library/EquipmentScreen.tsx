@@ -33,6 +33,7 @@ export default function EquipmentScreen({ navigation }: any) {
   const t = useT();
   const { baseUrl } = useContext(ApiContext);
   const [tab, setTab] = useState('camera');
+  const tabLabel = t(('equipment.' + tab) as any);
   const [search, setSearch] = useState('');
 
   const listKey = baseUrl
@@ -89,7 +90,7 @@ export default function EquipmentScreen({ navigation }: any) {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
   React.useEffect(() => {
-    navigation.setOptions({ title: '器材' });
+    navigation.setOptions({ title: t('title.equipment') });
   }, [navigation]);
 
   const handleAdd = async () => {
@@ -193,7 +194,7 @@ export default function EquipmentScreen({ navigation }: any) {
     if (tab === 'camera') {
       subtitle = item.camera_type || item.type || '';
       if (item.mount) tags.push(item.mount);
-      if (item.has_fixed_lens) tags.push('固定镜头');
+      if (item.has_fixed_lens) tags.push(t('equipment.fixedLensTag'));
       if (item.meter_type && item.meter_type !== 'none') tags.push(item.meter_type);
       if (item.production_year_start) tags.push(`${item.production_year_start}`);
     } else if (tab === 'lens') {
@@ -210,7 +211,7 @@ export default function EquipmentScreen({ navigation }: any) {
         tags.push(isVariable ? `f/${item.max_aperture}-${item.max_aperture_tele}` : `f/${item.max_aperture}`);
       }
       if (item.mount) tags.push(item.mount);
-      if (item.is_macro) tags.push('微距');
+      if (item.is_macro) tags.push(t('equipment.macro'));
       if (item.image_stabilization) tags.push('IS');
       if (item.filter_size) tags.push(`⌀${item.filter_size}`);
     } else if (tab === 'flash') {
@@ -287,10 +288,10 @@ export default function EquipmentScreen({ navigation }: any) {
         value={tab}
         onValueChange={setTab}
         buttons={[
-          { value: 'camera', label: '相机', icon: 'camera' },
-          { value: 'lens', label: '镜头', icon: 'camera-iris' },
-          { value: 'flash', label: '闪光灯', icon: 'flash' },
-          { value: 'film', label: '胶卷', icon: 'filmstrip' },
+          { value: 'camera', label: t('equipment.cameras'), icon: 'camera' },
+          { value: 'lens', label: t('equipment.lenses'), icon: 'camera-iris' },
+          { value: 'flash', label: t('equipment.flashes'), icon: 'flash' },
+          { value: 'film', label: t('equipment.films'), icon: 'filmstrip' },
         ]}
         style={styles.tabs}
         density="small"
@@ -298,7 +299,7 @@ export default function EquipmentScreen({ navigation }: any) {
 
       {/* Search */}
       <Searchbar
-        placeholder="搜索器材..."
+        placeholder={t('equipment.search')}
         value={search}
         onChangeText={setSearch}
         style={styles.searchbar}
@@ -320,9 +321,9 @@ export default function EquipmentScreen({ navigation }: any) {
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text variant="bodyLarge">暂无{tab === 'camera' ? '相机' : tab === 'lens' ? '镜头' : tab === 'flash' ? '闪光灯' : '胶卷'}</Text>
+              <Text variant="bodyLarge">{t('equipment.emptyOf', { what: tabLabel })}</Text>
               <Text variant="bodyMedium" style={{ opacity: 0.6, marginTop: 4 }}>
-                点击 + 添加
+                {t('equipment.emptyHint')}
               </Text>
             </View>
           }
@@ -339,18 +340,18 @@ export default function EquipmentScreen({ navigation }: any) {
       {/* Add Dialog */}
       <Portal>
         <Dialog visible={showAddDialog} onDismiss={() => setShowAddDialog(false)} style={styles.addDialog}>
-          <Dialog.Title>添加{tab === 'camera' ? '相机' : tab === 'lens' ? '镜头' : tab === 'flash' ? '闪光灯' : '胶卷'}</Dialog.Title>
+          <Dialog.Title>{t('equipment.addOf', { what: tabLabel })}</Dialog.Title>
           <Dialog.ScrollArea style={styles.dialogScrollArea}>
             <View style={styles.dialogContent}>
               <TextInput
-                label="品牌"
+                label={t('equipment.brand')}
                 mode="outlined"
                 value={addBrand}
                 onChangeText={setAddBrand}
                 style={styles.dialogInput}
               />
               <TextInput
-                label="型号"
+                label={t('equipment.model')}
                 mode="outlined"
                 value={addModel}
                 onChangeText={setAddModel}
@@ -358,7 +359,7 @@ export default function EquipmentScreen({ navigation }: any) {
               />
               {(tab === 'camera' || tab === 'lens') && (
                 <TextInput
-                  label="卡口（如 Nikon F、Canon EF）"
+                  label={t('equipment.mount')}
                   mode="outlined"
                   value={addMount}
                   onChangeText={setAddMount}
@@ -370,9 +371,9 @@ export default function EquipmentScreen({ navigation }: any) {
                   value={addType}
                   onValueChange={setAddType}
                   buttons={[
-                    { value: 'SLR', label: '单反' },
-                    { value: 'Rangefinder', label: '旁轴' },
-                    { value: 'Point-and-Shoot', label: '卡片机' },
+                    { value: 'SLR', label: t('equipment.slr') },
+                    { value: 'Rangefinder', label: t('equipment.rangefinder') },
+                    { value: 'Point-and-Shoot', label: t('equipment.pointShoot') },
                   ]}
                   style={{ marginTop: spacing.sm }}
                 />
@@ -382,7 +383,7 @@ export default function EquipmentScreen({ navigation }: any) {
                 <>
                   <View style={styles.dialogRow}>
                     <TextInput
-                      label="最短焦距 (mm)"
+                      label={t('equipment.focalMin')}
                       mode="outlined"
                       value={addFocalMin}
                       onChangeText={setAddFocalMin}
@@ -390,18 +391,18 @@ export default function EquipmentScreen({ navigation }: any) {
                       style={[styles.dialogInput, styles.dialogInputHalf]}
                     />
                     <TextInput
-                      label="最长焦距 (mm)"
+                      label={t('equipment.focalMax')}
                       mode="outlined"
                       value={addFocalMax}
                       onChangeText={setAddFocalMax}
                       keyboardType="numeric"
-                      placeholder="定焦留空"
+                      placeholder={t('equipment.primeHint')}
                       style={[styles.dialogInput, styles.dialogInputHalf]}
                     />
                   </View>
                   <View style={styles.dialogRow}>
                     <TextInput
-                      label="最大光圈 (f/)"
+                      label={t('equipment.maxAperture')}
                       mode="outlined"
                       value={addMaxAperture}
                       onChangeText={setAddMaxAperture}
@@ -410,18 +411,18 @@ export default function EquipmentScreen({ navigation }: any) {
                       style={[styles.dialogInput, styles.dialogInputHalf]}
                     />
                     <TextInput
-                      label="长焦端光圈 (f/)"
+                      label={t('equipment.teleAperture')}
                       mode="outlined"
                       value={addMaxApertureTele}
                       onChangeText={setAddMaxApertureTele}
                       keyboardType="decimal-pad"
-                      placeholder="变焦镜头填写"
+                      placeholder={t('equipment.variableHint')}
                       style={[styles.dialogInput, styles.dialogInputHalf]}
                     />
                   </View>
                   <View style={styles.dialogRow}>
                     <TextInput
-                      label="滤镜口径 ⌀ (mm)"
+                      label={t('equipment.filterSize')}
                       mode="outlined"
                       value={addFilterSize}
                       onChangeText={setAddFilterSize}
@@ -438,7 +439,7 @@ export default function EquipmentScreen({ navigation }: any) {
                         size={24} 
                         color={theme.colors.primary} 
                       />
-                      <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>微距</Text>
+                      <Text style={[styles.checkboxLabel, { color: theme.colors.onSurface }]}>{t('equipment.macro')}</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -446,22 +447,22 @@ export default function EquipmentScreen({ navigation }: any) {
             </View>
           </Dialog.ScrollArea>
           <Dialog.Actions>
-            <Button onPress={() => setShowAddDialog(false)}>取消</Button>
-            <Button onPress={handleAdd}>添加</Button>
+            <Button onPress={() => setShowAddDialog(false)}>{t('common.cancel')}</Button>
+            <Button onPress={handleAdd}>{t('common.add')}</Button>
           </Dialog.Actions>
         </Dialog>
 
         {/* Delete Dialog */}
         <Dialog visible={!!deleteTarget} onDismiss={() => setDeleteTarget(null)}>
-          <Dialog.Title>删除{tab === 'camera' ? '相机' : tab === 'lens' ? '镜头' : tab === 'flash' ? '闪光灯' : '胶卷'}？</Dialog.Title>
+          <Dialog.Title>{t('equipment.deleteOf', { what: tabLabel })}</Dialog.Title>
           <Dialog.Content>
             <Text>
-              确定要删除 {deleteTarget?.brand} {deleteTarget?.model} 吗？
+              {t('equipment.deleteBody', { name: `${deleteTarget?.brand || ''} ${deleteTarget?.model || ''}` })}
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setDeleteTarget(null)}>取消</Button>
-            <Button onPress={handleDelete} textColor={theme.colors.error}>删除</Button>
+            <Button onPress={() => setDeleteTarget(null)}>{t('common.cancel')}</Button>
+            <Button onPress={handleDelete} textColor={theme.colors.error}>{t('common.delete')}</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

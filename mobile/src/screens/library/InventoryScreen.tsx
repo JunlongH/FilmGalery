@@ -19,15 +19,6 @@ interface InventoryData {
   films: any[];
 }
 
-const FILM_ITEM_STATUS_LABELS_ZH: Record<string, string> = {
-  in_stock: '库存中',
-  loaded: '已装卷',
-  shot: '已拍完',
-  sent_to_lab: '已送冲',
-  developed: '已冲洗',
-  archived: '已归档',
-};
-
 export default function InventoryScreen({ navigation }: any) {
   const theme = useTheme();
   const t = useT();
@@ -44,7 +35,7 @@ export default function InventoryScreen({ navigation }: any) {
   );
   const allItems = useMemo(() => data?.items ?? [], [data]);
   const films = useMemo(() => data?.films ?? [], [data]);
-  const error = allItems.length === 0 && queryError ? '加载库存失败' : '';
+  const error = allItems.length === 0 && queryError ? t('inventory.loadFailed') : '';
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -79,8 +70,8 @@ export default function InventoryScreen({ navigation }: any) {
     const film = filmById.get(item.film_id) || null;
     // Film name already contains full information (brand + model)
     const filmName = film
-      ? (film.name || film.brand || '未知胶卷')
-      : `胶卷 #${item.film_id || ''}`;
+      ? (film.name || film.brand || t('home.unknownFilm'))
+      : t('home.rollFallback', { id: item.film_id || '' });
     // Build subtitle with format and ISO
     const filmMeta = film
       ? `ISO ${film.iso}${film.format && film.format !== '135' ? ` • ${film.format}` : ''}`
@@ -88,8 +79,8 @@ export default function InventoryScreen({ navigation }: any) {
     // For loaded items, show the camera used when available
     const statusLabel =
       item.status === 'loaded' && item.loaded_camera
-        ? `已装于 ${item.loaded_camera}`
-        : (FILM_ITEM_STATUS_LABELS_ZH[item.status] || item.status);
+        ? t('status.loadedOn', { camera: item.loaded_camera })
+        : (t(('status.' + item.status) as any) || item.status);
     const expiry = item.expiry_date || null;
     const label = item.label || '';
     const rawThumb = film?.thumbPath || film?.thumbUrl || null;
@@ -111,7 +102,7 @@ export default function InventoryScreen({ navigation }: any) {
             ) : null}
             <Text variant="bodySmall" style={styles.status}>
               {statusLabel}
-              {expiry ? ` • 有效期 ${expiry}` : ''}
+              {expiry ? ` • ${t('inventory.expiry', { date: expiry })}` : ''}
             </Text>
           </View>
         </View>
@@ -133,7 +124,7 @@ export default function InventoryScreen({ navigation }: any) {
               onPress={() => setStatusFilter(item.value)}
               style={styles.chip}
             >
-              {item.value === 'all' ? '全部' : (FILM_ITEM_STATUS_LABELS_ZH[item.value] || item.label)}
+              {item.value === 'all' ? t('common.all') : t(('status.' + item.value) as any)}
             </Chip>
           )}
         />
@@ -162,7 +153,7 @@ export default function InventoryScreen({ navigation }: any) {
             <View style={styles.emptyContainer}>
               <Icon name="package" size={56} color={theme.colors.onSurfaceVariant} />
               <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
-                没有符合此筛选条件的胶卷
+                {t('inventory.empty')}
               </Text>
             </View>
           }

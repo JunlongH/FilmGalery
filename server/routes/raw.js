@@ -49,7 +49,7 @@ const rawUpload = multer({
  * 
  * 获取 RAW 解码器状态
  */
-router.get('/status', async (req, res) => {
+router.get('/status', async (req, res, next) => {
   try {
     const isAvailable = await rawDecoder.isAvailable();
     const version = await rawDecoder.getVersion();
@@ -60,7 +60,7 @@ router.get('/status', async (req, res) => {
       ...version
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 });
 
@@ -69,7 +69,7 @@ router.get('/status', async (req, res) => {
  * 
  * 获取支持的 RAW 格式列表
  */
-router.get('/supported-formats', async (req, res) => {
+router.get('/supported-formats', async (req, res, next) => {
   try {
     const formats = rawDecoder.getSupportedFormats();
     const isAvailable = await rawDecoder.isAvailable();
@@ -80,7 +80,7 @@ router.get('/supported-formats', async (req, res) => {
       formats
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 });
 
@@ -97,7 +97,7 @@ router.get('/supported-formats', async (req, res) => {
  * - outputBits: 8 | 16 (default: 16)
  * - halfSize: boolean (default: false)
  */
-router.post('/decode', rawUpload.single('file'), async (req, res) => {
+router.post('/decode', rawUpload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -142,7 +142,7 @@ router.post('/decode', rawUpload.single('file'), async (req, res) => {
       await fs.unlink(req.file.path).catch(() => {});
     }
     console.error('RAW decode error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 });
 
@@ -151,7 +151,7 @@ router.post('/decode', rawUpload.single('file'), async (req, res) => {
  * 
  * 快速预览 RAW 文件 (低质量，用于 UI 预览)
  */
-router.post('/preview', rawUpload.single('file'), async (req, res) => {
+router.post('/preview', rawUpload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -184,7 +184,7 @@ router.post('/preview', rawUpload.single('file'), async (req, res) => {
     if (req.file) {
       await fs.unlink(req.file.path).catch(() => {});
     }
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 });
 
@@ -193,7 +193,7 @@ router.post('/preview', rawUpload.single('file'), async (req, res) => {
  * 
  * 提取 RAW 文件元数据 (不解码)
  */
-router.post('/metadata', rawUpload.single('file'), async (req, res) => {
+router.post('/metadata', rawUpload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -222,7 +222,7 @@ router.post('/metadata', rawUpload.single('file'), async (req, res) => {
     if (req.file) {
       await fs.unlink(req.file.path).catch(() => {});
     }
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 });
 
@@ -239,7 +239,7 @@ router.post('/metadata', rawUpload.single('file'), async (req, res) => {
  * - quality: 解码质量
  * - saveOriginalRaw: 是否保存原始 RAW 文件
  */
-router.post('/import', rawUpload.single('file'), async (req, res) => {
+router.post('/import', rawUpload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -338,7 +338,7 @@ router.post('/import', rawUpload.single('file'), async (req, res) => {
       await fs.unlink(req.file.path).catch(() => {});
     }
     console.error('RAW import error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 });
 
@@ -347,13 +347,13 @@ router.post('/import', rawUpload.single('file'), async (req, res) => {
  * 
  * 清理临时 RAW 文件
  */
-router.post('/cleanup', async (req, res) => {
+router.post('/cleanup', async (req, res, next) => {
   try {
     const olderThanMs = parseInt(req.body.olderThanMs) || 3600000;
     await rawDecoder.cleanup(olderThanMs);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 });
 

@@ -38,7 +38,7 @@ const { getStrictSourcePath, SOURCE_TYPE } = require('../../packages/shared/sour
  *   }
  * }
  */
-router.post('/photos/:id/detect-edges', async (req, res) => {
+router.post('/photos/:id/detect-edges', async (req, res, next) => {
   try {
     const photoId = parseInt(req.params.id);
     const { 
@@ -77,7 +77,7 @@ router.post('/photos/:id/detect-edges', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Edge detection error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 });
 
@@ -94,7 +94,7 @@ router.post('/photos/:id/detect-edges', async (req, res) => {
  *   sourceType: 'original' | 'negative' | 'positive'
  * }
  */
-router.post('/photos/batch-detect-edges', async (req, res) => {
+router.post('/photos/batch-detect-edges', async (req, res, next) => {
   try {
     const { 
       photoIds, 
@@ -149,7 +149,7 @@ router.post('/photos/batch-detect-edges', async (req, res) => {
     });
   } catch (error) {
     console.error('Batch edge detection error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 });
 
@@ -165,7 +165,7 @@ router.post('/photos/batch-detect-edges', async (req, res) => {
  *   preserveManualCrop: boolean  // 如果为 true 且已有手动裁剪，则不覆盖
  * }
  */
-router.post('/photos/:id/apply-edge-detection', async (req, res) => {
+router.post('/photos/:id/apply-edge-detection', async (req, res, next) => {
   try {
     const photoId = parseInt(req.params.id);
     const { cropRect, rotation = 0, preserveManualCrop = true } = req.body;
@@ -230,7 +230,7 @@ router.post('/photos/:id/apply-edge-detection', async (req, res) => {
     });
   } catch (error) {
     console.error('Apply edge detection error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 });
 
@@ -247,7 +247,7 @@ router.post('/photos/:id/apply-edge-detection', async (req, res) => {
  *   skipExistingCrop: boolean  // 跳过已有手动裁剪的照片
  * }
  */
-router.post('/rolls/:id/apply-edge-detection-to-all', async (req, res) => {
+router.post('/rolls/:id/apply-edge-detection-to-all', async (req, res, next) => {
   try {
     const rollId = parseInt(req.params.id);
     const { 
@@ -359,7 +359,7 @@ router.post('/rolls/:id/apply-edge-detection-to-all', async (req, res) => {
     });
   } catch (error) {
     console.error('Apply edge detection to roll error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 });
 
