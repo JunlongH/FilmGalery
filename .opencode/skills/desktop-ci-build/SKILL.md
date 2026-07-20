@@ -312,7 +312,88 @@ The NSIS installer target requires wine32 to finalize the installer payload embe
 2. OR swap `rcedit-ia32.exe` → `rcedit-x64.exe` in the winCodeSign cache (wine64 can run x64 binaries)
 3. OR push a tag and let GitHub Actions build natively on `windows-2022`
 
-## 10. Quick troubleshooting matrix
+## 10. Mobile Android build — EAS quota exhaustion + local fallback
+
+### The problem: EAS Free plan monthly quota
+
+EAS (Expo Application Services) Cloud builds have a monthly limit on the
+Free plan (30 Android builds / 15 iOS builds). When exhausted:
+
+```
+This account has used its Android builds from the Free plan this month,
+which will reset in N days. Upgrade your plan for more builds...
+Error: build command failed.
+```
+
+### The fix: local gradle build on the GitHub Actions runner
+
+`ubuntu-latest` has the Android SDK pre-installed. Build the APK locally
+as a fallback when EAS fails:
+
+```yaml
+# Step 1: try EAS first (fast, offloaded to cloud)
+- name: Build Android APK (EAS Cloud)
+  id: eas
+  continue-on-error: true
+  run: cd mobile && npx eas build -p android --profile preview --non-interactive
+  env:
+    EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+# Step 2: fallback to local gradle build
+- name: Build Android APK locally (EAS fallback)
+  if: steps.eas.outcome == 'failure'
+  working-directory: mobile
+  run: |
+    npx expo prebuild --platform android --clean --no-install
+    cd android
+    echo "sdk.dir=${ANDROID_HOME}" > local.properties
+    ./gradlew assembleDebug --no-daemon
+
+- name: Upload APK
+  if: steps.eas.outcome == 'failure'
+  uses: actions/upload-artifact@v4
+  with:
+    name: android-apk
+    path: mobile/android/app/build/outputs/apk/debug/*.apk
+```
+
+Key points:
+- **`continue-on-error: true`** on EAS step — the job doesn't fail when
+  quota is exhausted. `steps.eas.outcome` is `'failure'`, triggering the
+  fallback.
+- **Java 17 required** — `actions/setup-java@v4` with `zulu` distribution.
+  Gradle 8.x needs JDK 17+.
+- **`expo prebuild --clean`** — regenerates the native Android project
+  from app.json (needed because the `android/` dir might be stale or
+  git-ignored prebuild artifacts).
+- **`assembleDebug`** not `assembleRelease` — release builds need a
+  keystore (not available on CI without secrets). Debug-signed APK is
+  fine for sideloading.
+- **Build time: ~22 min** on ubuntu-latest (vs ~3 min for EAS Cloud).
+  The first build downloads Gradle + compiles all native modules.
+- **iOS cannot be built locally on Linux** — requires macOS. Use
+  `continue-on-error: true` on the iOS EAS step so the overall workflow
+  passes when Android succeeds even if iOS quota is exhausted.
+- **APK is ~65MB** (debug build with all ABIs: armeabi-v7a, x86, x86_64).
+
+### `gh release upload` for APK
+
+Attach the APK to the tag's release:
+
+```yaml
+- name: Attach APK to release
+  if: steps.eas.outcome == 'failure' && startsWith(github.ref, 'refs/tags/v')
+  run: |
+    APK=$(find mobile/android/app/build/outputs -name "*.apk" | head -1)
+    if [ -n "$APK" ]; then
+      gh release upload "${{ github.ref_name }}" "$APK" \
+        --repo "${{ github.repository }}" --clobber || true
+    fi
+  env:
+    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+## 11. Quick troubleshooting matrix
 
 | Error | Root cause | Fix |
 |-------|-----------|-----|
