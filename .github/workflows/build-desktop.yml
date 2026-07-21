@@ -216,6 +216,7 @@ jobs:
           TAG="${{ github.ref_name }}"
           REPO="JunlongH/FilmGallery"
           COMMIT_SHA="${{ github.sha }}"
+          export TAG REPO COMMIT_SHA
           API="https://api.github.com/repos/${REPO}"
 
           INSTALLERS=()
