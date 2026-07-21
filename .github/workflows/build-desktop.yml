@@ -200,37 +200,63 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
-    
+
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      # Use gh CLI directly — more robust than softprops/action-gh-release@v1
-      # which hit 422 'already_exists' collisions on re-runs. --clobber
-      # overwrites stale assets from previous attempts.
-      # continue-on-error: true so the overall workflow shows green even if
-      # the release has issues — artifacts are still available via the Actions
-      # UI as a fallback.
       - name: Create or update release
-        continue-on-error: true
         run: |
-          # Build a bash array of installer files (handles spaces in filenames
-          # like "FilmGallery Setup 3.2.0.exe" that unquoted $INSTALLERS would
-          # word-split into three args).
+          set -eu
+
+          # Collect installer files
           INSTALLERS=()
           while IFS= read -r f; do
             INSTALLERS+=("$f")
           done < <(find artifacts/ -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.zip" \) | sort)
+
           echo "Installers to upload (${#INSTALLERS[@]}):"
           printf '  %s\n' "${INSTALLERS[@]}"
-          # Try creating a new draft release; if it exists, upload with --clobber
-          gh release create "${{ github.ref_name }}" "${INSTALLERS[@]}" \
-            --repo "${{ github.repository }}" \
+
+          TAG="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
+          COMMIT_SHA="${{ github.sha }}"
+
+          # Clean up any stale untagged/orphaned release from a previous run
+          # (gh can create "untagged-*" releases when the tag is deleted/recreated)
+          if gh release view "$TAG" --repo "$REPO" &>/dev/null; then
+            echo "Release $TAG already exists, deleting and recreating..."
+            gh release delete "$TAG" --repo "$REPO" --yes --cleanup-tag 2>/dev/null || true
+            # Give GitHub a moment to process the deletion
+            sleep 3
+          fi
+
+          # Also clean up any orphaned untagged releases that may point to this tag
+          echo "Cleaning up any stale untagged releases..."
+          gh release list --repo "$REPO" --limit 100 2>/dev/null | grep 'untagged-' | while read -r line; do
+            UNTAGGED=$(echo "$line" | awk '{print $4}')
+            echo "Deleting stale untagged release: $UNTAGGED"
+            gh release delete "$UNTAGGED" --repo "$REPO" --yes 2>/dev/null || true
+          done
+          sleep 2
+
+          # Create release with --target to explicitly associate with the commit
+          # This prevents gh from creating an "untagged" release when the tag
+          # was recently pushed (especially after delete+recreate).
+          echo "Creating release $TAG at commit $COMMIT_SHA..."
+          gh release create "$TAG" "${INSTALLERS[@]}" \
+            --repo "$REPO" \
+            --target "$COMMIT_SHA" \
             --draft \
             --generate-notes \
-            --title "${{ github.ref_name }} — Phase 2B Auth + HTTPS" \
-            || gh release upload "${{ github.ref_name }}" "${INSTALLERS[@]}" --repo "${{ github.repository }}" --clobber
+            --title "$TAG"
+
+          echo "Release created: https://github.com/$REPO/releases/tag/$TAG"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
