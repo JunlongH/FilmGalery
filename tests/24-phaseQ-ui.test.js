@@ -122,12 +122,14 @@ describe('Phase Q.7 — buildRenderCoreParams SSOT', () => {
     expect(src).toMatch(/buildRenderCoreParams\s*=\s*React\.useCallback/);
   });
 
-  test('4 处 new RenderCore 统一调用 buildRenderCoreParams', () => {
+  test('P1-14: 4 处原 new RenderCore 已替换为 getRenderCore() 实例复用', () => {
     const src = readClientSrc('components/FilmLab/FilmLab.jsx');
-    // 应有 4 处 new RenderCore(buildRenderCoreParams())
-    const matches = src.match(/new RenderCore\(buildRenderCoreParams\(\)\)/g);
-    expect(matches).not.toBeNull();
-    expect(matches.length).toBe(4);
+    // v3 P1-14: 不再有裸 new RenderCore(buildRenderCoreParams()) 调用
+    expect(src).not.toMatch(/new RenderCore\(buildRenderCoreParams\(\)\)/);
+    // 应有 getRenderCore callback（ref + params key 缓存）
+    expect(src).toMatch(/getRenderCore\s*=\s*React\.useCallback/);
+    expect(src).toMatch(/renderCoreRef/);
+    expect(src).toMatch(/stableSerializeParams/);
   });
 });
 
@@ -200,8 +202,8 @@ describe('Phase Q.11 — 死 hooks 删除', () => {
     expect(src).not.toMatch(/export.*useFilmLabPipeline/);
   });
 
-  test('hooks/index.js 仍导出 useFilmLabRenderer（已接入 disposeWebGL）', () => {
+  test('hooks/index.js 不再导出 useFilmLabRenderer（v3 P0-4 已删除死代码）', () => {
     const src = readClientSrc('components/FilmLab/hooks/index.js');
-    expect(src).toMatch(/export.*useFilmLabRenderer/);
+    expect(src).not.toMatch(/export.*useFilmLabRenderer/);
   });
 });

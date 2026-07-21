@@ -199,15 +199,11 @@ describe('Phase O.2 — disposeWebGL 接入', () => {
     expect(src).toMatch(/disposeWebGL\(processedCanvasRef\.current\)/);
   });
 
-  test('useFilmLabRenderer 清理 effect 调用 disposeWebGL（hook 路径）', () => {
+  test('useFilmLabRenderer.js 已删除（v3 P0-4 死代码清理）', () => {
     const fs = require('fs');
     const path = require('path');
-    const src = fs.readFileSync(
-      path.join(__dirname, '..', 'client', 'src', 'components', 'FilmLab', 'hooks', 'useFilmLabRenderer.js'),
-      'utf-8'
-    );
-    expect(src).toMatch(/import.*disposeWebGL/);
-    expect(src).toMatch(/disposeWebGL\(processedCanvasRef\.current\)/);
+    const hookPath = path.join(__dirname, '..', 'client', 'src', 'components', 'FilmLab', 'hooks', 'useFilmLabRenderer.js');
+    expect(fs.existsSync(hookPath)).toBe(false);
   });
 
   test('FilmLabWebGL.disposeWebGL 删除所有 GL 资源', () => {

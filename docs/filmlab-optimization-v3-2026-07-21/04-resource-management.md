@@ -2,8 +2,10 @@
 
 ## P1 — 无 AbortController
 
-### P1-23 全管线零 AbortController
+### P1-23 全管线零 AbortController（v3 修正：由 P2 升级 P1）
 全管线（FilmLab.jsx + ComputeService.js + CpuRenderService.js）**无一处** `AbortController`/`AbortSignal`。
+
+**升级理由**：不仅是性能问题，更是**正确性问题**——切换照片时旧 fetch/XHR/CPU 渲染继续飞行，旧响应可能晚于新响应到达，覆盖新状态（典型 race condition）。
 
 | 位置 | 操作 | 影响 |
 |---|---|---|
@@ -15,7 +17,7 @@
 | FilmLab.jsx:1367-1402 | CPU 回退渲染 | 切照片时旧渲染继续阻塞 |
 | AutoCropButton.jsx:49-109 | detectEdges | 快速双击旧请求覆盖新状态 |
 
-**建议**：
+**建议**：统一 abort 机制（v3 修正：Phase S.2 用 `staleRef`，Phase U.1 用 `AbortSignal`——两套机制需统一）：
 ```js
 // 公共 API 接受 signal
 async function smartFilmlabPreviewLatest(photoId, params, { signal } = {}) {
@@ -23,21 +25,28 @@ async function smartFilmlabPreviewLatest(photoId, params, { signal } = {}) {
   // ...
 }
 
-// 调用方
+// CPU 渲染 shouldAbort 与 AbortSignal 统一
+async function processCanvasWithRenderCoreAsync(canvas, params, { signal, chunkRows = 64 } = {}) {
+  // 分块间检查：signal?.aborted
+  for (let y = 0; y < height; y += chunkRows) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    // ... process chunk ...
+    await yieldToMain();
+  }
+}
+
+// 调用方（FilmLab.jsx）
 const abortRef = useRef(null);
 const handleChange = (photoId) => {
-  abortRef.current?.abort();
+  abortRef.current?.abort();           // 取消所有飞行中的请求
   abortRef.current = new AbortController();
-  smartFilmlabPreviewLatest(photoId, params, { signal: abortRef.current.signal });
+  const signal = abortRef.current.signal;
+  smartFilmlabPreviewLatest(photoId, params, { signal });
+  processCanvasWithRenderCoreAsync(canvas, params, { signal });  // 同一 signal
 };
 ```
 
-CPU 渲染用 `shouldAbort` 回调（分块间检查）：
-```js
-await processCanvasWithRenderCoreAsync(canvas, params, {
-  shouldAbort: () => abortRef.current.signal.aborted
-});
-```
+**与 Phase S.2 的关系**：Phase S.2 的 `staleRef` 应改为直接使用 `AbortSignal.aborted`，避免两套 abort 机制。详见 05-execution-plan.md Phase S.2a 的 stale-render 语义设计。
 
 ---
 

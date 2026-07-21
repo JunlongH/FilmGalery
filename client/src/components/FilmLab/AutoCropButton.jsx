@@ -21,7 +21,7 @@ import { detectEdges } from '../../api';
  * @param {number} props.rotation - 当前旋转角度
  * @param {boolean} props.disabled - 是否禁用
  */
-export default function AutoCropButton({
+const AutoCropButton = React.memo(function AutoCropButton({
   photoId,
   sourceType = 'original',
   onDetectionResult,
@@ -59,22 +59,11 @@ export default function AutoCropButton({
         sourceType
       });
 
-      console.log('🔍 Edge detection response:', result);
-
       if (result.success && result.result) {
         setLastResult(result.result);
         
-        console.log('📊 Detection result:', {
-          cropRect: result.result.cropRect,
-          rotation: result.result.rotation,
-          confidence: result.result.confidence,
-          isValid: result.result.isValid
-        });
-        
         // 如果结果有效，回调给父组件
         if (result.result.isValid) {
-          console.log('✅ Applying valid detection result to cropRect');
-          
           // 检查是否是"无边框"情况
           const isNoBorder = result.result.confidence < 0.2 && 
             result.result.cropRect.w > 0.98 && 
@@ -93,30 +82,17 @@ export default function AutoCropButton({
             onDetectionResult(result.result);
           }
         } else {
-          console.warn('⚠️ Detection result is invalid (low confidence or bad geometry)');
           setError('Low detection confidence, please adjust sensitivity or crop manually');
         }
       } else {
-        console.error('❌ Edge detection failed:', result.error);
         setError(result.error || 'Edge detection failed');
       }
     } catch (err) {
-      console.error('❌ Edge detection error:', err);
       setError(err.message || 'Edge detection failed');
     } finally {
       setIsDetecting(false);
     }
   }, [photoId, sensitivity, filmFormat, sourceType, pushToHistory, onDetectionResult, isDetecting]);
-
-  // 应用上次的检测结果 (unused)
-  // const applyLastResult = useCallback(() => {
-  //   if (lastResult && lastResult.isValid && onDetectionResult) {
-  //     if (pushToHistory) {
-  //       pushToHistory();
-  //     }
-  //     onDetectionResult(lastResult);
-  //   }
-  // }, [lastResult, onDetectionResult, pushToHistory]);
 
   return (
     <div style={{ marginBottom: 8 }}>
@@ -276,4 +252,6 @@ export default function AutoCropButton({
       )}
     </div>
   );
-}
+});
+
+export default AutoCropButton;

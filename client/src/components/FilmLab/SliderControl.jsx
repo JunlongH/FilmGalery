@@ -78,4 +78,4 @@ const SliderControl = ({ label, value, onChange, min, max, step=1, onMouseDown, 
   );
 };
 
-export default SliderControl;
+export default React.memo(SliderControl);

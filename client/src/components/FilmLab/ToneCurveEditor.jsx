@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createSpline } from './utils';
 
-export default function ToneCurveEditor({
+const ToneCurveEditor = React.memo(function ToneCurveEditor({
   curves,
   setCurves,
   activeChannel,
@@ -21,8 +21,9 @@ export default function ToneCurveEditor({
 
   // Generate Histogram Path (outline, not filled) with adaptive vertical scaling
   // P1-23: useMemo 避免每帧重算（256 次循环 + 字符串拼接）
+  const activeHistogram = histograms?.[activeChannel];
   const histogramPath = useMemo(() => {
-    const currentHist = (histograms && histograms[activeChannel]) ? histograms[activeChannel] : new Array(256).fill(0);
+    const currentHist = activeHistogram ?? new Array(256).fill(0);
     // Find local max to stretch the histogram vertically per-channel
     let localMax = 0;
     for (let i = 0; i < 256; i++) {
@@ -42,7 +43,7 @@ export default function ToneCurveEditor({
       else d += ` L ${x} ${y}`;
     }
     return d || `M 0 ${curveHeight} L ${curveWidth} ${curveHeight}`;
-  }, [histograms, activeChannel, curveWidth, curveHeight]);
+  }, [activeHistogram, curveWidth, curveHeight]);
 
   const getCurveColor = () => {
     switch(activeChannel) {
@@ -322,4 +323,6 @@ export default function ToneCurveEditor({
       </div>
     </div>
   );
-}
+};
+
+export default ToneCurveEditor;

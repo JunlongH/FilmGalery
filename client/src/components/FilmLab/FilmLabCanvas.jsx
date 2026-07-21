@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { isRectValid, getPresetRatio } from './utils';
 
 export default function FilmLabCanvas({
@@ -31,6 +31,7 @@ export default function FilmLabCanvas({
   const [dragState, setDragState] = useState(null);
   const [localCropRect, setLocalCropRect] = useState(null);
   const [isReady, setIsReady] = useState(false);
+  const splitDragCleanupRef = useRef(null);
 
   // Poll for canvas size match to ensure overlay sync
   useEffect(() => {
@@ -59,6 +60,16 @@ export default function FilmLabCanvas({
       if (rafId) cancelAnimationFrame(rafId);
     };
   }, [isCropping, expectedWidth, canvasRef]);
+
+  // Cleanup split drag window listeners on unmount
+  useEffect(() => {
+    return () => {
+      if (splitDragCleanupRef.current) {
+        splitDragCleanupRef.current();
+        splitDragCleanupRef.current = null;
+      }
+    };
+  }, []);
 
   // Use local rect during drag, otherwise prop rect
   const activeCropRect = localCropRect || cropRect;
@@ -205,8 +216,7 @@ export default function FilmLabCanvas({
           const cy = startRect.y + startRect.h / 2;
           const currentAngle = Math.atan2(my - cy, mx - cx);
           const delta = (currentAngle - startAngle) * (180 / Math.PI);
-          let next = startRect.rotation + delta; // Wait, startRect doesn't have rotation. startRotation does.
-          next = dragState.startRotation + delta;
+          let next = dragState.startRotation + delta;
           next = Math.max(-45, Math.min(45, next));
           if (Math.abs(next) < 1) next = 0;
           
@@ -289,9 +299,14 @@ export default function FilmLabCanvas({
     const up = () => {
       window.removeEventListener('mousemove', move);
       window.removeEventListener('mouseup', up);
+      splitDragCleanupRef.current = null;
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
+    splitDragCleanupRef.current = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
   };
 
   return (
@@ -416,7 +431,7 @@ export default function FilmLabCanvas({
           >
             {/* Debug readout: current crop and target ratios (temporary) */}
             <div style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.6)', color:'#fff', padding:'4px 6px', borderRadius:4, fontSize:11, pointerEvents:'none' }}>
-              <span id="crop-debug" />
+
             </div>
             
             {/* Darken outside */}

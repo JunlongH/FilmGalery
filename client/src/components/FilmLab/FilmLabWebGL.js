@@ -6,6 +6,7 @@
 import { packLUT3DForWebGL, buildFragmentShader, VERTEX_SHADER, SHADER_VERSION as SHARED_SHADER_VERSION } from '@filmgallery/shared';
 
 // Debug flag - set to true during development for detailed logging
+// Treeshaken by bundler in production builds via process.env.NODE_ENV guard below.
 const DEBUG_WEBGL = false;
 const DEBUG_LUT = false;
 // const DEBUG_LUT_OUTPUT = false; // unused
@@ -58,7 +59,7 @@ function createProgram(gl, vsSource, fsSource) {
   }
   
   // Debug: 检查所有 active uniforms (仅在调试模式下)
-  if (DEBUG_WEBGL) {
+  if (process.env.NODE_ENV !== 'production' && DEBUG_WEBGL) {
     console.log('[FilmLabWebGL] Program created successfully. Checking active uniforms...');
     const numUniforms = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS);
     console.log('[FilmLabWebGL] Number of active uniforms:', numUniforms);
@@ -71,13 +72,27 @@ function createProgram(gl, vsSource, fsSource) {
   return prog;
 }
 
+// P1-53/P3-56: Cache result to avoid per-frame canvas creation.
+// Priority matches processImageWebGL (webgl2 first).
+let _webglAvailableCache = null;
+
 export function isWebGLAvailable() {
+  if (_webglAvailableCache !== null) return _webglAvailableCache;
   try {
     const canvas = document.createElement('canvas');
-    return !!(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
+    const gl = canvas.getContext('webgl2')
+      || canvas.getContext('webgl')
+      || canvas.getContext('experimental-webgl');
+    _webglAvailableCache = !!gl;
+    return _webglAvailableCache;
   } catch (e) {
+    _webglAvailableCache = false;
     return false;
   }
+}
+
+export function _resetWebGLAvailableCache() {
+  _webglAvailableCache = null;
 }
 
 // Process an image on the given canvas using WebGL. The canvas will be sized to image dimensions.
@@ -133,7 +148,7 @@ export function processImageWebGL(canvas, image, params = {}) {
     canvas._contextLostHandlerRegistered = true;
   }
   
-  if (DEBUG_WEBGL) console.log('[FilmLabWebGL] Using:', gl.getParameter(gl.VERSION));
+  if (process.env.NODE_ENV !== 'production' && DEBUG_WEBGL) console.log('[FilmLabWebGL] Using:', gl.getParameter(gl.VERSION));
 
   // Simple cache per-canvas to reuse programs and textures
   // SHADER_VERSION is checked below to invalidate cache when shader code changes
@@ -144,10 +159,14 @@ export function processImageWebGL(canvas, image, params = {}) {
   if (!cache) {
     cache = {};
     processImageWebGL._cache.set(canvas, cache);
-    if (DEBUG_WEBGL) console.log('[FilmLabWebGL] Created new cache for canvas');
+    if (process.env.NODE_ENV !== 'production' && DEBUG_WEBGL) console.log('[FilmLabWebGL] Created new cache for canvas');
   } else {
-    if (DEBUG_WEBGL) console.log('[FilmLabWebGL] Reusing existing cache, shaderVersion:', cache.shaderVersion);
+    if (process.env.NODE_ENV !== 'production' && DEBUG_WEBGL) console.log('[FilmLabWebGL] Reusing existing cache, shaderVersion:', cache.shaderVersion);
   }
+  // P2-19: Pre-allocated scratch buffers for uniform uploads — avoids per-frame GC pressure
+  if (!cache._scratch3) cache._scratch3 = new Float32Array(3);
+  if (!cache._scratch4) cache._scratch4 = new Float32Array(4);
+  if (!cache._scratch16) cache._scratch16 = new Float32Array(16);
 
   // ============================================================================
   // PHASE 2 REFACTOR: Pure WebGL Geometry via UV Mapping
@@ -258,7 +277,7 @@ export function processImageWebGL(canvas, image, params = {}) {
   const SHADER_VERSION = SHARED_SHADER_VERSION;
   
   // Build or reuse program
-  if (DEBUG_WEBGL) {
+  if (process.env.NODE_ENV !== 'production' && DEBUG_WEBGL) {
     console.log('[FilmLabWebGL] SHADER_VERSION:', SHADER_VERSION, 'cache.shaderVersion:', cache.shaderVersion);
   }
   if (!cache.program || cache.shaderVersion !== SHADER_VERSION) {
@@ -295,19 +314,21 @@ export function processImageWebGL(canvas, image, params = {}) {
   const tl = computedUVs ? computedUVs.uvTL : [0, 0];
   const tr = computedUVs ? computedUVs.uvTR : [1, 0];
   
-  const verts = new Float32Array([
-    -1, -1, bl[0], bl[1],  // BL
-     1, -1, br[0], br[1],  // BR
-    -1,  1, tl[0], tl[1],  // TL
-     1,  1, tr[0], tr[1],  // TR
-  ]);
-  
-  // Always update buffer since UVs change with crop/rotation
+  // P2-20: Dirty-flag vertex buffer — only re-upload when rotation/crop changes
+  const uvKey = JSON.stringify({ rotation: params.rotate, crop: params.cropRect });
   if (!cache.buffer) {
     cache.buffer = gl.createBuffer();
   }
   gl.bindBuffer(gl.ARRAY_BUFFER, cache.buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
+  if (cache.lastUVKey !== uvKey) {
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1, bl[0], bl[1],  // BL
+       1, -1, br[0], br[1],  // BR
+      -1,  1, tl[0], tl[1],  // TL
+       1,  1, tr[0], tr[1],  // TR
+    ]), gl.DYNAMIC_DRAW);
+    cache.lastUVKey = uvKey;
+  }
 
   const posLoc = gl.getAttribLocation(program, 'a_pos');
   const uvLoc = gl.getAttribLocation(program, 'a_uv');
@@ -423,7 +444,7 @@ export function processImageWebGL(canvas, image, params = {}) {
   gl.uniform1i(locs.u_image, 0);
 
   const inverted = params.inverted ? 1.0 : 0.0;
-  if (DEBUG_WEBGL) {
+  if (process.env.NODE_ENV !== 'production' && DEBUG_WEBGL) {
     console.log('[FilmLabWebGL] u_inverted:', inverted, 'params.inverted:', params.inverted);
     console.log('[FilmLabWebGL] locs.u_inverted:', locs.u_inverted);
     if (locs.u_inverted === null) {
@@ -443,12 +464,13 @@ export function processImageWebGL(canvas, image, params = {}) {
   }
 
   const gains = params.gains || [1.0, 1.0, 1.0];
-  if (DEBUG_WEBGL) console.log('[FilmLabWebGL] Setting u_gains:', gains);
-  gl.uniform3fv(locs.u_gains, new Float32Array(gains));
+  if (process.env.NODE_ENV !== 'production' && DEBUG_WEBGL) console.log('[FilmLabWebGL] Setting u_gains:', gains);
+  cache._scratch3.set(gains);
+  gl.uniform3fv(locs.u_gains, cache._scratch3);
 
   // Pass raw exposure value — shared shader divides by 50 internally: pow(2, exposure/50)
   const exposure = typeof params.exposure === 'number' ? params.exposure : 0.0;
-  if (DEBUG_WEBGL) console.log('[FilmLabWebGL] Setting u_exposure:', exposure, 'from', params.exposure);
+  if (process.env.NODE_ENV !== 'production' && DEBUG_WEBGL) console.log('[FilmLabWebGL] Setting u_exposure:', exposure, 'from', params.exposure);
   gl.uniform1f(locs.u_exposure, exposure);
 
   // Pass raw contrast value — shared shader scales by *2.55 internally
@@ -477,26 +499,30 @@ export function processImageWebGL(canvas, image, params = {}) {
   const baseMode = params.baseMode === 'log' ? 1.0 : 0.0;
   const baseGains = params.baseGains || [1.0, 1.0, 1.0];
   const baseDensity = params.baseDensity || [0.0, 0.0, 0.0];
-  if (DEBUG_WEBGL) console.log('[FilmLabWebGL] Setting base correction:', { baseMode, baseGains, baseDensity });
+  if (process.env.NODE_ENV !== 'production' && DEBUG_WEBGL) console.log('[FilmLabWebGL] Setting base correction:', { baseMode, baseGains, baseDensity });
   gl.uniform1f(locs.u_baseMode, baseMode);
-  gl.uniform3fv(locs.u_baseGains, new Float32Array(baseGains));
-  gl.uniform3fv(locs.u_baseDensity, new Float32Array(baseDensity));
+  cache._scratch3.set(baseGains);
+  gl.uniform3fv(locs.u_baseGains, cache._scratch3);
+  cache._scratch3.set(baseDensity);
+  gl.uniform3fv(locs.u_baseDensity, cache._scratch3);
 
   // Density Levels (Log domain auto-levels)
   const densityLevelsEnabled = params.densityLevelsEnabled && baseMode > 0.5 ? 1.0 : 0.0;
   const densityLevels = params.densityLevels || { red: { min: 0, max: 3 }, green: { min: 0, max: 3 }, blue: { min: 0, max: 3 } };
   gl.uniform1f(locs.u_densityLevelsEnabled, densityLevelsEnabled);
-  gl.uniform3fv(locs.u_densityLevelsMin, new Float32Array([
+  cache._scratch3.set([
     densityLevels.red?.min ?? 0,
     densityLevels.green?.min ?? 0,
     densityLevels.blue?.min ?? 0
-  ]));
-  gl.uniform3fv(locs.u_densityLevelsMax, new Float32Array([
+  ]);
+  gl.uniform3fv(locs.u_densityLevelsMin, cache._scratch3);
+  cache._scratch3.set([
     densityLevels.red?.max ?? 3,
     densityLevels.green?.max ?? 3,
     densityLevels.blue?.max ?? 3
-  ]));
-  if (DEBUG_WEBGL) console.log('[FilmLabWebGL] Setting density levels:', { densityLevelsEnabled, densityLevels });
+  ]);
+  gl.uniform3fv(locs.u_densityLevelsMax, cache._scratch3);
+  if (process.env.NODE_ENV !== 'production' && DEBUG_WEBGL) console.log('[FilmLabWebGL] Setting density levels:', { densityLevelsEnabled, densityLevels });
 
   // Curves
   const curves = params.curves;
@@ -665,46 +691,54 @@ export function processImageWebGL(canvas, image, params = {}) {
   const hslParams = params.hslParams;
   if (hslParams && !isDefaultHSLParams(hslParams)) {
     gl.uniform1f(locs.u_useHSL, 1.0);
-    gl.uniform3fv(locs.u_hslRed, new Float32Array([
+    cache._scratch3.set([
       hslParams.red?.hue ?? 0,
       hslParams.red?.saturation ?? 0,
       hslParams.red?.luminance ?? 0
-    ]));
-    gl.uniform3fv(locs.u_hslOrange, new Float32Array([
+    ]);
+    gl.uniform3fv(locs.u_hslRed, cache._scratch3);
+    cache._scratch3.set([
       hslParams.orange?.hue ?? 0,
       hslParams.orange?.saturation ?? 0,
       hslParams.orange?.luminance ?? 0
-    ]));
-    gl.uniform3fv(locs.u_hslYellow, new Float32Array([
+    ]);
+    gl.uniform3fv(locs.u_hslOrange, cache._scratch3);
+    cache._scratch3.set([
       hslParams.yellow?.hue ?? 0,
       hslParams.yellow?.saturation ?? 0,
       hslParams.yellow?.luminance ?? 0
-    ]));
-    gl.uniform3fv(locs.u_hslGreen, new Float32Array([
+    ]);
+    gl.uniform3fv(locs.u_hslYellow, cache._scratch3);
+    cache._scratch3.set([
       hslParams.green?.hue ?? 0,
       hslParams.green?.saturation ?? 0,
       hslParams.green?.luminance ?? 0
-    ]));
-    gl.uniform3fv(locs.u_hslCyan, new Float32Array([
+    ]);
+    gl.uniform3fv(locs.u_hslGreen, cache._scratch3);
+    cache._scratch3.set([
       hslParams.cyan?.hue ?? 0,
       hslParams.cyan?.saturation ?? 0,
       hslParams.cyan?.luminance ?? 0
-    ]));
-    gl.uniform3fv(locs.u_hslBlue, new Float32Array([
+    ]);
+    gl.uniform3fv(locs.u_hslCyan, cache._scratch3);
+    cache._scratch3.set([
       hslParams.blue?.hue ?? 0,
       hslParams.blue?.saturation ?? 0,
       hslParams.blue?.luminance ?? 0
-    ]));
-    gl.uniform3fv(locs.u_hslPurple, new Float32Array([
+    ]);
+    gl.uniform3fv(locs.u_hslBlue, cache._scratch3);
+    cache._scratch3.set([
       hslParams.purple?.hue ?? 0,
       hslParams.purple?.saturation ?? 0,
       hslParams.purple?.luminance ?? 0
-    ]));
-    gl.uniform3fv(locs.u_hslMagenta, new Float32Array([
+    ]);
+    gl.uniform3fv(locs.u_hslPurple, cache._scratch3);
+    cache._scratch3.set([
       hslParams.magenta?.hue ?? 0,
       hslParams.magenta?.saturation ?? 0,
       hslParams.magenta?.luminance ?? 0
-    ]));
+    ]);
+    gl.uniform3fv(locs.u_hslMagenta, cache._scratch3);
   } else {
     gl.uniform1f(locs.u_useHSL, 0.0);
   }
@@ -747,7 +781,7 @@ export function processImageWebGL(canvas, image, params = {}) {
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
   // Debug: Sample multiple pixels to verify rendering output
-  if (DEBUG_WEBGL) {
+  if (process.env.NODE_ENV !== 'production' && DEBUG_WEBGL) {
     const centerX = Math.floor(canvas.width / 2);
     const centerY = Math.floor(canvas.height / 2);
     

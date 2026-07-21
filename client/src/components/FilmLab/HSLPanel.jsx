@@ -5,7 +5,7 @@
  * @description 8 色相分区的 HSL (色相/饱和度/明度) 调整界面
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { HSL_CHANNEL_ORDER, DEFAULT_HSL_PARAMS } from '@filmgallery/shared';
 
 // 通道颜色配置 (用于 UI 显示)
@@ -35,7 +35,7 @@ const CHANNEL_NAMES = {
 /**
  * 单通道滑块组
  */
-function ChannelSliders({ channel, params, onChange, onMouseDown, showLabel = true }) {
+const ChannelSliders = React.memo(function ChannelSliders({ channel, params, onChange, onMouseDown, showLabel = true }) {
   const color = CHANNEL_COLORS[channel];
   const name = CHANNEL_NAMES[channel];
   const channelParams = params?.[channel] || { hue: 0, saturation: 0, luminance: 0 };
@@ -43,6 +43,10 @@ function ChannelSliders({ channel, params, onChange, onMouseDown, showLabel = tr
   const handleChange = (key, value) => {
     onChange(channel, { ...channelParams, [key]: value });
   };
+  
+  const handleHueChange = useCallback((v) => handleChange('hue', v), [handleChange]);
+  const handleSaturationChange = useCallback((v) => handleChange('saturation', v), [handleChange]);
+  const handleLuminanceChange = useCallback((v) => handleChange('luminance', v), [handleChange]);
   
   return (
     <div style={{ marginBottom: showLabel ? 8 : 0 }}>
@@ -77,7 +81,7 @@ function ChannelSliders({ channel, params, onChange, onMouseDown, showLabel = tr
           value={channelParams.hue}
           min={-180}
           max={180}
-          onChange={(v) => handleChange('hue', v)}
+          onChange={handleHueChange}
           onMouseDown={onMouseDown}
           suffix="°"
         />
@@ -86,7 +90,7 @@ function ChannelSliders({ channel, params, onChange, onMouseDown, showLabel = tr
           value={channelParams.saturation}
           min={-100}
           max={100}
-          onChange={(v) => handleChange('saturation', v)}
+          onChange={handleSaturationChange}
           onMouseDown={onMouseDown}
         />
         <HSLSlider
@@ -94,18 +98,18 @@ function ChannelSliders({ channel, params, onChange, onMouseDown, showLabel = tr
           value={channelParams.luminance}
           min={-100}
           max={100}
-          onChange={(v) => handleChange('luminance', v)}
+          onChange={handleLuminanceChange}
           onMouseDown={onMouseDown}
         />
       </div>
     </div>
   );
-}
+});
 
 /**
  * 紧凑型 HSL 滑块
  */
-function HSLSlider({ label, value, min, max, onChange, onMouseDown, suffix = '' }) {
+const HSLSlider = React.memo(function HSLSlider({ label, value, min, max, onChange, onMouseDown, suffix = '' }) {
   return (
     <div style={{ 
       display: 'flex', 
@@ -135,7 +139,7 @@ function HSLSlider({ label, value, min, max, onChange, onMouseDown, suffix = '' 
       </span>
     </div>
   );
-}
+});
 
 /**
  * HSL 调整面板主组件

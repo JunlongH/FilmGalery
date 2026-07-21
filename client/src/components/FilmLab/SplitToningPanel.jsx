@@ -5,7 +5,7 @@
  * @description 高光/阴影分区着色调整界面
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   DEFAULT_SPLIT_TONE_PARAMS, 
   SPLIT_TONE_PRESETS 
@@ -14,7 +14,7 @@ import {
 /**
  * 色相选择器 - 圆形色轮
  */
-function HueWheel({ hue, onChange, size = 60 }) {
+const HueWheel = React.memo(function HueWheel({ hue, onChange, size = 60 }) {
   const handleClick = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const cx = rect.width / 2;
@@ -77,12 +77,12 @@ function HueWheel({ hue, onChange, size = 60 }) {
       }} />
     </div>
   );
-}
+});
 
 /**
  * 色相/饱和度控制组
  */
-function ToneControl({ 
+const ToneControl = React.memo(function ToneControl({ 
   label, 
   hue, 
   saturation, 
@@ -186,7 +186,7 @@ function ToneControl({
       </div>
     </div>
   );
-}
+});
 
 /**
  * 分离色调面板主组件
@@ -244,6 +244,13 @@ export default function SplitToningPanel({
       }
     });
   };
+  
+  const handleHighlightsHue = useCallback((v) => updateHighlights('hue', v), [updateHighlights]);
+  const handleHighlightsSaturation = useCallback((v) => updateHighlights('saturation', v), [updateHighlights]);
+  const handleMidtonesHue = useCallback((v) => updateMidtones('hue', v), [updateMidtones]);
+  const handleMidtonesSaturation = useCallback((v) => updateMidtones('saturation', v), [updateMidtones]);
+  const handleShadowsHue = useCallback((v) => updateShadows('hue', v), [updateShadows]);
+  const handleShadowsSaturation = useCallback((v) => updateShadows('saturation', v), [updateShadows]);
   
   // 应用预设
   const applyPreset = (presetKey) => {
@@ -370,8 +377,8 @@ export default function SplitToningPanel({
         label="Highlights"
         hue={params.highlights.hue}
         saturation={params.highlights.saturation}
-        onHueChange={(v) => updateHighlights('hue', v)}
-        onSaturationChange={(v) => updateHighlights('saturation', v)}
+        onHueChange={handleHighlightsHue}
+        onSaturationChange={handleHighlightsSaturation}
         onMouseDown={pushToHistory}
         color="#ffcc00"
       />
@@ -388,8 +395,8 @@ export default function SplitToningPanel({
         label="Midtones"
         hue={params.midtones.hue}
         saturation={params.midtones.saturation}
-        onHueChange={(v) => updateMidtones('hue', v)}
-        onSaturationChange={(v) => updateMidtones('saturation', v)}
+        onHueChange={handleMidtonesHue}
+        onSaturationChange={handleMidtonesSaturation}
         onMouseDown={pushToHistory}
         color="#88dd88"
       />
@@ -406,8 +413,8 @@ export default function SplitToningPanel({
         label="Shadows"
         hue={params.shadows.hue}
         saturation={params.shadows.saturation}
-        onHueChange={(v) => updateShadows('hue', v)}
-        onSaturationChange={(v) => updateShadows('saturation', v)}
+        onHueChange={handleShadowsHue}
+        onSaturationChange={handleShadowsSaturation}
         onMouseDown={pushToHistory}
         color="#6688ff"
       />

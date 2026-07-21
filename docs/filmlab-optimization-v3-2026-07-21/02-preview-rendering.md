@@ -87,7 +87,7 @@ prepareLUTs() {
 `processPixelFloat` 改为 `this.luts.filmCurveFloat[idx]`（LUT 查找，O(1)）。
 
 ### P1-14 RenderCore 每次渲染都 new + prepareLUTs
-`FilmLab.jsx:1364, 1647, 1738, 2179` — 4 处 `new RenderCore(buildRenderCoreParams())` + `core.prepareLUTs()`。即使参数未变，也重建所有 LUT（tone LUT + 4 curve LUT × 2 精度 + WB gains + split-tone context）。
+`FilmLab.jsx:1364, 1671, 1762, 2195` + `CpuRenderService.js:170` — 5 处 `new RenderCore(buildRenderCoreParams())` + `core.prepareLUTs()`（v3 修正：原计划漏列 `CpuRenderService.js:170`；行号 1647/1738/2179 应为 1671/1762/2195，引用的是 `new RenderCore` 上一行而非本行）。即使参数未变，也重建所有 LUT（tone LUT + 4 curve LUT × 2 精度 + WB gains + split-tone context）。
 
 **建议**：
 ```js
@@ -110,6 +110,24 @@ const LUT_CACHE = new Map(); // key: serialized params
 2. eslint-disable 掩盖了 ~40 个状态变量依赖，漏一个就 stale
 
 **建议**：`useCallback` + 显式依赖列表；或提取到 `useFilmLabRenderer` hook（修复 typo 后真正使用）。
+
+### P1-53 isWebGLAvailable 与 processImageWebGL 判定不一致（v3 新发现）
+`FilmLabWebGL.js:74-81` — `isWebGLAvailable()` 只尝试 `canvas.getContext('webgl') || canvas.getContext('experimental-webgl')`，但 `processImageWebGL()`（line 88）优先尝试 `canvas.getContext('webgl2', ...)`。两者对"可用"的判定不一致。
+
+**影响**：理论上若某浏览器（部分移动端 WebView）对 `webgl` 返回 null 但对 `webgl2` 可用，GPU 路径会被 `isWebGLAvailable()` 误判为禁用，强制走 CPU 回退（触发 P0-2 阻塞）。
+
+**建议**：
+```js
+export function isWebGLAvailable() {
+  // 与 processImageWebGL 对齐：优先 webgl2
+  if (cached !== null) return cached;
+  const canvas = document.createElement('canvas');
+  const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  cached = !!gl;
+  return cached;
+}
+```
+（同时解决 P3-56 的 canvas 重复创建问题）
 
 ---
 
@@ -180,3 +198,15 @@ const yieldToMain = () => new Promise(resolve => {
 `FilmLab.jsx:1710-1784 vs 2031-2220` — 几何变换 + 像素循环 + toBlob 几乎相同。
 
 **建议**：抽 `renderAtSize(image, params, {maxWidth, outputFormat})`。
+
+### P2-54/P2-55 handleSave/downloadClientJPEG 同步像素循环阻塞（v3 新发现）
+`FilmLab.jsx:1765-1777`（handleSave）+ `FilmLab.jsx:2198-2210`（downloadClientJPEG）— 与 P0-2 同模式的同步 `for` 循环遍历全像素，但触发于用户点击 Save/Export 而非预览。对 6000×4000 全分辨率导出 = 24M 像素 × 超越函数 = **秒级阻塞**。
+
+P2-34 抽公共函数后仍同步阻塞——必须配套改 async：
+```js
+async function renderAtSize(image, params, { maxWidth, outputFormat, shouldAbort }) {
+  // 复用 processCanvasWithRenderCoreAsync（CpuRenderService.js:165）
+  // 分块 + setTimeout/MessageChannel 让步
+}
+```
+属 P2 而非 P0：导出非交互高频路径，但用户体验上"点击 Save 后 UI 冻结几秒"仍需修复。

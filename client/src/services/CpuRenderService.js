@@ -8,8 +8,18 @@
  * @since 2026-01-31
  */
 
-import { RenderCore, processCanvasChunkedSync, processBlock, PREVIEW_MAX_WIDTH_CLIENT, EXPORT_MAX_WIDTH } from '@filmgallery/shared';
+import { RenderCore, processCanvasChunkedSync, processBlock, PREVIEW_MAX_WIDTH_CLIENT, EXPORT_MAX_WIDTH, stableSerializeParams } from '@filmgallery/shared';
 import { getApiBase } from '../api';
+
+const _yieldChannel = typeof MessageChannel !== 'undefined' 
+  ? new MessageChannel() 
+  : null;
+const _yieldToMain = _yieldChannel 
+  ? () => new Promise(resolve => {
+      _yieldChannel.port1.onmessage = () => resolve();
+      _yieldChannel.port2.postMessage(null);
+    })
+  : () => new Promise(resolve => setTimeout(resolve, 0));
 
 // ============================================================================
 // 常量定义
@@ -132,6 +142,21 @@ export function applyGeometry(sourceCanvas, params) {
   return outCanvas;
 }
 
+// P1-14: 模块级 RenderCore 缓存 —— 避免每次 processCanvasWithRenderCore* 都 new + prepareLUTs
+// 单条目缓存（LRU）：params 序列化键相同则复用，不同则重建。旧实例由 GC 回收。
+let _cachedRenderCore = null;
+let _cachedRenderCoreKey = '';
+
+function getCachedRenderCore(params) {
+  const key = stableSerializeParams(params);
+  if (!_cachedRenderCore || _cachedRenderCoreKey !== key) {
+    _cachedRenderCore = new RenderCore(params);
+    _cachedRenderCore.prepareLUTs();
+    _cachedRenderCoreKey = key;
+  }
+  return _cachedRenderCore;
+}
+
 // ============================================================================
 // RenderCore 像素处理
 // ============================================================================
@@ -147,7 +172,9 @@ export function applyGeometry(sourceCanvas, params) {
  */
 export function processCanvasWithRenderCore(canvas, params) {
   // SSOT 循环逻辑在 packages/shared/renderChunked.js（chunkRows=全图 = 同步单块）
-  processCanvasChunkedSync(canvas, params, { chunkRows: canvas.height || 64 });
+  // P1-14: 复用 RenderCore 实例（getCachedRenderCore 内部按 params key 缓存）
+  const core = getCachedRenderCore(params);
+  processCanvasChunkedSync(canvas, params, { chunkRows: canvas.height || 64, core });
   return canvas;
 }
 
@@ -159,27 +186,31 @@ export function processCanvasWithRenderCore(canvas, params) {
  * @param {Object} params - RenderCore 参数
  * @param {Object} [opts]
  * @param {number} [opts.chunkRows=64] - 每块处理的行数（让出频率）
- * @param {() => boolean} [opts.shouldAbort] - 可选中止谓词，返回 true 时提前退出
+ * @param {AbortSignal} [opts.signal] - P1-23: 统一 abort 机制（替代 shouldAbort 回调）
+ * @param {() => boolean} [opts.shouldAbort] - 已废弃，保留向后兼容（signal 优先）
  * @returns {Promise<HTMLCanvasElement>} 处理后的 Canvas（同一个）
  */
 export async function processCanvasWithRenderCoreAsync(canvas, params, opts = {}) {
-  const { chunkRows = 64, shouldAbort = null } = opts;
+  const { chunkRows = 64, shouldAbort = null, signal = null } = opts;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const width = canvas.width;
   const height = canvas.height;
-  const core = new RenderCore(params);
-  core.prepareLUTs();
+  // P1-14: 复用 RenderCore 实例（getCachedRenderCore 内部按 params key 缓存）
+  const core = getCachedRenderCore(params);
+
+  // P1-23: 统一 abort 检查（signal 优先，shouldAbort 向后兼容）
+  const isAborted = () => (signal && signal.aborted) || (shouldAbort && shouldAbort());
 
   // 按行分块处理，每块后 await 让出主线程。
   // 块内处理复用 SSOT processBlock（与同步版数值一致）。
   for (let y0 = 0; y0 < height; y0 += chunkRows) {
-    if (shouldAbort && shouldAbort()) break;
+    if (isAborted()) throw new DOMException('Render aborted', 'AbortError');
     const y1 = Math.min(y0 + chunkRows, height);
     const blockHeight = y1 - y0;
     const imageData = ctx.getImageData(0, y0, width, blockHeight);
     processBlock(imageData.data, core);
     ctx.putImageData(imageData, 0, y0);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await _yieldToMain();
   }
   return canvas;
 }
@@ -257,12 +288,10 @@ export async function canvasToBlob(canvas, format = 'jpeg', quality = JPEG_QUALI
  */
 export async function localCpuPreview({ imageUrl, params, maxWidth = PREVIEW_MAX_WIDTH }) {
   try {
-    console.log('[CpuRenderService] Starting CPU preview render');
     const startTime = performance.now();
     
     // 加载图片
     const { canvas, width, height } = await loadImageToCanvas(imageUrl, maxWidth);
-    console.log(`[CpuRenderService] Image loaded: ${width}x${height}`);
 
     // 像素处理（异步分块，避免大图阻塞主线程）
     await processCanvasWithRenderCoreAsync(canvas, params);
@@ -274,7 +303,7 @@ export async function localCpuPreview({ imageUrl, params, maxWidth = PREVIEW_MAX
     const { blob } = await canvasToBlob(finalCanvas, 'jpeg', JPEG_QUALITY);
     
     const elapsed = performance.now() - startTime;
-    console.log(`[CpuRenderService] CPU preview completed in ${elapsed.toFixed(0)}ms`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[CpuRenderService] CPU preview completed in ${elapsed.toFixed(0)}ms`);
     
     return { ok: true, blob, source: 'local-cpu' };
   } catch (e) {
@@ -290,14 +319,12 @@ export async function localCpuPreview({ imageUrl, params, maxWidth = PREVIEW_MAX
  */
 export async function localCpuRender({ imageUrl, params, format = 'jpeg', maxWidth = null }) {
   try {
-    console.log('[CpuRenderService] Starting CPU render, format:', format);
     const startTime = performance.now();
     
     // 加载图片（不限制宽度以保持原始分辨率）
     // 如果 maxWidth 为 0，明确表示不限制宽度；否则使用传入值或默认限制
     const effectiveMaxWidth = (maxWidth === 0) ? 0 : (maxWidth || EXPORT_MAX_WIDTH);
     const { canvas, width, height } = await loadImageToCanvas(imageUrl, effectiveMaxWidth);
-    console.log(`[CpuRenderService] Image loaded: ${width}x${height}`);
 
     // 像素处理（异步分块，避免大图阻塞主线程）
     await processCanvasWithRenderCoreAsync(canvas, params);
@@ -310,7 +337,7 @@ export async function localCpuRender({ imageUrl, params, format = 'jpeg', maxWid
     const { blob, contentType, warning } = await canvasToBlob(finalCanvas, format, quality);
     
     const elapsed = performance.now() - startTime;
-    console.log(`[CpuRenderService] CPU render completed in ${elapsed.toFixed(0)}ms, size: ${(blob.size / 1024).toFixed(0)}KB`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[CpuRenderService] CPU render completed in ${elapsed.toFixed(0)}ms, size: ${(blob.size / 1024).toFixed(0)}KB`);
     
     return { 
       ok: true, 
@@ -333,8 +360,6 @@ export async function localCpuRender({ imageUrl, params, format = 'jpeg', maxWid
  */
 export async function localCpuExport({ photoId, imageUrl, params, format = 'jpeg' }, uploadFn) {
   try {
-    console.log('[CpuRenderService] Starting CPU export, photoId:', photoId);
-    
     // 渲染图片 (Explicitly disable size limit for export)
     const renderResult = await localCpuRender({ imageUrl, params, format, maxWidth: 0 });
     

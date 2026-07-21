@@ -21,7 +21,7 @@ const STRIP_WIDTH = 80;
 // 缩略图组件
 // ============================================================================
 
-function PhotoThumb({ photo, isActive, onClick, hasPositive, isSelected, showCheckbox }) {
+const PhotoThumb = React.memo(function PhotoThumb({ photo, isActive, onClick, hasPositive, isSelected, showCheckbox }) {
   const thumbUrl = useMemo(() => {
     // 优先使用正片缩略图，然后其他缩略图，最后回退到全尺寸图片
     const thumbPath = photo.positive_thumb_path || 
@@ -118,7 +118,7 @@ function PhotoThumb({ photo, isActive, onClick, hasPositive, isSelected, showChe
       )}
     </div>
   );
-}
+});
 
 // ============================================================================
 // 主组件
@@ -197,7 +197,7 @@ export default function PhotoSwitcher({
   }, [goPrev, goNext]);
   
   // 切换批量选择
-  const toggleBatchSelect = (photoId) => {
+  const toggleBatchSelect = useCallback((photoId) => {
     setSelectedForBatch(prev => {
       if (prev.includes(photoId)) {
         return prev.filter(id => id !== photoId);
@@ -205,7 +205,17 @@ export default function PhotoSwitcher({
         return [...prev, photoId];
       }
     });
-  };
+  }, []);
+  
+  const thumbClickHandlers = useMemo(() => {
+    return photos.map((photo) => () => {
+      if (batchMode) {
+        toggleBatchSelect(photo.id);
+      } else if (onPhotoChange) {
+        onPhotoChange(photo);
+      }
+    });
+  }, [photos, batchMode, onPhotoChange, toggleBatchSelect]);
   
   // 全选/取消全选
   const toggleSelectAll = () => {
@@ -391,7 +401,7 @@ export default function PhotoSwitcher({
           <div style={{ color: '#888', fontSize: 10, textAlign: 'center', padding: 10 }}>
             ...
           </div>
-        ) : photos.map((photo) => (
+        ) : photos.map((photo, index) => (
           <PhotoThumb
             key={photo.id}
             photo={photo}
@@ -399,13 +409,7 @@ export default function PhotoSwitcher({
             hasPositive={!!photo.positive_rel_path}
             isSelected={selectedForBatch.includes(photo.id)}
             showCheckbox={batchMode}
-            onClick={() => {
-              if (batchMode) {
-                toggleBatchSelect(photo.id);
-              } else if (onPhotoChange) {
-                onPhotoChange(photo);
-              }
-            }}
+            onClick={thumbClickHandlers[index]}
           />
         ))}
       </div>

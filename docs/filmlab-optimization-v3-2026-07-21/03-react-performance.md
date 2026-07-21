@@ -92,12 +92,12 @@ useEffect(() => {
 2. 或按值比较：`useMemo` 内先比较 JSON.stringify(histograms[activeChannel])
 
 ### P1-17 PhotoThumb 重渲染
-`PhotoSwitcher.jsx:24` — `PhotoThumb` 接收 `currentParams`（每次滑块变化都变），导致 36+ 缩略图全重渲染。
+`PhotoSwitcher.jsx:24` — `PhotoThumb` 接收 `{ photo, isActive, onClick, hasPositive, isSelected, showCheckbox }`（v3 修正：原诊断称"接收 `currentParams` prop"不准确——`currentParams` 是父级 PhotoSwitcher 的 prop，不传给 PhotoThumb）。但根因成立：无 `React.memo` 时，父组件 PhotoSwitcher 在 `currentParams` 变化时重渲染，连带 36+ 个 PhotoThumb 全部重渲染。
 
 **建议**：
 ```jsx
 const PhotoThumb = React.memo(function PhotoThumb({ photo, isSelected, onClick }) {
-  // 不接收 currentParams
+  // ...
 });
 // onClick 用 useCallback 稳定
 ```
@@ -161,10 +161,10 @@ return () => { active = false; };
 
 ## P2 — 中等影响
 
-### P2-28 AI 上下文每滑块触发
-`FilmLab.jsx:224-230` — `updateOverlayContext` effect 依赖 11 个参数值。每次滑块变化都触发 AI 面板上下文更新+重渲染。
-
-**建议**：`setTimeout(…, 300)` + cleanup debounce。
+### P2-28 AI 上下文每滑块触发（v3 修正：升级 P1，详见 01-issues-by-priority.md）
+> 原 P2-28 已升级为 P1-28。`FilmLab.jsx:224-230` — `updateOverlayContext` effect 依赖 11 个参数值，每次滑块变化都触发 AI 面板上下文更新+重渲染，直接影响交互响应。
+>
+> **建议**：`setTimeout(…, 300)` + cleanup debounce。修复在 Phase V.4 执行（与 AbortController 阶段联动）。
 
 ### P2-12 webglParams memo 8 次 find
 `FilmLab.jsx:256-263` — `filmCurveProfiles?.find(p => p.key === filmCurveProfile)` 调 8 次（每字段一次）。
@@ -174,6 +174,16 @@ return () => { active = false; };
 const filmCurveParams = resolveFilmCurveParams();
 // webglParams memo 内：...filmCurveParams
 ```
+
+### P2-18 直方图数组分配（v3 修正：由 P1 降级 P2）
+`FilmLab.jsx:1299-1302` — `processImage` 每帧分配 4× `new Array(256)`（直方图缓冲）。8KB/帧，相比 P0-3 的 12MB `getImageData` 分配可忽略，但 `useRef` 复用仍值得做。
+
+**建议**：`useRef(new Array(256).fill(0))` × 4，每帧 `arr.fill(0)` 重置。
+
+### P2-7 直方图属性名不一致（v3 修正：由 P1 降级 P2）
+`FilmLab.jsx:1358 vs 1416 vs 150` — 错误路径用 `r/g/b`，正常路径用 `red/green/blue`。仅 error path 触发（`getImageData` 失败时，罕见：跨域 canvas 污染、零尺寸 canvas）。ToneCurveEditor 直方图为空——cosmetic 影响。仍应修复，但非 P0/P1 优先级。
+
+**建议**：统一为 `{ rgb, red, green, blue }`，删除 `maxCount`。
 
 ---
 

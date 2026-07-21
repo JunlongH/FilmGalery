@@ -221,6 +221,11 @@ class RenderCore {
       useKelvinModel: true,
     });
 
+    // P1-13: 预构建胶片曲线 LUT —— 消除 processPixel*/processPixel 内每像素的
+    // FILM_CURVE_PROFILES 哈希查找 + ?? 回退解析 + log10/pow 超越函数调用。
+    // 3M 像素 × 3 通道 = 9M 次 log10+pow → 9M 次数组索引（~1000x 加速）
+    const filmCurveCtx = this._prepareFilmCurveContext();
+
     this.luts = {
       toneLUT,
       lutRGB,
@@ -240,9 +245,73 @@ class RenderCore {
       lut2Intensity: p.lut2Intensity,
       // Q18: Precompute split tone tint colors once per frame
       splitToneCtx: prepareSplitTone(p.splitToning),
+      // P1-13: 预构建胶片曲线 LUT（enabled=false 时为空壳，查找时短路）
+      filmCurveCtx,
     };
 
     return this.luts;
+  }
+
+  /**
+   * P1-13: 预构建胶片曲线 LUT
+   *
+   * 将 per-pixel 的 FILM_CURVE_PROFILES 哈希查找 + 参数回退解析 + log10/pow 计算
+   * 提升到 prepareLUTs() 一次性完成。构建：
+   *   - 8-bit LUT (256-entry Uint8Array) —— 供 processPixel 使用
+   *   - Float LUT (1024-entry Float32Array × 3 通道) —— 供 processPixelFloat 使用
+   *
+   * 精度：1024-entry 对 8-bit 输入过采样 4x，对 float 输入提供 10-bit 精度。
+   * applyFilmCurveFloat 内部 clamp(value, 0.001, 1)，故 LUT[0] 对应 value=0 → 内部 0.001。
+   *
+   * @returns {{enabled: boolean, lut8?: Uint8Array, lutFloatR?: Float32Array, lutFloatG?: Float32Array, lutFloatB?: Float32Array}}
+   */
+  _prepareFilmCurveContext() {
+    const p = this.params;
+    if (!p.inverted || !p.filmCurveEnabled || !p.filmCurveProfile) {
+      return { enabled: false };
+    }
+
+    const profile = FILM_CURVE_PROFILES[p.filmCurveProfile];
+    if (!profile) {
+      return { enabled: false };
+    }
+
+    const gammaMain = p.filmCurveGamma ?? profile.gamma;
+    const dMin = p.filmCurveDMin ?? profile.dMin;
+    const dMax = p.filmCurveDMax ?? profile.dMax;
+    // 8-bit 路径保持原有行为：不传 toe/shoulder（默认 0 = 简单 gamma）
+    const params8 = { gamma: gammaMain, dMin, dMax };
+
+    // Float 路径：per-channel gamma + toe/shoulder（与原 processPixelFloat 一致）
+    const toe = p.filmCurveToe ?? profile.toe ?? 0;
+    const shoulder = p.filmCurveShoulder ?? profile.shoulder ?? 0;
+    const gammaR = p.filmCurveGammaR ?? profile.gammaR ?? gammaMain;
+    const gammaG = p.filmCurveGammaG ?? profile.gammaG ?? gammaMain;
+    const gammaB = p.filmCurveGammaB ?? profile.gammaB ?? gammaMain;
+
+    // 8-bit LUT (256 entries) —— 单 gamma（匹配原 processPixel 行为）
+    const lut8 = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) {
+      lut8[i] = applyFilmCurve(i, params8);
+    }
+
+    // Float LUT (1024 entries × 3 channels) —— per-channel gamma
+    const FLOAT_LUT_SIZE = 1024;
+    const FLOAT_LUT_MAX = FLOAT_LUT_SIZE - 1;
+    const lutFloatR = new Float32Array(FLOAT_LUT_SIZE);
+    const lutFloatG = new Float32Array(FLOAT_LUT_SIZE);
+    const lutFloatB = new Float32Array(FLOAT_LUT_SIZE);
+    const paramsR = { gamma: gammaR, dMin, dMax, toe, shoulder };
+    const paramsG = { gamma: gammaG, dMin, dMax, toe, shoulder };
+    const paramsB = { gamma: gammaB, dMin, dMax, toe, shoulder };
+    for (let i = 0; i < FLOAT_LUT_SIZE; i++) {
+      const v = i / FLOAT_LUT_MAX;
+      lutFloatR[i] = applyFilmCurveFloat(v, paramsR);
+      lutFloatG[i] = applyFilmCurveFloat(v, paramsG);
+      lutFloatB[i] = applyFilmCurveFloat(v, paramsB);
+    }
+
+    return { enabled: true, lut8, lutFloatR, lutFloatG, lutFloatB, FLOAT_LUT_MAX };
   }
 
   // ==========================================================================
@@ -281,26 +350,14 @@ class RenderCore {
     const luts = this.luts || this.prepareLUTs();
 
     // ① Film Curve (H&D density model) — Q13: per-channel gamma + toe/shoulder
-    // Only when inverting negatives and film curve is enabled
-    if (p.inverted && p.filmCurveEnabled && p.filmCurveProfile) {
-      const profile = FILM_CURVE_PROFILES[p.filmCurveProfile];
-      if (profile) {
-        const gammaMain = p.filmCurveGamma ?? profile.gamma;
-        const dMin  = p.filmCurveDMin  ?? profile.dMin;
-        const dMax  = p.filmCurveDMax  ?? profile.dMax;
-        // Q13: prefer explicit params (from client), then profile, then defaults
-        const toe   = p.filmCurveToe ?? profile.toe ?? 0;
-        const shoulder = p.filmCurveShoulder ?? profile.shoulder ?? 0;
-
-        // Per-channel gamma: prefer explicit params, then profile, then main gamma
-        const gammaR = p.filmCurveGammaR ?? profile.gammaR ?? gammaMain;
-        const gammaG = p.filmCurveGammaG ?? profile.gammaG ?? gammaMain;
-        const gammaB = p.filmCurveGammaB ?? profile.gammaB ?? gammaMain;
-
-        r = applyFilmCurveFloat(r, { gamma: gammaR, dMin, dMax, toe, shoulder });
-        g = applyFilmCurveFloat(g, { gamma: gammaG, dMin, dMax, toe, shoulder });
-        b = applyFilmCurveFloat(b, { gamma: gammaB, dMin, dMax, toe, shoulder });
-      }
+    // P1-13: 使用预构建 LUT（eliminates per-pixel FILM_CURVE_PROFILES lookup + log10/pow）
+    // 1024-entry Float32Array，输入 clamp 到 [0,1] 后量化到 10-bit 索引
+    const fcCtx = luts.filmCurveCtx;
+    if (fcCtx.enabled) {
+      const max = fcCtx.FLOAT_LUT_MAX;
+      r = r <= 0 ? fcCtx.lutFloatR[0] : r >= 1 ? fcCtx.lutFloatR[max] : fcCtx.lutFloatR[(r * max) | 0];
+      g = g <= 0 ? fcCtx.lutFloatG[0] : g >= 1 ? fcCtx.lutFloatG[max] : fcCtx.lutFloatG[(g * max) | 0];
+      b = b <= 0 ? fcCtx.lutFloatB[0] : b >= 1 ? fcCtx.lutFloatB[max] : fcCtx.lutFloatB[(b * max) | 0];
     }
 
     // Phase I：线性域反转 — 片基校正与反转在线性光下进行（物理正确，对齐 darktable/RawTherapee）。
@@ -514,18 +571,12 @@ class RenderCore {
     const luts = this.luts || this.prepareLUTs();
 
     // ① 胶片曲线 (Film Curve)
-    if (p.inverted && p.filmCurveEnabled && p.filmCurveProfile) {
-      const profile = FILM_CURVE_PROFILES[p.filmCurveProfile];
-      if (profile) {
-        const curveParams = {
-          gamma: p.filmCurveGamma ?? profile.gamma,
-          dMin: p.filmCurveDMin ?? profile.dMin,
-          dMax: p.filmCurveDMax ?? profile.dMax,
-        };
-        r = applyFilmCurve(r, curveParams);
-        g = applyFilmCurve(g, curveParams);
-        b = applyFilmCurve(b, curveParams);
-      }
+    // P1-13: 使用预构建 LUT（eliminates per-pixel FILM_CURVE_PROFILES lookup + log10/pow）
+    const fcCtx = luts.filmCurveCtx;
+    if (fcCtx.enabled) {
+      r = fcCtx.lut8[r];
+      g = fcCtx.lut8[g];
+      b = fcCtx.lut8[b];
     }
 
     // ② 片基校正 (Base Correction)

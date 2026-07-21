@@ -6,6 +6,14 @@ import SplitToningPanel from './SplitToningPanel';
 import LutSelectorModal from './LutSelectorModal';
 import AutoCropButton from './AutoCropButton';
 import { createFilmCurveProfile, updateFilmCurveProfile, deleteFilmCurveProfile } from '../../api';
+import { remapDetectedCropRect } from '@filmgallery/shared';
+
+// 源类型标签配置
+const sourceLabels = {
+  original: { label: 'ORIG', color: '#4caf50' },
+  negative: { label: 'NEG', color: '#2196f3' },
+  positive: { label: 'POS', color: '#ff9800' }
+};
 
 // Film Curve Profile Selector Component
 function FilmCurveProfileSelector({ 
@@ -619,12 +627,6 @@ export default function FilmLabControls({
     setShowLutSelector(false);
   };
   
-  // 源类型标签配置
-  const sourceLabels = {
-    original: {label: 'ORIG', color: '#4caf50' },
-    negative: { label: 'NEG', color: '#2196f3' },
-    positive: { label: 'POS', color: '#ff9800' }
-  };
   const currentSource = sourceLabels[sourceType] || sourceLabels.original;
   
   return (
@@ -946,7 +948,6 @@ export default function FilmLabControls({
               onDetectionResult={(result) => {
                 // Phase D: 把检测系坐标重映射到客户端"总旋转后包围盒"坐标系
                 if (result && result.cropRect) {
-                  const { remapDetectedCropRect } = require('@filmgallery/shared');
                   const remapped = remapDetectedCropRect(
                     result.cropRect,
                     result.rotation || 0,

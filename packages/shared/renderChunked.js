@@ -36,18 +36,22 @@ function processBlock(data, core) {
  * 用于测试验证分块边界不影响结果。
  *
  * @param {Object} fakeCanvas - 伪 canvas
- * @param {Object} params - RenderCore 参数
+ * @param {Object} params - RenderCore 参数（当 opts.core 提供时可省略）
  * @param {Object} [opts]
  * @param {number} [opts.chunkRows=64]
  * @param {() => boolean} [opts.shouldAbort]
+ * @param {RenderCore} [opts.core] - P1-14: 预构建的 RenderCore 实例（跳过内部 new+prepareLUTs）
  */
 function processCanvasChunkedSync(fakeCanvas, params, opts = {}) {
-  const { chunkRows = 64, shouldAbort = null } = opts;
+  const { chunkRows = 64, shouldAbort = null, core: prebuiltCore = null } = opts;
   const ctx = fakeCanvas.getContext('2d', { willReadFrequently: true });
   const width = fakeCanvas.width;
   const height = fakeCanvas.height;
-  const core = new RenderCore(params);
-  core.prepareLUTs();
+  const core = prebuiltCore || (() => {
+    const c = new RenderCore(params);
+    c.prepareLUTs();
+    return c;
+  })();
 
   for (let y0 = 0; y0 < height; y0 += chunkRows) {
     if (shouldAbort && shouldAbort()) break;

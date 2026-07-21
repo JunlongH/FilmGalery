@@ -12,5 +12,4 @@
  * @module hooks
  */
 
-// 渲染器（仍保留，已接入 disposeWebGL 清理）
-export { useFilmLabRenderer } from './useFilmLabRenderer';
+
