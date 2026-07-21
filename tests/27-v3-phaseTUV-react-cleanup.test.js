@@ -98,7 +98,10 @@ describe('T.4 — 直方图属性名统一 (P2-7)', () => {
 
   test('setHistograms 使用 red/green/blue 属性名', () => {
     const src = readClientSrc('components/FilmLab/FilmLab.jsx');
-    expect(src).toMatch(/red:\s*histR,\s*green:\s*histG,\s*blue:\s*histB/);
+    // P2-18 复用数组后用 spread 创建新引用（React 需要新引用检测变化）
+    expect(src).toMatch(/red:\s*\[\.\.\.histR\]/);
+    expect(src).toMatch(/green:\s*\[\.\.\.histG\]/);
+    expect(src).toMatch(/blue:\s*\[\.\.\.histB\]/);
   });
 });
 

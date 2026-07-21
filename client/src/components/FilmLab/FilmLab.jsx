@@ -184,6 +184,8 @@ export default function FilmLab({
   // Optimization: Cache WebGL output
   const processedCanvasRef = useRef(null);
   const lastWebglParamsRef = useRef(null);
+  // CPU 双缓冲：offscreen work canvas，避免分块处理时用户看到从上到下逐块刷新
+  const cpuWorkCanvasRef = useRef(null);
   // P0-3: 256×256 scratch canvas for histogram readback (12MB → 256KB per frame)
   const histogramScratchRef = useRef(null);
   // 追踪当前图片 effect 创建的 blob URL，用于切换照片/卸载时 revoke，避免数 MB/张的泄漏
@@ -1321,22 +1323,28 @@ export default function FilmLab({
         // Draw WebGL result to display canvas
         ctx.drawImage(sourceForDraw, 0, 0);
     } else {
-        // CPU path: apply transforms manually
+        // CPU path: 双缓冲 —— 在 offscreen work canvas 上绘制+处理，完成后一次性 blit
+        // 旧实现直接在显示 canvas 上分块 putImageData，用户看到从上到下逐块刷新
         const outW = Math.max(1, Math.round(rotatedW * eff.w));
         const outH = Math.max(1, Math.round(rotatedH * eff.h));
-        canvas.width = outW;
-        canvas.height = outH;
 
         const cropX = eff.x * rotatedW;
         const cropY = eff.y * rotatedH;
 
-        ctx.save();
-        // Shift so that crop area maps to (0,0)
-        ctx.translate(-cropX, -cropY);
-        ctx.translate(rotatedW / 2, rotatedH / 2);
-        ctx.rotate(rad);
-        ctx.drawImage(sourceForDraw, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
-        ctx.restore();
+        // 在 offscreen work canvas 上绘制旋转原图（用户不可见）
+        if (!cpuWorkCanvasRef.current) cpuWorkCanvasRef.current = document.createElement('canvas');
+        const workCanvas = cpuWorkCanvasRef.current;
+        workCanvas.width = outW;
+        workCanvas.height = outH;
+        const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
+
+        workCtx.save();
+        workCtx.translate(-cropX, -cropY);
+        workCtx.translate(rotatedW / 2, rotatedH / 2);
+        workCtx.rotate(rad);
+        workCtx.drawImage(sourceForDraw, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
+        workCtx.restore();
+        // workCanvas 现在有旋转原图，display canvas 仍显示上一帧（无闪烁）
     }
     
     // P0-3: Use 256×256 scratch canvas instead of full-canvas getImageData (12MB → 256KB)
@@ -1382,19 +1390,22 @@ export default function FilmLab({
         // WebGL Path: canvas already has processed pixels (drawImage from WebGL canvas)
         // No pixel processing needed — just histogram readback via scratch canvas
     } else {
-        // CPU Path: async chunked processing (P0-2/S.2b)
-        // 旧实现：同步 for 循环处理 3M 像素，阻塞主线程 200-800ms
-        // 新实现：await processCanvasWithRenderCoreAsync 分块 + setTimeout 让步 + signal abort
-        // 注：processCanvasWithRenderCoreAsync 使用 processPixelFloat（float 路径，精度更高）
-        
-        // S.2b: async pixel processing (replaces sync loop)
-        await processCanvasWithRenderCoreAsync(canvas, buildRenderCoreParams(), {
+        // CPU Path: async chunked processing on offscreen work canvas (双缓冲)
+        // processCanvasWithRenderCoreAsync 在 workCanvas 上分块处理，用户不可见
+        const workCanvas = cpuWorkCanvasRef.current;
+
+        await processCanvasWithRenderCoreAsync(workCanvas, buildRenderCoreParams(), {
           signal,
           chunkRows: 64,
         });
-        
-        // S.2a: stale check after await —— 若已被新渲染取代，不写 stale 直方图
+
+        // S.2a: stale check after await —— 若已被新渲染取代，不 blit stale 结果
         if (renderIdRef.current !== myId || signal.aborted) return;
+
+        // 一次性 blit 完整结果到显示 canvas（单帧更新，无逐块刷新）
+        canvas.width = workCanvas.width;
+        canvas.height = workCanvas.height;
+        ctx.drawImage(workCanvas, 0, 0);
     }
 
     // P0-3: Shared histogram calculation via 256×256 scratch canvas
