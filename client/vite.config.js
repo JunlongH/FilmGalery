@@ -24,6 +24,10 @@ import path from 'node:path';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: './',
+  define: {
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    'process.env.REACT_APP_API_BASE': JSON.stringify('http://127.0.0.1:4001'),
+  },
   resolve: {
     alias: {
       '@filmgallery/shared': path.resolve(__dirname, '../packages/shared'),
@@ -35,6 +39,12 @@ export default defineConfig({
   server: {
     port: 3000,
     strictPort: true, // electron-main.js:582 hard-references :3000
+  },
+  optimizeDeps: {
+    include: [
+      '@filmgallery/shared',
+      '@filmgallery/shared/coordTransform',
+    ],
   },
   build: {
     outDir: 'build',

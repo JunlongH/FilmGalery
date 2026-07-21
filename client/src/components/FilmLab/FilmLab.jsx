@@ -255,6 +255,21 @@ export default function FilmLab({
     blue: getCurveLUT(curves.blue),
   }), [curves]);
 
+  const resolveFilmCurveParams = React.useCallback(() => {
+    const profile = filmCurveProfiles?.find(p => p.key === filmCurveProfile);
+    return {
+      filmCurveEnabled,
+      filmCurveGamma: profile?.gamma ?? 0.6,
+      filmCurveGammaR: profile?.gammaR ?? profile?.gamma ?? 0.6,
+      filmCurveGammaG: profile?.gammaG ?? profile?.gamma ?? 0.6,
+      filmCurveGammaB: profile?.gammaB ?? profile?.gamma ?? 0.6,
+      filmCurveDMin: profile?.dMin ?? 0.1,
+      filmCurveDMax: profile?.dMax ?? 3.0,
+      filmCurveToe: profile?.toe ?? 0,
+      filmCurveShoulder: profile?.shoulder ?? 0,
+    };
+  }, [filmCurveEnabled, filmCurveProfile, filmCurveProfiles]);
+
   const webglParams = React.useMemo(() => {
     const gains = computeWBGains({ red, green, blue, temp, tint });
     // compute preview-scale consistent with geometry (preview max width)
@@ -335,23 +350,6 @@ export default function FilmLab({
       baseMode, baseRed, baseGreen, baseBlue, baseDensityR, baseDensityG, baseDensityB,
       densityLevelsEnabled, densityLevels,
       rotation, orientation, committedCrop, curves, hslParams, splitToning, saturation]);
-
-  // P0-8/P1-19: resolveFilmCurveParams SSOT — 4 处 filmCurve profile 解析统一调用
-  // 旧实现重复链式查找 4 次，且 downloadClientJPEG GPU 路径漏取 gammaR/G/B/toe/shoulder
-  const resolveFilmCurveParams = React.useCallback(() => {
-    const profile = filmCurveProfiles?.find(p => p.key === filmCurveProfile);
-    return {
-      filmCurveEnabled,
-      filmCurveGamma: profile?.gamma ?? 0.6,
-      filmCurveGammaR: profile?.gammaR ?? profile?.gamma ?? 0.6,
-      filmCurveGammaG: profile?.gammaG ?? profile?.gamma ?? 0.6,
-      filmCurveGammaB: profile?.gammaB ?? profile?.gamma ?? 0.6,
-      filmCurveDMin: profile?.dMin ?? 0.1,
-      filmCurveDMax: profile?.dMax ?? 3.0,
-      filmCurveToe: profile?.toe ?? 0,
-      filmCurveShoulder: profile?.shoulder ?? 0,
-    };
-  }, [filmCurveEnabled, filmCurveProfile, filmCurveProfiles]);
 
   // P1-18: buildRenderCoreParams SSOT — 4 处 new RenderCore({...}) 参数组装统一调用
   // 旧实现 4 处参数列表 95% 相同，handleSave/downloadClientJPEG 还漏 lut1Intensity 等
