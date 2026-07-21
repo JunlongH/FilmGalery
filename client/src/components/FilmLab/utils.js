@@ -337,10 +337,3 @@ export function getExifOrientation(buffer) {
   }
   return -1;
 }
-
-/**
- * 稳定序列化渲染参数（键排序递归），用于渲染脏标记比较。
- * 替代手写键列表的 paramsEqual —— 后者漏检大量参数导致预览冻结。
- * SSOT 实现在 packages/shared/paramSerializer.js
- */
-export { stableSerializeParams, renderParamsEqual } from '@filmgallery/shared';

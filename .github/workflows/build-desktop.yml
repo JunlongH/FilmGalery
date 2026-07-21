@@ -208,13 +208,15 @@ jobs:
           path: artifacts
 
       - name: Create release via GitHub API
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
 
           TAG="${{ github.ref_name }}"
           REPO="JunlongH/FilmGallery"
           COMMIT_SHA="${{ github.sha }}"
-          API="https://api.github.com/repos/$REPO"
+          API="https://api.github.com/repos/${REPO}"
 
           INSTALLERS=()
           while IFS= read -r f; do
@@ -223,44 +225,44 @@ jobs:
           echo "Installers to upload (${#INSTALLERS[@]}):"
           printf '  %s\n' "${INSTALLERS[@]}"
 
-          # Delete any existing release for this tag (including stale untagged ones)
-          echo "Cleaning up any existing release for $TAG..."
-          EXISTING=$(curl -sfL -H "Authorization: Bearer $GITHUB_TOKEN" \
-            "$API/releases/tags/$TAG" 2>/dev/null || true)
-          if [ -n "$EXISTING" ]; then
-            RELEASE_ID=$(echo "$EXISTING" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-            echo "Deleting existing release id=$RELEASE_ID"
-            curl -sfL -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" \
-              "$API/releases/$RELEASE_ID" >/dev/null || true
+          # Delete any existing release for this tag
+          echo "Cleaning up any existing release for ${TAG}..."
+          EXISTING=$(curl -sfL -H "Authorization: Bearer ${GITHUB_TOKEN}" "${API}/releases/tags/${TAG}" 2>/dev/null || true)
+          if [ -n "${EXISTING}" ]; then
+            RELEASE_ID=$(echo "${EXISTING}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+            echo "Deleting existing release id=${RELEASE_ID}"
+            curl -sfL -X DELETE -H "Authorization: Bearer ${GITHUB_TOKEN}" "${API}/releases/${RELEASE_ID}" >/dev/null || true
             sleep 2
           fi
 
-          # Create release directly via GitHub API (avoids gh CLI tag resolution issues)
-          echo "Creating release $TAG..."
-          RESP=$(curl -sfL -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            "$API/releases" \
-            -d "$(python3 -c "
+          # Create release via GitHub API
+          echo "Creating release ${TAG}..."
+          RELEASE_PAYLOAD=$(python3 -c "
 import json
 print(json.dumps({
-    'tag_name': '$TAG',
-    'target_commitish': '$COMMIT_SHA',
-    'name': '$TAG',
+    'tag_name': '${TAG}',
+    'target_commitish': '${COMMIT_SHA}',
+    'name': '${TAG}',
     'draft': False,
     'prerelease': False
 }))
-            ")")
+          ")
 
-          RELEASE_ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-          UPLOAD_URL=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'].replace('{?name,label}', ''))")
-          echo "Release created: id=$RELEASE_ID"
+          RESP=$(curl -sfL -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "${API}/releases" \
+            -d "${RELEASE_PAYLOAD}")
+
+          RELEASE_ID=$(echo "${RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          UPLOAD_URL=$(echo "${RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'].split('{')[0])")
+          echo "Release created: id=${RELEASE_ID}"
 
           # Upload each asset
           for f in "${INSTALLERS[@]}"; do
             BASENAME=$(basename "$f")
-            # Determine content type
-            case "$BASENAME" in
+            case "${BASENAME}" in
               *.exe) CT="application/vnd.microsoft.portable-executable" ;;
               *.dmg) CT="application/x-apple-diskimage" ;;
               *.AppImage) CT="application/octet-stream" ;;
@@ -268,16 +270,15 @@ print(json.dumps({
               *.zip) CT="application/zip" ;;
               *) CT="application/octet-stream" ;;
             esac
-            echo "Uploading $BASENAME..."
+            ENCODED_NAME=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${BASENAME}'))")
+            echo "Uploading ${BASENAME}..."
             curl -sfL -X POST \
               -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer $GITHUB_TOKEN" \
-              -H "Content-Type: $CT" \
-              "$UPLOAD_URL?name=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$BASENAME'))")" \
-              --data-binary "@$f" >/dev/null
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Content-Type: ${CT}" \
+              "${UPLOAD_URL}?name=${ENCODED_NAME}" \
+              --data-binary "@${f}" >/dev/null
             echo "  done"
           done
 
-          echo "Release published: https://github.com/$REPO/releases/tag/$TAG"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "Release published: https://github.com/${REPO}/releases/tag/${TAG}"

@@ -644,7 +644,7 @@ export default function FilmLabControls({
             color: currentSource.color,
             fontWeight: 500
           }}>
-            {currentSource.icon} {currentSource.label}
+            {currentSource.label}
           </span>
         </div>
         <button className="iv-btn-icon" onClick={onClose} style={{ fontSize: 20 }}>×</button>

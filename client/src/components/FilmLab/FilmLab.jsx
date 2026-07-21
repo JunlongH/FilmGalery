@@ -460,7 +460,7 @@ export default function FilmLab({
     if (!inverted && filmCurveEnabled) {
       setFilmCurveEnabled(false);
     }
-  }, [inverted, filmCurveEnabled]);
+  }, [inverted]);
 
   // Keep localStorage as a lightweight cache/backup
   const persistPresets = (next) => {
@@ -962,7 +962,10 @@ export default function FilmLab({
 
 
   const handleCanvasClick = (e) => {
-    if (hasPannedRef.current) return;
+    if (hasPannedRef.current) {
+      hasPannedRef.current = false;
+      return;
+    }
     if ((!isPicking && !isPickingBase && !isPickingWB) || !image || !canvasRef.current) return;
     
     const canvas = canvasRef.current;
@@ -1295,7 +1298,8 @@ export default function FilmLab({
                  lut3: combinedLUT,
                  // HSL and Split Toning parameters
                  hslParams,
-                 splitToning
+                 splitToning,
+                 saturation
               });
               
               processedCanvasRef.current = webglCanvas;
@@ -1439,7 +1443,12 @@ export default function FilmLab({
       }
     }
     if (!isRotating) {
-      setHistograms({ rgb: histRGB, red: histR, green: histG, blue: histB });
+      setHistograms({
+        rgb: [...histRGB],
+        red: [...histR],
+        green: [...histG],
+        blue: [...histB]
+      });
     }
     } catch (processImageError) {
       // S.2c: 错误分类处理
@@ -1907,7 +1916,7 @@ export default function FilmLab({
           toneCurveLutFloat: Array.from(toneCurveLutFloat),
           toneCurveLut: Array.from(toneCurveLut),
           lut3d: lut3d ? { size: lut3d.size, data: Array.from(lut3d.data) } : null,
-          hslParams, splitToning
+          hslParams, splitToning, saturation
         };
         
         const res = await window.__electron.filmlabGpuProcess({ params, photoId, imageUrl });
@@ -2098,10 +2107,11 @@ export default function FilmLab({
           filmCurveShoulder: filmCurveParams.filmCurveShoulder,
            curves: curveLUTs,
           lut3: combinedLUT,
-          // HSL and Split Toning parameters
-          hslParams,
-          splitToning
-        });
+           // HSL and Split Toning parameters
+           hslParams,
+           splitToning,
+           saturation
+         });
         // Apply rotation + crop on CPU from GPU result
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
