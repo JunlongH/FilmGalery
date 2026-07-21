@@ -237,23 +237,13 @@ jobs:
 
           # Create release via GitHub API
           echo "Creating release ${TAG}..."
-          RELEASE_PAYLOAD=$(python3 -c "
-import json
-print(json.dumps({
-    'tag_name': '${TAG}',
-    'target_commitish': '${COMMIT_SHA}',
-    'name': '${TAG}',
-    'draft': False,
-    'prerelease': False
-}))
-          ")
-
+          python3 -c "import json,os; print(json.dumps({'tag_name':os.environ['TAG'],'target_commitish':os.environ['COMMIT_SHA'],'name':os.environ['TAG'],'draft':False,'prerelease':False}))" > /tmp/release-payload.json
           RESP=$(curl -sfL -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -H "Content-Type: application/json" \
             "${API}/releases" \
-            -d "${RELEASE_PAYLOAD}")
+            -d @/tmp/release-payload.json)
 
           RELEASE_ID=$(echo "${RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
           UPLOAD_URL=$(echo "${RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'].split('{')[0])")
