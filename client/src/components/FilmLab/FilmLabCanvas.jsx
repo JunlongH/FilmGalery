@@ -375,8 +375,13 @@ export default function FilmLabCanvas({
               ref={origCanvasRef}
               style={{
                 display: 'block',
-                maxWidth: '100%',
-                maxHeight: 'calc(100vh - 40px)',
+                // 修复（P4）：split 模式下原图 canvas 不应被外层裁剪容器压缩。
+                // 令 canvas 宽度为容器宽度的倒数倍，使其在视觉上保持完整尺寸，
+                // 仅由外层 overflow:hidden 裁剪显示左半部分（与右侧处理图对齐）。
+                width: compareMode === 'split' && compareSlider > 0.01
+                  ? `${100 / compareSlider}%`
+                  : '100%',
+                height: '100%',
                 objectFit: 'contain',
               }}
             />

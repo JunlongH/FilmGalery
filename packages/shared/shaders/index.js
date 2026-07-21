@@ -56,6 +56,9 @@ const uniforms = require('./uniforms');
  * @param {Object} options - 构建选项
  * @param {boolean} options.isGL2 - 是否为 WebGL2 (支持 sampler3D, texture(), #version 300 es)
  * @param {boolean} options.useCompositeCurve - 使用单一 RGBA 复合曲线纹理 (gpu-renderer 路径)
+ * @param {boolean} options.useNativeLUT3D - 使用 WebGL2 原生 sampler3D（仅 isGL2=true 时有效）。
+ *   默认跟随 isGL2（向后兼容 gpu-renderer 路径）。
+ *   客户端预览应传 false 以使用 packed-2D 路径（避免 3D 纹理上传实现）。
  * @param {string} options.precision - 精度 ('lowp', 'mediump', 'highp')
  * @returns {string} 完整的 GLSL 片元着色器代码
  */
@@ -65,23 +68,26 @@ function buildFragmentShader(options = {}) {
     useCompositeCurve = false,
     precision = 'mediump',
   } = options;
+  // LUT 路径解耦：客户端预览可显式禁用原生 sampler3D（即使运行在 WebGL2 上下文）
+  // 避免客户端需实现 texImage3D 上传路径；服务端 gpu-renderer 保持默认启用
+  const useNativeLUT3D = options.useNativeLUT3D !== undefined ? options.useNativeLUT3D : isGL2;
 
   if (isGL2) {
     return `#version 300 es
 precision highp float;
-precision highp sampler3D;
-
+${useNativeLUT3D ? 'precision highp sampler3D;\n' : ''}
 // WebGL2 compat: modules may use texture2D()
 #define texture2D texture
 
 in vec2 v_uv;
 out vec4 fragColor;
 
+${useNativeLUT3D ? `
 // WebGL2: 3D LUT as native sampler3D
 uniform sampler3D u_lut3dTex;
 uniform float u_hasLut3d;
 uniform float u_lut3dSize;
-
+` : ''}
 ${useCompositeCurve ? `
 // Composite curve texture (gpu-renderer path: R,G,B channels = per-channel curves)
 uniform sampler2D u_toneCurveTex;
@@ -93,10 +99,11 @@ ${filmCurve.FILM_CURVE_GLSL}
 ${baseDensity.BASE_DENSITY_GLSL}
 ${inversion.INVERSION_GLSL}
 ${tonemap.TONEMAP_GLSL}
+${useNativeLUT3D ? '' : lut3d.LUT3D_GLSL}
 ${hslAdjust.HSL_ADJUST_GLSL}
 ${saturation.getSaturationGLSL()}
 ${splitTone.SPLIT_TONE_GLSL}
-${buildMainFunction({ isGL2: true, useCompositeCurve })}
+${buildMainFunction({ isGL2: true, useCompositeCurve, useNativeLUT3D })}
 `;
   } else {
     return `
@@ -124,9 +131,12 @@ ${buildMainFunction({ isGL2: false })}
  * @param {Object} options
  * @param {boolean} options.isGL2 - WebGL2 mode
  * @param {boolean} options.useCompositeCurve - Use single RGBA composite curve texture
+ * @param {boolean} options.useNativeLUT3D - Use native sampler3D (WebGL2 only); false → packed-2D
  */
 function buildMainFunction(options = {}) {
   const { isGL2 = false, useCompositeCurve = false } = options;
+  // 与 buildFragmentShader 一致：未显式指定时跟随 isGL2（向后兼容 gpu-renderer 路径）
+  const useNativeLUT3D = options.useNativeLUT3D !== undefined ? options.useNativeLUT3D : isGL2;
   const TEX = isGL2 ? 'texture' : 'texture2D';
   const FRAG_OUT = isGL2 ? 'fragColor' : 'gl_FragColor';
 
@@ -152,6 +162,11 @@ void main() {
     c.r = applyFilmCurve(c.r, u_filmCurveGammaR, u_filmCurveDMin, u_filmCurveDMax, toe, sh);
     c.g = applyFilmCurve(c.g, u_filmCurveGammaG, u_filmCurveDMin, u_filmCurveDMax, toe, sh);
     c.b = applyFilmCurve(c.b, u_filmCurveGammaB, u_filmCurveDMin, u_filmCurveDMax, toe, sh);
+  }
+
+  // Phase I：线性域反转（与 CPU processPixelFloat 同语义）— 片基校正/密度色阶/反转在线性光下进行
+  if (u_linearDomainInversion > 0.5) {
+    c = srgbToLinear(c);
   }
 
   // ② Base Correction — neutralize film base color
@@ -202,7 +217,12 @@ void main() {
     }
   }
 
-${isGL2 ? `
+  // Phase I：转回 sRGB 编码域（LUT/WB/Tone 仍在 sRGB 域）
+  if (u_linearDomainInversion > 0.5) {
+    c = linearToSrgb(c);
+  }
+
+${useNativeLUT3D ? `
   // ③b 3D LUT (WebGL2 native sampler3D — applied AFTER inversion)
   if (u_hasLut3d > 0.5) {
     float size = u_lut3dSize;
@@ -211,7 +231,7 @@ ${isGL2 ? `
     c = mix(c, lutColor, u_lutIntensity);
   }
 ` : `
-  // ③b 3D LUT (WebGL1 packed 2D texture — applied AFTER inversion)
+  // ③b 3D LUT (packed 2D texture — works in both WebGL1 and WebGL2)
   if (u_useLut3d > 0.5) {
     vec3 lutColor = sampleLUT3D(c);
     c = mix(c, lutColor, u_lutIntensity);

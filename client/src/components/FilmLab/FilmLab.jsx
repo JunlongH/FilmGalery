@@ -5,7 +5,7 @@ import { getCurveLUT, parseCubeLUT, getMaxSafeRect, getPresetRatio, getExifOrien
 import FilmLabControls from './FilmLabControls';
 import FilmLabCanvas from './FilmLabCanvas';
 import PhotoSwitcher from './PhotoSwitcher';
-import { isWebGLAvailable, processImageWebGL } from './FilmLabWebGL';
+import { isWebGLAvailable, processImageWebGL, disposeWebGL } from './FilmLabWebGL';
 import { useAIPanel } from '../AIPanel/AIPanelContext';
 
 // 使用统一渲染核心 (via CRACO alias)
@@ -48,16 +48,31 @@ export default function FilmLab({
   // Parameters
   const [inverted, setInverted] = useState(false); // Default to false as requested
   const [inversionMode, setInversionMode] = useState('linear'); // 'linear' | 'log'
-  const [filmType, setFilmType] = useState('default'); // Film profile (legacy, kept for backwards compat)
+  // P3: filmType 死状态已删除（旧 "legacy, kept for backwards compat" 但全项目无消费者）
   
   // Film Curve (independent of inversion)
   const [filmCurveEnabled, setFilmCurveEnabled] = useState(false);
   const [filmCurveProfile, setFilmCurveProfile] = useState('default'); // Profile key
   const [filmCurveProfiles, setFilmCurveProfiles] = useState([]); // All available profiles (built-in + custom)
   
-  const [isPicking, setIsPicking] = useState(false);
-  const [isPickingBase, setIsPickingBase] = useState(false);
-  const [isPickingWB, setIsPickingWB] = useState(false);
+  const [isPicking, setIsPickingRaw] = useState(false);
+  const [isPickingBase, setIsPickingBaseRaw] = useState(false);
+  const [isPickingWB, setIsPickingWBRaw] = useState(false);
+
+  // P2-3: picker 互斥 — 三个 picker 同时最多一个激活
+  // 旧实现 3 个独立 useState，toggling 时不清其他 → 可同时激活 Base+WB picker
+  const setIsPicking = (v) => {
+    if (v) { setIsPickingBaseRaw(false); setIsPickingWBRaw(false); }
+    setIsPickingRaw(v);
+  };
+  const setIsPickingBase = (v) => {
+    if (v) { setIsPickingRaw(false); setIsPickingWBRaw(false); }
+    setIsPickingBaseRaw(v);
+  };
+  const setIsPickingWB = (v) => {
+    if (v) { setIsPickingRaw(false); setIsPickingBaseRaw(false); }
+    setIsPickingWBRaw(v);
+  };
   const [pickedColor, setPickedColor] = useState(null);
   const [exposure, setExposure] = useState(0); // -100 to 100
   const [contrast, setContrast] = useState(0); // -100 to 100
@@ -166,6 +181,8 @@ export default function FilmLab({
   // Optimization: Cache WebGL output
   const processedCanvasRef = useRef(null);
   const lastWebglParamsRef = useRef(null);
+  // 追踪当前图片 effect 创建的 blob URL，用于切换照片/卸载时 revoke，避免数 MB/张的泄漏
+  const currentBlobUrlRef = useRef(null);
 
   // 当 sourceType 变化时，清除 WebGL 缓存以避免显示旧的渲染结果
   // 这是修复"正片模式下先显示正片然后跳到负片"问题的关键
@@ -179,6 +196,16 @@ export default function FilmLab({
       setInverted(false);
     }
   }, [sourceType]);
+
+  // P0-2: 组件卸载时释放 WebGL 资源（program + 纹理 + buffer）
+  // 旧实现从未调用 disposeWebGL，每次组件卸载泄漏 GL 资源至页面卸载
+  useEffect(() => {
+    return () => {
+      if (processedCanvasRef.current) {
+        disposeWebGL(processedCanvasRef.current);
+      }
+    };
+  }, []);
 
   // AI 上下文：FilmLab 打开/关闭时 push/pop，编辑参数变化时更新
   const { isOpen: isAIPanelOpen, panelWidth: aiPanelWidth, pushOverlayContext, popOverlayContext, updateOverlayContext } = useAIPanel();
@@ -222,10 +249,18 @@ export default function FilmLab({
       // HSL and Split Toning params for WebGL preview (serialized for cache comparison)
       hslParams, splitToning,
       saturation,
-      hslKey: JSON.stringify(hslParams),
-      splitToneKey: JSON.stringify(splitToning),
-      // Film Curve params
+      // P3: hslKey/splitToneKey 死字段已删除（JSON.stringify 用于缓存比较，但 lastWebglParamsRef 用引用比较，从不读取 key）
+      // Film Curve params（在 memo 内解析 profile —— filmCurveProfiles 异步加载，
+      // 解析结果必须参与缓存键，否则 profile 到达后预览不刷新）
       filmCurveEnabled, filmCurveProfile,
+      filmCurveGamma: filmCurveProfiles?.find(p => p.key === filmCurveProfile)?.gamma,
+      filmCurveGammaR: filmCurveProfiles?.find(p => p.key === filmCurveProfile)?.gammaR,
+      filmCurveGammaG: filmCurveProfiles?.find(p => p.key === filmCurveProfile)?.gammaG,
+      filmCurveGammaB: filmCurveProfiles?.find(p => p.key === filmCurveProfile)?.gammaB,
+      filmCurveDMin: filmCurveProfiles?.find(p => p.key === filmCurveProfile)?.dMin,
+      filmCurveDMax: filmCurveProfiles?.find(p => p.key === filmCurveProfile)?.dMax,
+      filmCurveToe: filmCurveProfiles?.find(p => p.key === filmCurveProfile)?.toe,
+      filmCurveShoulder: filmCurveProfiles?.find(p => p.key === filmCurveProfile)?.shoulder,
       // Include geometry params to invalidate cache when geometry changes
       rotation, orientation, rotationOffset, isCropping,
       // Serialize committedCrop for comparison
@@ -239,7 +274,7 @@ export default function FilmLab({
       temp, tint, red, green, blue, baseMode, baseRed, baseGreen, baseBlue, baseDensityR, baseDensityG, baseDensityB, 
       densityLevelsEnabled, densityLevels,
       curves, lut1, lut2,
-      hslParams, splitToning, saturation, filmCurveEnabled, filmCurveProfile,
+      hslParams, splitToning, saturation, filmCurveEnabled, filmCurveProfile, filmCurveProfiles,
       rotation, orientation, rotationOffset, isCropping, committedCrop, image, sourceType]);
 
   // 当前参数（用于 PhotoSwitcher "Apply to batch" 功能）
@@ -277,11 +312,61 @@ export default function FilmLab({
     hslParams,
     splitToning,
     saturation
-  }), [inverted, inversionMode, filmCurveEnabled, filmCurveProfile, exposure, contrast, 
-      highlights, shadows, whites, blacks, temp, tint, red, green, blue, 
-      baseMode, baseRed, baseGreen, baseBlue, baseDensityR, baseDensityG, baseDensityB, 
+  }), [inverted, inversionMode, filmCurveEnabled, filmCurveProfile, exposure, contrast,
+      highlights, shadows, whites, blacks, temp, tint, red, green, blue,
+      baseMode, baseRed, baseGreen, baseBlue, baseDensityR, baseDensityG, baseDensityB,
       densityLevelsEnabled, densityLevels,
       rotation, orientation, committedCrop, curves, hslParams, splitToning, saturation]);
+
+  // P0-8/P1-19: resolveFilmCurveParams SSOT — 4 处 filmCurve profile 解析统一调用
+  // 旧实现重复链式查找 4 次，且 downloadClientJPEG GPU 路径漏取 gammaR/G/B/toe/shoulder
+  const resolveFilmCurveParams = React.useCallback(() => {
+    const profile = filmCurveProfiles?.find(p => p.key === filmCurveProfile);
+    return {
+      filmCurveEnabled,
+      filmCurveGamma: profile?.gamma ?? 0.6,
+      filmCurveGammaR: profile?.gammaR ?? profile?.gamma ?? 0.6,
+      filmCurveGammaG: profile?.gammaG ?? profile?.gamma ?? 0.6,
+      filmCurveGammaB: profile?.gammaB ?? profile?.gamma ?? 0.6,
+      filmCurveDMin: profile?.dMin ?? 0.1,
+      filmCurveDMax: profile?.dMax ?? 3.0,
+      filmCurveToe: profile?.toe ?? 0,
+      filmCurveShoulder: profile?.shoulder ?? 0,
+    };
+  }, [filmCurveEnabled, filmCurveProfile, filmCurveProfiles]);
+
+  // P1-18: buildRenderCoreParams SSOT — 4 处 new RenderCore({...}) 参数组装统一调用
+  // 旧实现 4 处参数列表 95% 相同，handleSave/downloadClientJPEG 还漏 lut1Intensity 等
+  // 新增参数需同步改 4 处的维护陷阱消除
+  const buildRenderCoreParams = React.useCallback(() => {
+    const effectiveInvertedValue = getEffectiveInverted(sourceType, inverted);
+    return {
+      exposure, contrast, highlights, shadows, whites, blacks,
+      curves, red, green, blue, temp, tint, lut1, lut2,
+      lut1Intensity: lut1?.intensity ?? 1.0,
+      lut2Intensity: lut2?.intensity ?? 1.0,
+      inverted: effectiveInvertedValue,
+      inversionMode,
+      filmCurveEnabled, filmCurveProfile,
+      // 片基校正 (Pre-Inversion) - 支持线性和对数两种模式
+      baseRed, baseGreen, baseBlue,
+      baseMode, baseDensityR, baseDensityG, baseDensityB,
+      // 密度色阶 (Density Levels)
+      densityLevelsEnabled, densityLevels,
+      // HSL / Split Toning / Saturation
+      hslParams, splitToning,
+      saturation,
+    };
+  }, [
+    sourceType, inverted, inversionMode,
+    exposure, contrast, highlights, shadows, whites, blacks,
+    curves, red, green, blue, temp, tint, lut1, lut2,
+    filmCurveEnabled, filmCurveProfile,
+    baseRed, baseGreen, baseBlue,
+    baseMode, baseDensityR, baseDensityG, baseDensityB,
+    densityLevelsEnabled, densityLevels,
+    hslParams, splitToning, saturation,
+  ]);
 
   // Pre-calculate geometry for canvas sizing and crop overlay sync
   const geometry = React.useMemo(() => {
@@ -351,7 +436,11 @@ export default function FilmLab({
 
   const savePreset = async (name) => {
     if (!name) return;
-    
+
+    // P0-4: 使用 serializeAllParams SSOT（含 baseMode/baseDensity/densityLevels/rotation/cropRect）
+    // 旧实现漏存半数参数，加载预设后这些参数丢失
+    const snap = serializeAllParams();
+
     // Serialize LUTs (Float32Array -> Array) for JSON storage
     const serializeLut = (lut) => {
       if (!lut) return null;
@@ -362,19 +451,10 @@ export default function FilmLab({
     };
 
     const params = {
-      inverted, inversionMode, exposure, contrast, highlights, shadows, whites, blacks,
-      temp, tint, red, green, blue,
-      // 片基校正增益 (Pre-Inversion)
-      baseRed, baseGreen, baseBlue,
-      curves: JSON.parse(JSON.stringify(curves)),
-      // New Features
-      hslParams,
-      splitToning,
-      saturation,
-      filmCurveEnabled,
-      filmCurveProfile,
-      lut1: serializeLut(lut1),
-      lut2: serializeLut(lut2)
+      ...snap,
+      // LUT 数据需序列化为 JSON 可存储格式（Float32Array → Array）
+      lut1: serializeLut(snap.lut1),
+      lut2: serializeLut(snap.lut2)
     };
 
     const existing = presets.find(p => p.name === name);
@@ -486,65 +566,85 @@ export default function FilmLab({
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
 
+  // 完整参数快照（SSOT — savePreset/captureSnapshot/currentParams 统一调用）
+  // P0-4: 旧 savePreset 漏存 baseMode/baseDensity*/densityLevels/rotation/cropRect，
+  //       导致加载预设后半数参数丢失。统一用 serializeAllParams 消除漂移。
+  const serializeAllParams = React.useCallback(() => ({
+    inverted, inversionMode,
+    exposure, contrast, highlights, shadows, whites, blacks,
+    temp, tint, red, green, blue,
+    baseMode, baseRed, baseGreen, baseBlue,
+    baseDensityR, baseDensityG, baseDensityB,
+    densityLevelsEnabled, densityLevels,
+    filmCurveEnabled, filmCurveProfile,
+    hslParams, splitToning, saturation,
+    curves, rotation, cropRect,
+    lut1: lut1 ? { ...lut1 } : null,
+    lut2: lut2 ? { ...lut2 } : null,
+  }), [
+    inverted, inversionMode, exposure, contrast, highlights, shadows, whites, blacks,
+    temp, tint, red, green, blue, baseMode, baseRed, baseGreen, baseBlue,
+    baseDensityR, baseDensityG, baseDensityB, densityLevelsEnabled, densityLevels,
+    filmCurveEnabled, filmCurveProfile, hslParams, splitToning, saturation,
+    curves, rotation, cropRect, lut1, lut2,
+  ]);
+
+  const captureSnapshot = serializeAllParams;
+
+  const applySnapshot = (snap) => {
+    setInverted(sourceType === 'positive' ? false : snap.inverted);
+    setInversionMode(snap.inversionMode ?? 'linear');
+    setExposure(snap.exposure);
+    setContrast(snap.contrast);
+    setHighlights(snap.highlights || 0);
+    setShadows(snap.shadows || 0);
+    setWhites(snap.whites || 0);
+    setBlacks(snap.blacks || 0);
+    setTemp(snap.temp);
+    setTint(snap.tint);
+    setRed(snap.red);
+    setGreen(snap.green);
+    setBlue(snap.blue);
+    setBaseMode(snap.baseMode || 'linear');
+    setBaseRed(snap.baseRed ?? 1.0);
+    setBaseGreen(snap.baseGreen ?? 1.0);
+    setBaseBlue(snap.baseBlue ?? 1.0);
+    setBaseDensityR(snap.baseDensityR ?? 0);
+    setBaseDensityG(snap.baseDensityG ?? 0);
+    setBaseDensityB(snap.baseDensityB ?? 0);
+    setDensityLevelsEnabled(snap.densityLevelsEnabled ?? false);
+    if (snap.densityLevels) setDensityLevels(snap.densityLevels);
+    setFilmCurveEnabled(snap.filmCurveEnabled ?? false);
+    setFilmCurveProfile(snap.filmCurveProfile || 'default');
+    if (snap.hslParams) setHslParams(snap.hslParams);
+    if (snap.splitToning) setSplitToning(snap.splitToning);
+    setSaturation(snap.saturation ?? 0);
+    if (snap.curves) setCurves(snap.curves);
+    setRotation(snap.rotation || 0);
+    setCropRect(snap.cropRect || { x: 0, y: 0, w: 1, h: 1 });
+    setLut1(snap.lut1 ? { ...snap.lut1 } : null);
+    setLut2(snap.lut2 ? { ...snap.lut2 } : null);
+  };
+
   const pushToHistory = () => {
-    setHistory(prev => [...prev, {
-      inverted, exposure, contrast, highlights, shadows, whites, blacks, temp, tint, red, green, blue, curves, rotation, cropRect,
-      lut1: lut1 ? { ...lut1 } : null,
-      lut2: lut2 ? { ...lut2 } : null
-    }]);
+    setHistory(prev => [...prev, captureSnapshot()]);
     setFuture([]);
   };
 
   const handleUndo = () => {
     if (history.length === 0) return;
     const previous = history[history.length - 1];
-    const current = { inverted, exposure, contrast, highlights, shadows, whites, blacks, temp, tint, red, green, blue, curves, rotation, cropRect };
-    
-    setFuture(prev => [...prev, current]);
+    setFuture(prev => [...prev, captureSnapshot()]);
     setHistory(prev => prev.slice(0, -1));
-    
-    // 在正片模式下，不应该恢复反转设置
-    setInverted(sourceType === 'positive' ? false : previous.inverted);
-    setExposure(previous.exposure);
-    setContrast(previous.contrast);
-    setHighlights(previous.highlights || 0);
-    setShadows(previous.shadows || 0);
-    setWhites(previous.whites || 0);
-    setBlacks(previous.blacks || 0);
-    setTemp(previous.temp);
-    setTint(previous.tint);
-    setRed(previous.red);
-    setGreen(previous.green);
-    setBlue(previous.blue);
-    setCurves(previous.curves);
-    setRotation(previous.rotation || 0);
-    setCropRect(previous.cropRect || { x: 0, y: 0, w: 1, h: 1 });
+    applySnapshot(previous);
   };
 
   const handleRedo = () => {
     if (future.length === 0) return;
     const next = future[future.length - 1];
-    const current = { inverted, exposure, contrast, highlights, shadows, whites, blacks, temp, tint, red, green, blue, curves, rotation, cropRect };
-    
-    setHistory(prev => [...prev, current]);
+    setHistory(prev => [...prev, captureSnapshot()]);
     setFuture(prev => prev.slice(0, -1));
-    
-    // 在正片模式下，不应该恢复反转设置
-    setInverted(sourceType === 'positive' ? false : next.inverted);
-    setExposure(next.exposure);
-    setContrast(next.contrast);
-    setHighlights(next.highlights || 0);
-    setShadows(next.shadows || 0);
-    setWhites(next.whites || 0);
-    setBlacks(next.blacks || 0);
-    setTemp(next.temp);
-    setTint(next.tint);
-    setRed(next.red);
-    setGreen(next.green);
-    setBlue(next.blue);
-    setCurves(next.curves);
-    setRotation(next.rotation || 0);
-    setCropRect(next.cropRect || { x: 0, y: 0, w: 1, h: 1 });
+    applySnapshot(next);
   };
 
   const handleReset = () => {
@@ -590,6 +690,12 @@ export default function FilmLab({
 
   useEffect(() => {
     setImage(null);
+
+    // 切换照片时释放上一张的 blob URL
+    if (currentBlobUrlRef.current) {
+      URL.revokeObjectURL(currentBlobUrlRef.current);
+      currentBlobUrlRef.current = null;
+    }
     
     // 使用共享工具函数检测是否需要服务器解码（RAW/TIFF 文件浏览器无法直接加载）
     const needsServerDecode = requiresServerDecode(imageUrl);
@@ -609,6 +715,7 @@ export default function FilmLab({
                 const res = await smartFilmlabPreview({ photoId, params: {}, maxWidth: 2000, sourceType });
                 if (active && res.ok) {
                     const url = URL.createObjectURL(res.blob);
+                    currentBlobUrlRef.current = url;
                     const img = new Image();
                     img.onload = () => { if (active) setImage(img); };
                     img.src = url;
@@ -640,6 +747,7 @@ export default function FilmLab({
             const res = await smartFilmlabPreview({ photoId, params: {}, maxWidth: 2000, sourceType });
             if (res.ok) {
               const url = URL.createObjectURL(res.blob);
+              currentBlobUrlRef.current = url;
               const proxyImg = new Image();
               proxyImg.onload = () => setImage(proxyImg);
               proxyImg.onerror = () => console.error('Proxy load also failed');
@@ -696,13 +804,25 @@ export default function FilmLab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rotation, orientation, isCropping, isRotating, webglParams]);
 
+  // 卸载时释放最后的 blob URL（防止切换组件/路由后泄漏）
+  useEffect(() => {
+    return () => {
+      if (currentBlobUrlRef.current) {
+        URL.revokeObjectURL(currentBlobUrlRef.current);
+        currentBlobUrlRef.current = null;
+      }
+    };
+  }, []);
+
   // Render original (unprocessed) image for compare modes when geometry changes or image loads
   useEffect(() => {
     if (!image || !origCanvasRef.current) return;
     if (compareMode === 'off') return;
     renderOriginal();
+    // P0-7: 补 rotationOffset 依赖（renderOriginal 内部使用 rotation+orientation+rotationOffset，
+    // EXIF 解析后 setRotationOffset 时需重跑 renderOriginal，否则 compare 模式原图旋转错误）
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [image, rotation, orientation, isCropping, compareMode]);
+  }, [image, rotation, orientation, rotationOffset, isCropping, compareMode]);
 
   // Consolidated Crop/Rotation Logic (Rewrite)
   useEffect(() => {
@@ -918,9 +1038,10 @@ export default function FilmLab({
       // WB Picker: The clicked point should become neutral gray
       // Sample from the RENDERED canvas (already has all effects applied)
       const renderedCtx = canvas.getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' });
+      // P0-3: 同时保护下界和上界，防止 clickX/clickY 接近 canvas 边缘时 x+3 > canvas.width 抛 IndexSizeError
       const renderedData = renderedCtx.getImageData(
-        Math.max(0, Math.floor(clickX - 1)),
-        Math.max(0, Math.floor(clickY - 1)),
+        Math.max(0, Math.min(canvas.width - 3, Math.floor(clickX - 1))),
+        Math.max(0, Math.min(canvas.height - 3, Math.floor(clickY - 1))),
         3, 3
       ).data;
       
@@ -981,9 +1102,10 @@ export default function FilmLab({
     if (isPicking) {
       // Get pixel directly from the displayed canvas at click location
       const renderedCtx = canvas.getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' });
+      // P0-3: 同 WB picker，保护上界防止 IndexSizeError
       const renderedData = renderedCtx.getImageData(
-        Math.max(0, Math.floor(clickX - 1)),
-        Math.max(0, Math.floor(clickY - 1)),
+        Math.max(0, Math.min(canvas.width - 3, Math.floor(clickX - 1))),
+        Math.max(0, Math.min(canvas.height - 3, Math.floor(clickY - 1))),
         3, 3
       ).data;
       
@@ -1079,15 +1201,15 @@ export default function FilmLab({
               const cropRect = isCropping ? null : committedCrop;
               
               // Get Film Curve profile parameters (Q13: per-channel gamma + toe/shoulder)
-              const currentFilmProfile = filmCurveProfiles?.find(p => p.key === filmCurveProfile);
-              const filmCurveGamma = currentFilmProfile?.gamma ?? 0.6;
-              const filmCurveGammaR = currentFilmProfile?.gammaR ?? filmCurveGamma;
-              const filmCurveGammaG = currentFilmProfile?.gammaG ?? filmCurveGamma;
-              const filmCurveGammaB = currentFilmProfile?.gammaB ?? filmCurveGamma;
-              const filmCurveDMin = currentFilmProfile?.dMin ?? 0.1;
-              const filmCurveDMax = currentFilmProfile?.dMax ?? 3.0;
-              const filmCurveToe = currentFilmProfile?.toe ?? 0;
-              const filmCurveShoulder = currentFilmProfile?.shoulder ?? 0;
+              // 优先使用 webglParams 中已解析的值（参与缓存键），未解析时回退到默认
+              const filmCurveGamma = webglParams.filmCurveGamma ?? 0.6;
+              const filmCurveGammaR = webglParams.filmCurveGammaR ?? filmCurveGamma;
+              const filmCurveGammaG = webglParams.filmCurveGammaG ?? filmCurveGamma;
+              const filmCurveGammaB = webglParams.filmCurveGammaB ?? filmCurveGamma;
+              const filmCurveDMin = webglParams.filmCurveDMin ?? 0.1;
+              const filmCurveDMax = webglParams.filmCurveDMax ?? 3.0;
+              const filmCurveToe = webglParams.filmCurveToe ?? 0;
+              const filmCurveShoulder = webglParams.filmCurveShoulder ?? 0;
               
               // webglParams.inverted 已经根据 sourceType 计算过了
                 processImageWebGL(webglCanvas, image, {
@@ -1229,23 +1351,17 @@ export default function FilmLab({
         // No need to putImageData, it's already on the canvas from drawImage(webglCanvas)
     } else {
         // CPU Path: 使用统一渲染核心
+        // 数据守卫：getImageData 可能因跨域污染 / 0 尺寸 canvas 而失败（data 为 null）。
+        // 此时 canvas 已含 drawImage 的旋转原图，跳过像素处理但保留直方图空更新，
+        // 不依赖异常兜底（旧实现 data[idx] 抛 TypeError 被 catch 吞掉，用户看到未处理原图）
+        if (!data) {
+          setHistograms({ rgb: histRGB, r: histR, g: histG, b: histB, maxCount });
+          return;
+        }
         // 使用统一的 getEffectiveInverted 函数计算有效反转状态
         const effectiveInvertedValue = getEffectiveInverted(sourceType, inverted);
-        const core = new RenderCore({
-          exposure, contrast, highlights, shadows, whites, blacks,
-          curves, red, green, blue, temp, tint, lut1, lut2,
-          lut1Intensity: lut1?.intensity ?? 1.0,
-          lut2Intensity: lut2?.intensity ?? 1.0,
-          inverted: effectiveInvertedValue, inversionMode, filmCurveEnabled, filmCurveProfile,
-          hslParams, splitToning,
-          saturation,
-          // 片基校正 (Pre-Inversion)
-          baseRed, baseGreen, baseBlue,
-          // 对数域片基校正参数
-          baseMode, baseDensityR, baseDensityG, baseDensityB,
-          // 密度色阶 (Density Levels)
-          densityLevelsEnabled, densityLevels
-        });
+        // P1-18: 使用 buildRenderCoreParams SSOT
+        const core = new RenderCore(buildRenderCoreParams());
         core.prepareLUTs();
 
         for (let y = 0; y < height; y++) {
@@ -1521,16 +1637,25 @@ export default function FilmLab({
   const handleLutUpload = (e, index) => {
     const file = e.target.files[0];
     if (!file) return;
-    
+
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target.result;
-      const parsed = parseCubeLUT(text);
-      const lutObj = { name: file.name, ...parsed, intensity: 1.0 };
-      
-      pushToHistory();
-      if (index === 1) setLut1(lutObj);
-      else setLut2(lutObj);
+      try {
+        const parsed = parseCubeLUT(text);
+        const lutObj = { name: file.name, ...parsed, intensity: 1.0 };
+
+        pushToHistory();
+        if (index === 1) setLut1(lutObj);
+        else setLut2(lutObj);
+      } catch (err) {
+        console.error('[FilmLab] LUT 解析失败:', err.message);
+        alert(`无法加载 LUT 文件：${err.message}\n请确认是有效的 .cube (3D LUT) 文件。`);
+      }
+    };
+    reader.onerror = () => {
+      console.error('[FilmLab] LUT 文件读取失败');
+      alert('LUT 文件读取失败，请重试。');
     };
     reader.readAsText(file);
   };
@@ -1542,21 +1667,8 @@ export default function FilmLab({
     // 使用统一渲染核心
     // 使用统一的 getEffectiveInverted 函数计算有效反转状态
     const effectiveInvertedValue = getEffectiveInverted(sourceType, inverted);
-    const core = new RenderCore({
-      exposure, contrast, highlights, shadows, whites, blacks,
-      curves, red, green, blue, temp, tint, lut1, lut2,
-      lut1Intensity: lut1?.intensity ?? 1.0,
-      lut2Intensity: lut2?.intensity ?? 1.0,
-      inverted: effectiveInvertedValue, inversionMode, filmCurveEnabled, filmCurveProfile,
-      hslParams, splitToning,
-      saturation,
-      // 片基校正 (Pre-Inversion)
-      baseRed, baseGreen, baseBlue,
-      // 对数域片基校正参数
-      baseMode, baseDensityR, baseDensityG, baseDensityB,
-      // 密度色阶 (Density Levels)
-      densityLevelsEnabled, densityLevels
-    });
+    // P1-18: 使用 buildRenderCoreParams SSOT
+    const core = new RenderCore(buildRenderCoreParams());
     core.prepareLUTs();
 
     for (let b = 0; b < size; b++) {
@@ -1639,27 +1751,15 @@ export default function FilmLab({
     canvas.width = cropW;
     canvas.height = cropH;
     ctx.drawImage(rotCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-    
+
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
 
     // 使用统一渲染核心
     // 使用统一的 getEffectiveInverted 函数计算有效反转状态
     const effectiveInvertedValue = getEffectiveInverted(sourceType, inverted);
-    const core = new RenderCore({
-      exposure, contrast, highlights, shadows, whites, blacks,
-      curves, red, green, blue, temp, tint, lut1, lut2,
-      lut1Intensity: lut1?.intensity ?? 1.0,
-      lut2Intensity: lut2?.intensity ?? 1.0,
-      inverted: effectiveInvertedValue, inversionMode, filmCurveEnabled, filmCurveProfile,
-      // 片基校正增益 (Pre-Inversion)
-      baseRed, baseGreen, baseBlue,
-      // 对数域片基校正参数
-      baseMode, baseDensityR, baseDensityG, baseDensityB,
-      // 密度色阶 (Density Levels)
-      densityLevelsEnabled, densityLevels,
-      hslParams, splitToning
-    });
+    // P1-18: 使用 buildRenderCoreParams SSOT（修复旧 handleSave 漏 lut1Intensity/saturation 的 bug）
+    const core = new RenderCore(buildRenderCoreParams());
     core.prepareLUTs();
 
     for (let i = 0; i < data.length; i += 4) {
@@ -1697,24 +1797,15 @@ export default function FilmLab({
         };
       };
       
-      // Get Film Curve profile parameters (Q13: per-channel gamma + toe/shoulder — same as GPU Export)
-      const currentFilmProfile = filmCurveProfiles?.find(p => p.key === filmCurveProfile);
-      const filmCurveGamma = currentFilmProfile?.gamma ?? 0.6;
-      const filmCurveGammaR = currentFilmProfile?.gammaR ?? filmCurveGamma;
-      const filmCurveGammaG = currentFilmProfile?.gammaG ?? filmCurveGamma;
-      const filmCurveGammaB = currentFilmProfile?.gammaB ?? filmCurveGamma;
-      const filmCurveDMin = currentFilmProfile?.dMin ?? 0.1;
-      const filmCurveDMax = currentFilmProfile?.dMax ?? 3.0;
-      const filmCurveToe = currentFilmProfile?.toe ?? 0;
-      const filmCurveShoulder = currentFilmProfile?.shoulder ?? 0;
-      
+      // P1-19: 使用 resolveFilmCurveParams SSOT（替代手动链式查找）
+      const filmCurveParams = resolveFilmCurveParams();
+
       const params = {
         sourceType, // 传递源类型以便服务器选择正确的源文件
         inverted: getEffectiveInverted(sourceType, inverted), // 使用统一函数计算有效反转状态
-        inversionMode, filmCurveEnabled, filmCurveProfile,
-        // Explicitly pass film curve parameters for RenderCore (Q13: per-channel gamma + toe/shoulder)
-        filmCurveGamma, filmCurveGammaR, filmCurveGammaG, filmCurveGammaB,
-        filmCurveDMin, filmCurveDMax, filmCurveToe, filmCurveShoulder,
+        inversionMode,
+        ...filmCurveParams,
+        filmCurveProfile,
         exposure, contrast, highlights, shadows, whites, blacks, temp, tint, red, green, blue,
         // 片基校正增益 (Pre-Inversion)
         baseRed, baseGreen, baseBlue,
@@ -1975,11 +2066,9 @@ export default function FilmLab({
             }
           }
         }
-        // Get Film Curve profile parameters
-        const currentFilmProfile = filmCurveProfiles?.find(p => p.key === filmCurveProfile);
-        const filmCurveGamma = currentFilmProfile?.gamma ?? 0.6;
-        const filmCurveDMin = currentFilmProfile?.dMin ?? 0.1;
-        const filmCurveDMax = currentFilmProfile?.dMax ?? 3.0;
+        // P0-8: 使用 resolveFilmCurveParams SSOT（含 gammaR/G/B/toe/shoulder）
+        // 旧实现只取 gamma/dMin/dMax，GPU Save As 与其他路径胶片曲线行为不一致
+        const filmCurveParams = resolveFilmCurveParams();
 
         // 使用统一的 getEffectiveInverted 函数计算有效反转状态
         const effectiveInvertedValue = getEffectiveInverted(sourceType, inverted);
@@ -2001,10 +2090,15 @@ export default function FilmLab({
           shadows,
           whites,
           blacks,
-          filmCurveEnabled,
-          filmCurveGamma,
-          filmCurveDMin,
-          filmCurveDMax,
+          filmCurveEnabled: filmCurveParams.filmCurveEnabled,
+          filmCurveGamma: filmCurveParams.filmCurveGamma,
+          filmCurveGammaR: filmCurveParams.filmCurveGammaR,
+          filmCurveGammaG: filmCurveParams.filmCurveGammaG,
+          filmCurveGammaB: filmCurveParams.filmCurveGammaB,
+          filmCurveDMin: filmCurveParams.filmCurveDMin,
+          filmCurveDMax: filmCurveParams.filmCurveDMax,
+          filmCurveToe: filmCurveParams.filmCurveToe,
+          filmCurveShoulder: filmCurveParams.filmCurveShoulder,
           curves: {
             rgb: getCurveLUT(curves.rgb),
             red: getCurveLUT(curves.red),
@@ -2097,20 +2191,8 @@ export default function FilmLab({
     // 使用统一渲染核心
     // 使用统一的 getEffectiveInverted 函数计算有效反转状态
     const effectiveInvertedValue = getEffectiveInverted(sourceType, inverted);
-    const core = new RenderCore({
-      exposure, contrast, highlights, shadows, whites, blacks,
-      curves, red, green, blue, temp, tint, lut1, lut2,
-      lut1Intensity: lut1?.intensity ?? 1.0,
-      lut2Intensity: lut2?.intensity ?? 1.0,
-      inverted: effectiveInvertedValue, inversionMode, filmCurveEnabled, filmCurveProfile,
-      // 片基校正增益 (Pre-Inversion)
-      baseRed, baseGreen, baseBlue,
-      // 对数域片基校正参数
-      baseMode, baseDensityR, baseDensityG, baseDensityB,
-      // 密度色阶 (Density Levels)
-      densityLevelsEnabled, densityLevels,
-      hslParams, splitToning
-    });
+    // P1-18: 使用 buildRenderCoreParams SSOT
+    const core = new RenderCore(buildRenderCoreParams());
     core.prepareLUTs();
 
     for (let i = 0; i < data.length; i += 4) {
@@ -2423,6 +2505,15 @@ export default function FilmLab({
   useEffect(() => {
     const onKey = (e) => {
       if (!isCropping) return;
+      // P0-6: 过滤输入框/文本域/contenteditable，避免预设名/搜索框输入 x 误触发 ratioSwap
+      const target = e.target;
+      if (target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      )) {
+        return;
+      }
       if (e.key === 'x' || e.key === 'X') {
         setRatioSwap((v) => !v);
       }
@@ -2594,7 +2685,6 @@ export default function FilmLab({
         inverted={inverted} setInverted={setInverted}
         useGPU={useGPU} setUseGPU={setUseGPU}
         inversionMode={inversionMode} setInversionMode={setInversionMode}
-        filmType={filmType} setFilmType={setFilmType}
         filmCurveEnabled={filmCurveEnabled} setFilmCurveEnabled={setFilmCurveEnabled}
         filmCurveProfile={filmCurveProfile} setFilmCurveProfile={setFilmCurveProfile}
         filmCurveProfiles={filmCurveProfiles} setFilmCurveProfiles={setFilmCurveProfiles}
@@ -2617,6 +2707,8 @@ export default function FilmLab({
         ratioSwap={ratioSwap} setRatioSwap={setRatioSwap}
         rotation={rotation} setRotation={setRotation}
         cropRect={cropRect} setCropRect={setCropRect}
+        orientation={orientation}
+        rotationOffset={rotationOffset}
         onRotateStart={() => { committedRotationRef.current = rotation; setIsRotating(true); }}
         onRotateEnd={() => { setIsRotating(false); }}
         setOrientation={setOrientation}

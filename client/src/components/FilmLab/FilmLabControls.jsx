@@ -511,7 +511,7 @@ export default function FilmLabControls({
   inverted, setInverted,
   useGPU, setUseGPU,
   inversionMode, setInversionMode,
-  filmType, setFilmType,
+  // P3: filmType/setFilmType 死 prop 已删除（全项目无消费者）
   filmCurveEnabled, setFilmCurveEnabled,
   filmCurveProfile, setFilmCurveProfile,
   filmCurveProfiles, setFilmCurveProfiles,
@@ -534,6 +534,8 @@ export default function FilmLabControls({
   ratioSwap, setRatioSwap,
   rotation, setRotation,
   cropRect, setCropRect,  // 用于自动边缘检测
+  orientation,            // EXIF orientation (Phase D: 自动裁剪坐标变换)
+  rotationOffset,         // 额外偏移角（Phase D）
   onAutoEdgeDetection,    // 自动边缘检测回调
   onRotateStart,
   onRotateEnd,
@@ -941,24 +943,26 @@ export default function FilmLabControls({
                cropRect={cropRect}
                rotation={rotation}
                pushToHistory={pushToHistory}
-               onDetectionResult={(result) => {
-                 console.log('📐 Received detection result in FilmLabControls:', result);
-                 // 应用检测结果到裁剪区域
-                 if (result && result.cropRect) {
-                   console.log('🎯 Updating cropRect from', cropRect, 'to', result.cropRect);
-                   setCropRect(result.cropRect);
-                 }
-                 // 应用旋转角度 - 注意：边缘检测的旋转是相对于原始图像的绝对角度，
-                 // 不是增量，所以应该替换而不是累加
-                 if (result && Math.abs(result.rotation) > 0.1) {
-                   console.log('🔄 Setting rotation to:', result.rotation, '(replacing, not adding)');
-                   setRotation(result.rotation);
-                 }
-                 // 回调父组件
-                 if (onAutoEdgeDetection) {
-                   onAutoEdgeDetection(result);
-                 }
-               }}
+              onDetectionResult={(result) => {
+                // Phase D: 把检测系坐标重映射到客户端"总旋转后包围盒"坐标系
+                if (result && result.cropRect) {
+                  const { remapDetectedCropRect } = require('@filmgallery/shared');
+                  const remapped = remapDetectedCropRect(
+                    result.cropRect,
+                    result.rotation || 0,
+                    { orientation: orientation || 0, rotationOffset: rotationOffset || 0, currentRotation: rotation || 0 }
+                  );
+                  setCropRect(remapped.cropRect);
+                  // rotation 为相对于 orientation+rotationOffset 的增量（替换式语义）
+                  if (Math.abs(remapped.rotation) > 0.1) {
+                    setRotation(remapped.rotation);
+                  }
+                }
+                // 回调父组件
+                if (onAutoEdgeDetection) {
+                  onAutoEdgeDetection(result);
+                }
+              }}
                disabled={!photoId}
              />
              

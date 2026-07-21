@@ -33,49 +33,36 @@ float splitToneSmoothstep(float t) {
 vec3 applySplitTone(vec3 color) {
   float lum = calcLuminance(color);
 
-  // Zone weights (matching CPU calculateZoneWeights)
+  // Zone weights (matching CPU calculateZoneWeights — partition of unity,
+  // shadow + midtone + highlight ≡ 1, continuous smoothstep transitions)
   // balance is in [-1, 1] range (pre-divided by 100 on JS side)
   float balanceOffset = u_splitBalance / 2.0;
-  float midpoint = 0.5 + balanceOffset;
   float shadowEnd = 0.25;
   float highlightStart = 0.75;
+  float midpoint = clamp(0.5 + balanceOffset, shadowEnd + 0.05, highlightStart - 0.05);
 
   float shadowWeight = 0.0;
-  float midtoneWeight = 0.0;
   float highlightWeight = 0.0;
 
-  // Shadow zone
-  if (lum < shadowEnd) {
+  // Shadow zone: 1 below shadowEnd, smooth ramp to 0 at midpoint
+  if (lum <= shadowEnd) {
     shadowWeight = 1.0;
   } else if (lum < midpoint) {
-    float d = max(midpoint - shadowEnd, 0.001);
-    float st = splitToneSmoothstep(clamp((lum - shadowEnd) / d, 0.0, 1.0));
+    float d = midpoint - shadowEnd;
+    float st = splitToneSmoothstep((lum - shadowEnd) / d);
     shadowWeight = 1.0 - st;
-    midtoneWeight = st;
   }
 
-  // Highlight zone
-  if (lum > highlightStart) {
+  // Highlight zone: 1 above highlightStart, smooth ramp from 0 at midpoint
+  if (lum >= highlightStart) {
     highlightWeight = 1.0;
   } else if (lum > midpoint) {
-    float d = max(highlightStart - midpoint, 0.001);
-    float st = splitToneSmoothstep(clamp((lum - midpoint) / d, 0.0, 1.0));
-    highlightWeight = st;
-    midtoneWeight = max(midtoneWeight, 1.0 - st);
+    float d = highlightStart - midpoint;
+    highlightWeight = splitToneSmoothstep((lum - midpoint) / d);
   }
 
-  // Midtone zone (peak at midpoint)
-  if (lum >= shadowEnd && lum <= highlightStart) {
-    if (abs(lum - midpoint) < 0.1) {
-      midtoneWeight = 1.0;
-    } else if (lum < midpoint) {
-      float d = max(midpoint - shadowEnd, 0.001);
-      midtoneWeight = max(midtoneWeight, splitToneSmoothstep(clamp((lum - shadowEnd) / d, 0.0, 1.0)));
-    } else {
-      float d = max(highlightStart - midpoint, 0.001);
-      midtoneWeight = max(midtoneWeight, 1.0 - splitToneSmoothstep(clamp((lum - midpoint) / d, 0.0, 1.0)));
-    }
-  }
+  // Midtone takes the remainder — weights always sum to 1
+  float midtoneWeight = 1.0 - shadowWeight - highlightWeight;
 
   // Generate tint colors (hue is 0-1 range, pre-divided by 360 on JS side)
   vec3 highlightTint = hsl2rgb(vec3(u_splitHighlightHue * 360.0, 1.0, 0.5));

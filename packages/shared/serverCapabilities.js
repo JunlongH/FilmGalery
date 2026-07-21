@@ -23,11 +23,17 @@ const API_CATEGORIES = {
 const COMPUTE_ROUTES = [
   '/api/filmlab/process',
   '/api/filmlab/preview',
+  '/api/filmlab/export',
   '/api/raw/decode',
   '/api/raw/preview',
   '/api/batch-render',
   '/api/edge-detection/detect',
   '/api/edge-detection/auto-crop'
+];
+
+// 参数化 compute 路由（无法用前缀表达，前缀 /api/photos 属于 DATA 类）
+const COMPUTE_ROUTE_PATTERNS = [
+  /^\/api\/photos\/[^/]+\/render-positive$/
 ];
 
 // Data routes available in all modes
@@ -72,7 +78,8 @@ function isComputeEnabled() {
  * Check if a route requires compute capability
  */
 function isComputeRoute(path) {
-  return COMPUTE_ROUTES.some(route => path.startsWith(route));
+  return COMPUTE_ROUTES.some(route => path.startsWith(route)) ||
+         COMPUTE_ROUTE_PATTERNS.some(re => re.test(path));
 }
 
 /**
@@ -104,6 +111,7 @@ module.exports = {
   SERVER_MODES,
   API_CATEGORIES,
   COMPUTE_ROUTES,
+  COMPUTE_ROUTE_PATTERNS,
   DATA_ROUTES,
   getServerMode,
   isComputeEnabled,

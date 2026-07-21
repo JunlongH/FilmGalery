@@ -75,6 +75,33 @@ float calcLuminance(vec3 c) {
 float calcLuminance601(vec3 c) {
   return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
 }
+
+// ============================================================================
+// sRGB <-> Linear transfer functions (IEC 61966-2-1)
+// 与 packages/shared/render/math/color-space.js 数值一致；用于 Phase I 线性域反转
+// ============================================================================
+
+// 单通道 sRGB → linear（负值 clamp 到 0）
+float srgbToLinear1(float srgb) {
+  srgb = max(srgb, 0.0);
+  if (srgb <= 0.04045) return srgb / 12.92;
+  return pow((srgb + 0.055) / 1.055, 2.4);
+}
+
+// 单通道 linear → sRGB（负值 clamp 到 0）
+float linearToSrgb1(float linear) {
+  linear = max(linear, 0.0);
+  if (linear <= 0.0031308) return linear * 12.92;
+  return 1.055 * pow(linear, 1.0 / 2.4) - 0.055;
+}
+
+vec3 srgbToLinear(vec3 c) {
+  return vec3(srgbToLinear1(c.r), srgbToLinear1(c.g), srgbToLinear1(c.b));
+}
+
+vec3 linearToSrgb(vec3 c) {
+  return vec3(linearToSrgb1(c.r), linearToSrgb1(c.g), linearToSrgb1(c.b));
+}
 `;
 
 module.exports = {

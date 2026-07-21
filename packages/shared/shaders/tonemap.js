@@ -31,15 +31,19 @@ vec3 applyContrast(vec3 c, float contrast) {
 vec3 applyHighlightsShadows(vec3 c) {
   float sFactor = u_shadows * 0.005;
   float hFactor = u_highlights * 0.005;
-  
+
+  // Bernstein 基函数在 clamp 后的值上计算（匹配 CPU processPixelFloat），
+  // 避免 c 超出 [0,1] 时权重符号反转；增量仍加到未 clamp 的 c 上
+  vec3 cc = clamp(c, 0.0, 1.0);
+
   if (sFactor != 0.0) {
-    c += sFactor * pow(1.0 - c, vec3(2.0)) * c * 4.0;
+    c += sFactor * pow(1.0 - cc, vec3(2.0)) * cc * 4.0;
   }
-  
+
   if (hFactor != 0.0) {
-    c += hFactor * pow(c, vec3(2.0)) * (1.0 - c) * 4.0;
+    c += hFactor * pow(cc, vec3(2.0)) * (1.0 - cc) * 4.0;
   }
-  
+
   return c;
 }
 

@@ -72,6 +72,7 @@ export {
   loadImageToCanvas,
   applyGeometry,
   processCanvasWithRenderCore,
+  processCanvasWithRenderCoreAsync,
   canvasToBlob
 } from './CpuRenderService';
 

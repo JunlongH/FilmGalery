@@ -22,6 +22,10 @@ const render = require('./render');
 const helpers = require('./filmLabHelpers');
 const sourcePathResolver = require('./sourcePathResolver');
 const rawUtils = require('./rawUtils');
+const paramSerializer = require('./paramSerializer');
+const autoCropCoord = require('./autoCropCoord');
+const lutParser = require('./lutParser');
+const renderChunked = require('./renderChunked');
 
 // Service discovery & coordinate transforms (consumed by client/mobile/watch/server).
 const coordTransform = require('./coordTransform');
@@ -43,6 +47,21 @@ module.exports = {
 
   /** 将 RenderCore 应用到整个像素缓冲区（消除 N 处重复 for-loop；2C.3） */
   renderBuffer,
+
+  /** 渲染参数稳定序列化/相等性比较（渲染脏标记，Phase C） */
+  stableSerializeParams: paramSerializer.stableSerializeParams,
+  renderParamsEqual: paramSerializer.renderParamsEqual,
+
+  /** 自动裁剪坐标系重映射（Phase D） */
+  remapDetectedCropRect: autoCropCoord.remapDetectedCropRect,
+  nearestOrthogonal: autoCropCoord.nearestOrthogonal,
+
+  /** 3D LUT (.cube) 解析（Phase E） */
+  parseCubeLUT: lutParser.parseCubeLUT,
+
+  /** 分块像素处理（Phase J，SSOT 循环） */
+  processBlock: renderChunked.processBlock,
+  processCanvasChunkedSync: renderChunked.processCanvasChunkedSync,
   
   // ============================================================================
   // 全局饱和度
@@ -180,8 +199,6 @@ module.exports = {
   // 默认参数
   DEFAULT_TONE_PARAMS: constants.DEFAULT_TONE_PARAMS,
   DEFAULT_WB_PARAMS: constants.DEFAULT_WB_PARAMS,
-  DEFAULT_BASE_GAINS: constants.DEFAULT_BASE_GAINS,
-  DEFAULT_BASE_CORRECTION: constants.DEFAULT_BASE_CORRECTION,
   INVERSION_MODE_LABELS: constants.INVERSION_MODE_LABELS,
   DEFAULT_INVERSION_PARAMS: constants.DEFAULT_INVERSION_PARAMS,
   DEFAULT_CURVES: constants.DEFAULT_CURVES,

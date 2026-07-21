@@ -19,6 +19,9 @@ uniform sampler2D u_image;
 uniform float u_inverted;      // 0.0 = no inversion, 1.0 = invert
 uniform float u_inversionMode; // 0.0 = linear, 1.0 = log
 
+// Phase I: 线性域反转（0.0 = gamma 域，1.0 = 线性光下做片基校正+反转）
+uniform float u_linearDomainInversion;
+
 // White Balance
 uniform vec3 u_gains;          // r,g,b gains
 

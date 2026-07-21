@@ -36,7 +36,7 @@ const LUM_B = 0.0722;
  * @returns {[number, number, number]} Adjusted [r, g, b] in 0–1 range
  */
 function applySaturationFloat(r, g, b, strength) {
-  const s = 1 + strength / 100;
+  const s = Math.max(0, 1 + strength / 100); // 防 strength < -100 产生负饱和度（色度反转）
   const lum = LUM_R * r + LUM_G * g + LUM_B * b;
   return [
     Math.max(0, Math.min(1, lum + (r - lum) * s)),
@@ -55,7 +55,7 @@ function applySaturationFloat(r, g, b, strength) {
  * @returns {[number, number, number]} Adjusted [r, g, b] clamped to 0–255
  */
 function applySaturation(r, g, b, strength) {
-  const s = 1 + strength / 100;
+  const s = Math.max(0, 1 + strength / 100); // 防 strength < -100 产生负饱和度（色度反转）
   const lum = LUM_R * r + LUM_G * g + LUM_B * b;
   return [
     Math.max(0, Math.min(255, Math.round(lum + (r - lum) * s))),

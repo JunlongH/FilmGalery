@@ -69,30 +69,8 @@ export const getCurveLUT = (points) => {
   return lut;
 };
 
-// Helper to parse .cube file
-export const parseCubeLUT = (text) => {
-  const lines = text.split('\n');
-  let size = 33; // Default
-  const data = [];
-  
-  for (let line of lines) {
-    line = line.trim();
-    if (!line || line.startsWith('#')) continue;
-    
-    if (line.startsWith('LUT_3D_SIZE')) {
-      size = parseInt(line.split(/\s+/)[1]);
-      continue;
-    }
-    
-    // Data lines
-    const parts = line.split(/\s+/).map(parseFloat);
-    if (parts.length >= 3 && !isNaN(parts[0])) {
-      data.push(parts[0], parts[1], parts[2]);
-    }
-  }
-  
-  return { size, data: new Float32Array(data) };
-};
+// 3D LUT (.cube) 解析器 — SSOT 在 packages/shared/lutParser.js
+export { parseCubeLUT } from '@filmgallery/shared';
 
 // Helper for trilinear interpolation
 export const sampleLUT = (r, g, b, lut) => {
@@ -359,3 +337,10 @@ export function getExifOrientation(buffer) {
   }
   return -1;
 }
+
+/**
+ * 稳定序列化渲染参数（键排序递归），用于渲染脏标记比较。
+ * 替代手写键列表的 paramsEqual —— 后者漏检大量参数导致预览冻结。
+ * SSOT 实现在 packages/shared/paramSerializer.js
+ */
+export { stableSerializeParams, renderParamsEqual } from '@filmgallery/shared';

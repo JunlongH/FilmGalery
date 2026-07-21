@@ -6,6 +6,7 @@ build/
 dist/
 dist_v*/
 *.zip
+*.apk
 
 # Runtime data
 uploads/

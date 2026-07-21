@@ -45,32 +45,40 @@ vec3 applyHSLAdjustment(vec3 color) {
   float w;
 
   // 8 channels: hue centers & ranges from HSL_CHANNELS (filmLabHSL.js)
+  // P2-1: ranges adjusted for partition of unity (no weak zones at midpoints)
   w = hslChannelWeight(h, 0.0, 30.0);
   if (w > 0.0) { hueAdjust += u_hslRed.x * w; satAdjust += (u_hslRed.y / 100.0) * w; lumAdjust += (u_hslRed.z / 100.0) * w; totalWeight += w; }
   w = hslChannelWeight(h, 30.0, 30.0);
   if (w > 0.0) { hueAdjust += u_hslOrange.x * w; satAdjust += (u_hslOrange.y / 100.0) * w; lumAdjust += (u_hslOrange.z / 100.0) * w; totalWeight += w; }
-  w = hslChannelWeight(h, 60.0, 30.0);
+  w = hslChannelWeight(h, 60.0, 60.0);
   if (w > 0.0) { hueAdjust += u_hslYellow.x * w; satAdjust += (u_hslYellow.y / 100.0) * w; lumAdjust += (u_hslYellow.z / 100.0) * w; totalWeight += w; }
-  w = hslChannelWeight(h, 120.0, 45.0);
+  w = hslChannelWeight(h, 120.0, 60.0);
   if (w > 0.0) { hueAdjust += u_hslGreen.x * w; satAdjust += (u_hslGreen.y / 100.0) * w; lumAdjust += (u_hslGreen.z / 100.0) * w; totalWeight += w; }
-  w = hslChannelWeight(h, 180.0, 30.0);
+  w = hslChannelWeight(h, 180.0, 60.0);
   if (w > 0.0) { hueAdjust += u_hslCyan.x * w; satAdjust += (u_hslCyan.y / 100.0) * w; lumAdjust += (u_hslCyan.z / 100.0) * w; totalWeight += w; }
-  w = hslChannelWeight(h, 240.0, 45.0);
+  w = hslChannelWeight(h, 240.0, 60.0);
   if (w > 0.0) { hueAdjust += u_hslBlue.x * w; satAdjust += (u_hslBlue.y / 100.0) * w; lumAdjust += (u_hslBlue.z / 100.0) * w; totalWeight += w; }
-  w = hslChannelWeight(h, 280.0, 30.0);
+  w = hslChannelWeight(h, 280.0, 50.0);
   if (w > 0.0) { hueAdjust += u_hslPurple.x * w; satAdjust += (u_hslPurple.y / 100.0) * w; lumAdjust += (u_hslPurple.z / 100.0) * w; totalWeight += w; }
   // Magenta: center 330° (NOT 320°) — matches CPU HSL_CHANNELS definition
-  w = hslChannelWeight(h, 330.0, 30.0);
+  w = hslChannelWeight(h, 330.0, 50.0);
   if (w > 0.0) { hueAdjust += u_hslMagenta.x * w; satAdjust += (u_hslMagenta.y / 100.0) * w; lumAdjust += (u_hslMagenta.z / 100.0) * w; totalWeight += w; }
 
-  // Normalize if overlapping channels sum > 1 (BUG-07 fix)
-  if (totalWeight > 1.0) {
-    hueAdjust /= totalWeight;
-    satAdjust /= totalWeight;
-    lumAdjust /= totalWeight;
-  }
+  // P2-1: Normalize by max(1, totalWeight) — eliminates weak response zones
+  // (old code only divided when > 1, leaving midpoints at 25% strength)
+  float norm = max(1.0, totalWeight);
+  hueAdjust /= norm;
+  satAdjust /= norm;
+  lumAdjust /= norm;
 
   if (totalWeight > 0.0) {
+    // Continuous saturation ramp: fade hue/sat adjustments for near-gray pixels
+    // (replaces the old s<0.05 hard switch in CPU — keeps both paths identical)
+    float rampT = clamp(s / 0.1, 0.0, 1.0);
+    float satRamp = rampT * rampT * (3.0 - 2.0 * rampT);
+    hueAdjust *= satRamp;
+    satAdjust *= satRamp;
+
     hsl.x = mod(hsl.x + hueAdjust, 360.0);
 
     // Asymmetric saturation (BUG-04 fix — matches CPU filmLabHSL.js)
@@ -82,13 +90,11 @@ vec3 applyHSLAdjustment(vec3 color) {
     }
     hsl.y = clamp(hsl.y, 0.0, 1.0);
 
-    // Asymmetric luminance with 0.5 damping (BUG-05 fix — matches CPU filmLabHSL.js)
-    if (lumAdjust > 0.0) {
-      hsl.z = l + (1.0 - l) * lumAdjust * 0.5;
-    } else if (lumAdjust < 0.0) {
-      hsl.z = l * (1.0 + lumAdjust * 0.5);
-    }
-    hsl.z = clamp(hsl.z, 0.0, 1.0);
+    // Luminance: linear delta for near-gray (legacy gray behavior), asymmetric
+    // delta for saturated pixels, continuously blended by satRamp (matches CPU)
+    float linearDelta = lumAdjust * 0.5;
+    float asymDelta = lumAdjust > 0.0 ? (1.0 - l) * lumAdjust * 0.5 : l * lumAdjust * 0.5;
+    hsl.z = clamp(l + mix(linearDelta, asymDelta, satRamp), 0.0, 1.0);
   }
 
   return hsl2rgb(hsl);

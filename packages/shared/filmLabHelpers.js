@@ -271,9 +271,10 @@ function sampleLUT3D(r, g, b, lut, intensity = 1) {
     return c0 * (1 - fb) + c1 * fb;
   };
 
-  const rOut = interp(0) * 255;
-  const gOut = interp(1) * 255;
-  const bOut = interp(2) * 255;
+  // P2-10: clamp 输出到 [0, 255]（HDR .cube LUT 数据可能 >1.0，*255 后越界）
+  const rOut = Math.max(0, Math.min(255, interp(0) * 255));
+  const gOut = Math.max(0, Math.min(255, interp(1) * 255));
+  const bOut = Math.max(0, Math.min(255, interp(2) * 255));
 
   // 应用强度
   if (intensity >= 1) {

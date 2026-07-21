@@ -57,24 +57,25 @@ function detect(edges, width, height, threshold = 100, thetaResolution = 1, rhoR
   // 提取峰值 (局部最大值)
   const lines = [];
   const neighborhoodSize = 5;
-  
+
   for (let r = neighborhoodSize; r < numRhos - neighborhoodSize; r++) {
-    for (let t = neighborhoodSize; t < numThetas - neighborhoodSize; t++) {
+    for (let t = 0; t < numThetas; t++) {
       const votes = accumulator[r * numThetas + t];
-      
+
       if (votes < threshold) continue;
-      
-      // 检查是否为局部最大值
+
+      // 检查是否为局部最大值（θ 轴周期性：t=0/-90° 与 t=numThetas-1/+89° 物理相邻，需环绕）
       let isMax = true;
       for (let dr = -neighborhoodSize; dr <= neighborhoodSize && isMax; dr++) {
         for (let dt = -neighborhoodSize; dt <= neighborhoodSize && isMax; dt++) {
           if (dr === 0 && dt === 0) continue;
-          if (accumulator[(r + dr) * numThetas + (t + dt)] > votes) {
+          const tt = ((t + dt) % numThetas + numThetas) % numThetas; // θ 环绕
+          if (accumulator[(r + dr) * numThetas + tt] > votes) {
             isMax = false;
           }
         }
       }
-      
+
       if (isMax) {
         const rho = (r * rhoResolution) - diagLen;
         const theta = thetaValues[t];
@@ -99,57 +100,81 @@ function detect(edges, width, height, threshold = 100, thetaResolution = 1, rhoR
  */
 function mergeLines(lines, rhoThreshold = 20, thetaThreshold = 10) {
   if (lines.length === 0) return [];
-  
+
+  // 预规范化：强制 ρ ≥ 0（若 ρ<0 则翻转 ρ 符号并将 θ 偏移 π），
+  // 使等价直线有唯一表示，解决 (-89°, ρ=100) ≡ (91°, ρ=-100) 的环绕合并问题
+  const norm = (l) => {
+    let rho = l.rho;
+    let theta = l.theta;
+    if (rho < 0) {
+      rho = -rho;
+      theta += Math.PI;
+    }
+    while (theta >= 2 * Math.PI) theta -= 2 * Math.PI;
+    while (theta < 0) theta += 2 * Math.PI;
+    return { rho, theta, votes: l.votes };
+  };
+  const normed = lines.map(norm);
+
   const thetaThresholdRad = thetaThreshold * Math.PI / 180;
   const merged = [];
   const used = new Set();
-  
-  for (let i = 0; i < lines.length; i++) {
+
+  for (let i = 0; i < normed.length; i++) {
     if (used.has(i)) continue;
-    
-    const line = lines[i];
+
+    const line = normed[i];
     let rhoSum = line.rho * line.votes;
-    let thetaSum = line.theta * line.votes;
+    // θ 用环形均值（atan2(Σ sin, Σ cos)）以正确处理 0/2π 边界
+    let sumSin = Math.sin(line.theta) * line.votes;
+    let sumCos = Math.cos(line.theta) * line.votes;
     let votesSum = line.votes;
     let count = 1;
-    
+
     used.add(i);
-    
-    for (let j = i + 1; j < lines.length; j++) {
+
+    for (let j = i + 1; j < normed.length; j++) {
       if (used.has(j)) continue;
-      
-      const other = lines[j];
+
+      const other = normed[j];
       const rhoDiff = Math.abs(line.rho - other.rho);
+      // θ 在 [0, 2π) 环形：短弧距离
       let thetaDiff = Math.abs(line.theta - other.theta);
-      
-      // 处理角度周期性
-      if (thetaDiff > Math.PI) {
-        thetaDiff = 2 * Math.PI - thetaDiff;
-      }
-      
+      if (thetaDiff > Math.PI) thetaDiff = 2 * Math.PI - thetaDiff;
+
       if (rhoDiff <= rhoThreshold && thetaDiff <= thetaThresholdRad) {
-        // 加权平均
         rhoSum += other.rho * other.votes;
-        thetaSum += other.theta * other.votes;
+        sumSin += Math.sin(other.theta) * other.votes;
+        sumCos += Math.cos(other.theta) * other.votes;
         votesSum += other.votes;
         count++;
         used.add(j);
       }
     }
-    
+
+    // 环形加权均值：避免 (θ₁≈0, θ₂≈2π) 算术平均到 π
+    let avgTheta = Math.atan2(sumSin, sumCos);
+    // 规范化到 [0, 2π)；浮点误差可能让 atan2 返回极小负值（如 -1e-17），加 2π 后又接近 2π
+    if (avgTheta < 0) avgTheta += 2 * Math.PI;
+    if (avgTheta >= 2 * Math.PI - 1e-9) avgTheta = 0;
+
     merged.push({
       rho: rhoSum / votesSum,
-      theta: thetaSum / votesSum,
+      theta: avgTheta,
       votes: votesSum,
       mergedCount: count
     });
   }
-  
+
   return merged;
 }
 
 /**
  * 将直线分类为水平和垂直两组
+ * 
+ * θ 在 [0, 2π) 内有四个主方向（环形距离判定）：
+ *   - 接近 0 或 π → vertical（法线水平，直线垂直）
+ *   - 接近 π/2 或 3π/2 → horizontal（法线垂直，直线水平）
  * 
  * @param {Array} lines - 直线列表
  * @param {number} tolerance - 角度容差 (度)
@@ -159,22 +184,31 @@ function classifyLines(lines, tolerance = 20) {
   const horizontal = [];
   const vertical = [];
   const toleranceRad = tolerance * Math.PI / 180;
-  
+
+  // 四个主方向的环形距离最小值判定
+  // horizontal: π/2, 3π/2；vertical: 0, π
   for (const line of lines) {
-    // theta 接近 0 或 π 为垂直线 (x*cos(0) + y*sin(0) = x = rho)
-    // theta 接近 π/2 或 -π/2 为水平线 (y = rho)
-    const absTheta = Math.abs(line.theta);
-    
-    if (absTheta < toleranceRad || Math.abs(absTheta - Math.PI) < toleranceRad) {
-      // 接近垂直
+    let theta = line.theta;
+    // 归一化到 [0, 2π)
+    theta = ((theta % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+
+    // 短弧距离函数（θ 在 [0, 2π) 内）
+    const circDist = (a) => {
+      const d = Math.abs(theta - a);
+      return Math.min(d, 2 * Math.PI - d);
+    };
+
+    const distToV = Math.min(circDist(0), circDist(Math.PI));
+    const distToH = Math.min(circDist(Math.PI / 2), circDist(3 * Math.PI / 2));
+
+    if (distToV < toleranceRad && distToV <= distToH) {
       vertical.push(line);
-    } else if (Math.abs(absTheta - Math.PI / 2) < toleranceRad) {
-      // 接近水平
+    } else if (distToH < toleranceRad) {
       horizontal.push(line);
     }
     // 其他斜线暂时忽略
   }
-  
+
   return { horizontal, vertical };
 }
 

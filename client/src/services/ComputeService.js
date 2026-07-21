@@ -17,6 +17,32 @@ import CpuRenderService from './CpuRenderService';
 let serverCapabilities = null;
 let lastCapabilityCheck = 0;
 const CAPABILITY_CACHE_MS = 60000; // 1分钟缓存
+const CAPABILITY_NEGATIVE_CACHE_MS = 10000; // 探测失败时的负缓存（避免热路径重复 fetch）
+
+// 格式 → MIME 映射（三处渲染路径共用，避免漂移）
+const FORMAT_MIME = {
+  jpeg: 'image/jpeg',
+  jpg: 'image/jpeg',
+  png: 'image/png',
+  tiff: 'image/tiff',
+  tiff16: 'image/tiff',
+};
+
+// 预览请求序号（防竞态：仅最新请求的结果被采用）
+let previewRequestSeq = 0;
+
+/**
+ * 发起带序号守卫的预览调用：仅当这是最新请求时才返回结果，
+ * 否则返回 { ok: false, stale: true }，调用方应丢弃。
+ */
+export async function smartFilmlabPreviewLatest(args) {
+  const seq = ++previewRequestSeq;
+  const result = await smartFilmlabPreview(args);
+  if (seq !== previewRequestSeq) {
+    return { ok: false, stale: true, error: 'superseded by newer preview request' };
+  }
+  return result;
+}
 
 // 进度回调注册表
 const progressCallbacks = new Map();
@@ -64,8 +90,9 @@ export async function getServerCapabilities() {
       serverCapabilities = {
         mode: data.mode || 'standalone',
         compute: data.capabilities?.compute ?? true,
-        database: data.capabilities?.database ?? true,
-        files: data.capabilities?.files ?? true,
+        // 与服务端 schema 对齐（data/compute/storage），保留旧字段名兼容
+        database: data.capabilities?.data ?? data.capabilities?.database ?? true,
+        files: data.capabilities?.storage ?? data.capabilities?.files ?? true,
         version: data.version
       };
       lastCapabilityCheck = now;
@@ -74,14 +101,18 @@ export async function getServerCapabilities() {
   } catch (e) {
     console.warn('[ComputeService] Failed to fetch capabilities:', e);
   }
-  
-  // 默认假设服务器有完整能力
-  return {
-    mode: 'standalone',
-    compute: true,
+
+  // 探测失败：混合模式（NAS）下不能假设服务器有算力，默认本地处理；
+  // 非混合模式按 standalone 处理（保持旧行为）。结果做短 TTL 负缓存。
+  const fallback = {
+    mode: isHybridMode() ? 'nas' : 'standalone',
+    compute: !isHybridMode(),
     database: true,
     files: true
   };
+  serverCapabilities = fallback;
+  lastCapabilityCheck = Date.now() - CAPABILITY_CACHE_MS + CAPABILITY_NEGATIVE_CACHE_MS;
+  return fallback;
 }
 
 /**
@@ -144,8 +175,8 @@ export async function smartFilmlabPreview({ photoId, params, maxWidth = 1400, so
     if (resp.status === 503) {
       const data = await resp.json().catch(() => ({}));
       if (data.code === 'E_NAS_NO_COMPUTE') {
-        // 服务器明确表示无计算能力，尝试本地处理
-        return await localGpuPreview({ photoId, params, maxWidth });
+        // 服务器明确表示无计算能力，尝试本地处理（必须透传 sourceType）
+        return await localGpuPreview({ photoId, params, maxWidth, sourceType });
       }
     }
     
@@ -187,15 +218,15 @@ async function localGpuPreview({ photoId, params, maxWidth, sourceType = 'origin
         sourceType 
       });
       
-      if (result?.ok) {
-        return { 
-          ok: true, 
-          blob: result.blob, 
-          source: 'local-gpu' 
+      if (result?.ok && result.blob?.size > 0) {
+        return {
+          ok: true,
+          blob: result.blob,
+          source: 'local-gpu'
         };
       }
-      
-      console.warn('[ComputeService] GPU preview failed, falling back to CPU:', result?.error);
+
+      console.warn('[ComputeService] GPU preview failed or returned empty blob, falling back to CPU:', result?.error);
     } catch (e) {
       console.warn('[ComputeService] GPU preview exception, falling back to CPU:', e.message);
     }
@@ -209,36 +240,13 @@ async function localGpuPreview({ photoId, params, maxWidth, sourceType = 'origin
 }
 
 /**
- * 获取照片的图片 URL
+ * 获取照片的图片 URL（SSOT：委托到 CpuRenderService.getPhotoImageUrl，消除两份重复实现）
  * @param {number} photoId - 照片 ID
  * @param {string} sourceType - 源类型: 'original' | 'negative' | 'positive'
  */
-async function getPhotoImageUrl(photoId, sourceType = 'original') {
-  try {
-    const apiBase = getApiBase();
-    const res = await fetch(`${apiBase}/api/photos/${photoId}`);
-    if (res.ok) {
-      const photo = await res.json();
-      // 根据 sourceType 返回对应的路径
-      switch (sourceType) {
-        case 'positive':
-          return photo.positive_rel_path ? `${apiBase}/uploads/${photo.positive_rel_path}` : null;
-        case 'negative':
-          return photo.negative_rel_path ? `${apiBase}/uploads/${photo.negative_rel_path}` :
-                 photo.original_rel_path ? `${apiBase}/uploads/${photo.original_rel_path}` :
-                 photo.full_rel_path ? `${apiBase}/uploads/${photo.full_rel_path}` : null;
-        case 'original':
-        default:
-          return photo.original_rel_path ? `${apiBase}/uploads/${photo.original_rel_path}` :
-                 photo.negative_rel_path ? `${apiBase}/uploads/${photo.negative_rel_path}` :
-                 photo.full_rel_path ? `${apiBase}/uploads/${photo.full_rel_path}` : null;
-      }
-    }
-  } catch (e) {
-    console.error('[ComputeService] Failed to get photo info:', e);
-  }
-  return null;
-}
+const getPhotoImageUrl = (photoId, sourceType = 'original') =>
+  CpuRenderService.getPhotoImageUrl(photoId, sourceType);
+
 
 /**
  * 智能渲染正片
@@ -308,16 +316,16 @@ async function localRenderPositive(photoId, params, { format = 'jpeg', sourceTyp
         sourceType
       });
       
-      if (result?.ok) {
-        return { 
-          ok: true, 
+      if (result?.ok && result.blob?.size > 0) {
+        return {
+          ok: true,
           blob: result.blob,
-          contentType: format === 'tiff16' ? 'image/tiff' : 'image/jpeg',
-          source: 'local-gpu' 
+          contentType: FORMAT_MIME[format] || 'image/jpeg',
+          source: 'local-gpu'
         };
       }
-      
-      console.warn('[ComputeService] GPU render failed, falling back to CPU:', result?.error);
+
+      console.warn('[ComputeService] GPU render failed or returned empty blob, falling back to CPU:', result?.error);
     } catch (e) {
       console.warn('[ComputeService] GPU render exception, falling back to CPU:', e.message);
     }
@@ -713,7 +721,7 @@ export async function batchProcess(photoIds, params, options = {}) {
         total,
         completed,
         failed,
-        percent: Math.round((completed / total) * 100),
+        percent: Math.round(((completed + failed) / total) * 100),
         current: completed + failed
       });
     }
@@ -780,6 +788,7 @@ const ComputeService = {
   
   // 智能处理
   smartFilmlabPreview,
+  smartFilmlabPreviewLatest,
   smartRenderPositive,
   smartExportPositive,
   

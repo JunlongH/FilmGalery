@@ -20,7 +20,8 @@ const {
   EXPORT_MAX_WIDTH,
 } = require('./filmLabConstants');
 const { DEFAULT_HSL_PARAMS: HSL_CANONICAL_DEFAULTS } = require('./filmLabHSL');
-const { DEFAULT_SPLIT_TONE_PARAMS: SPLIT_TONE_CANONICAL_DEFAULTS } = require('./filmLabSplitTone');
+const { DEFAULT_SPLIT_TONE_PARAMS: SPLIT_TONE_CANONICAL_DEFAULTS, validateSplitToneParams } = require('./filmLabSplitTone');
+const { stableSerializeParams } = require('./paramSerializer');
 
 // ============================================================================
 // 常量定义
@@ -29,43 +30,29 @@ const { DEFAULT_SPLIT_TONE_PARAMS: SPLIT_TONE_CANONICAL_DEFAULTS } = require('./
 /** 当前参数版本 */
 const PARAMS_VERSION = 3;
 
-/** 默认 HSL 参数 */
-const DEFAULT_HSL_PARAMS = {
-  red: { hue: 0, saturation: 0, luminance: 0 },
-  orange: { hue: 0, saturation: 0, luminance: 0 },
-  yellow: { hue: 0, saturation: 0, luminance: 0 },
-  green: { hue: 0, saturation: 0, luminance: 0 },
-  cyan: { hue: 0, saturation: 0, luminance: 0 },
-  blue: { hue: 0, saturation: 0, luminance: 0 },
-  purple: { hue: 0, saturation: 0, luminance: 0 },
-  magenta: { hue: 0, saturation: 0, luminance: 0 },
-};
+// P1-27: 删除本地 DEFAULT_HSL_PARAMS / DEFAULT_SPLIT_TONING 重复定义
+// 直接使用从 canonical 模块导入的 HSL_CANONICAL_DEFAULTS / SPLIT_TONE_CANONICAL_DEFAULTS
+// 旧别名保留以兼容模块外部可能存在的引用
+const DEFAULT_HSL_PARAMS = HSL_CANONICAL_DEFAULTS;
+const DEFAULT_SPLIT_TONING = SPLIT_TONE_CANONICAL_DEFAULTS;
 
-/** 默认分离色调参数 — 与 filmLabSplitTone.DEFAULT_SPLIT_TONE_PARAMS 对齐 */
-const DEFAULT_SPLIT_TONING = {
-  highlights: { hue: 30, saturation: 0 },
-  midtones: { hue: 0, saturation: 0 },
-  shadows: { hue: 220, saturation: 0 },
-  balance: 0,
-};
-
-/** 完整默认参数模板 */
+/** 完整默认参数模板（冻结，禁止原地修改；用 createDefaultParams() 取深拷贝实例） */
 const DEFAULT_PROCESSING_PARAMS = {
   version: PARAMS_VERSION,
-  
+
   // 反转
   inverted: DEFAULT_INVERSION_PARAMS.inverted,
   inversionMode: DEFAULT_INVERSION_PARAMS.inversionMode,
   filmCurveEnabled: false,
   filmCurveProfile: 'default',
-  
+
   // 白平衡
   red: DEFAULT_WB_PARAMS.red,
   green: DEFAULT_WB_PARAMS.green,
   blue: DEFAULT_WB_PARAMS.blue,
   temp: DEFAULT_WB_PARAMS.temp,
   tint: DEFAULT_WB_PARAMS.tint,
-  
+
   // 色调
   exposure: DEFAULT_TONE_PARAMS.exposure,
   contrast: DEFAULT_TONE_PARAMS.contrast,
@@ -73,19 +60,19 @@ const DEFAULT_PROCESSING_PARAMS = {
   shadows: DEFAULT_TONE_PARAMS.shadows,
   whites: DEFAULT_TONE_PARAMS.whites,
   blacks: DEFAULT_TONE_PARAMS.blacks,
-  
+
   // 曲线
   curves: { ...DEFAULT_CURVES },
-  
+
   // HSL (统一使用 hslParams 字段名)
   hslParams: { ...DEFAULT_HSL_PARAMS },
-  
+
   // 全局饱和度 (Luma-preserving)
   saturation: 0,
-  
+
   // 分离色调
   splitToning: { ...DEFAULT_SPLIT_TONING },
-  
+
   // 片基校正
   baseMode: 'linear',
   baseRed: 1.0,
@@ -94,20 +81,42 @@ const DEFAULT_PROCESSING_PARAMS = {
   baseDensityR: 0.0,
   baseDensityG: 0.0,
   baseDensityB: 0.0,
-  
+
   // 密度域色阶
   densityLevelsEnabled: false,
-  
+
   // 裁剪/旋转
   cropRect: { ...DEFAULT_CROP_RECT },
   rotation: 0,
-  
+
   // 3D LUT
   lut1: null,
   lut1Intensity: 1.0,
   lut2: null,
   lut2Intensity: 1.0,
 };
+
+// 冻结默认值防止原地修改污染全局（嵌套对象递归冻结）
+function deepFreeze(obj) {
+  if (obj && typeof obj === 'object') {
+    Object.keys(obj).forEach(k => deepFreeze(obj[k]));
+    Object.freeze(obj);
+  }
+  return obj;
+}
+deepFreeze(DEFAULT_PROCESSING_PARAMS);
+deepFreeze(DEFAULT_HSL_PARAMS);
+deepFreeze(DEFAULT_SPLIT_TONING);
+
+/**
+ * 创建一份默认参数的深拷贝实例（消费方可安全修改）。
+ * 结构化克隆语义：嵌套对象/数组均为独立副本。
+ *
+ * @returns {Object} 全新的默认参数对象
+ */
+function createDefaultParams() {
+  return structuredClone(DEFAULT_PROCESSING_PARAMS);
+}
 
 // ============================================================================
 // 参数构建
@@ -123,26 +132,62 @@ const DEFAULT_PROCESSING_PARAMS = {
  * @returns {Object} 完整的处理参数
  */
 function buildExportParams(preset, overrides = {}) {
-  // 从默认值开始
-  const params = { ...DEFAULT_PROCESSING_PARAMS };
-  
-  // 应用预设
+  // 从默认值开始（深拷贝，避免消费方原地修改污染全局默认）
+  const params = createDefaultParams();
+
+  // 应用预设（深合并嵌套对象，避免整体替换丢兄弟字段）
   if (preset) {
-    const presetParams = typeof preset === 'string' 
-      ? JSON.parse(preset) 
-      : preset;
-    
-    Object.assign(params, presetParams);
+    let presetParams;
+    if (typeof preset === 'string') {
+      try {
+        presetParams = JSON.parse(preset);
+      } catch (e) {
+        console.warn('[filmLabExport] preset JSON 解析失败，已忽略 preset:', e.message);
+        presetParams = null;
+      }
+    } else {
+      presetParams = preset;
+    }
+    if (presetParams) mergeDeep(params, presetParams);
   }
-  
-  // 应用覆盖值
-  Object.assign(params, overrides);
-  
-  // 确保版本号
-  params.version = PARAMS_VERSION;
-  
-  // 迁移旧版本参数
-  return migrateParams(params);
+
+  // 应用覆盖值（同样深合并）
+  mergeDeep(params, overrides);
+
+  // 先迁移（保留原始 version 字段供 migrateParams 判定分支），再盖章最新版本号
+  const migrated = migrateParams(params);
+  migrated.version = PARAMS_VERSION;
+  return migrated;
+}
+
+/**
+ * 深合并：将 src 的字段合并到 dst，嵌套对象递归合并（而非整体替换）。
+ * 数组按索引合并（src 提供则覆盖元素），null/undefined 跳过。
+ *
+ * P0-11: 数组元素深拷贝，避免 dst[key]=sv 共享 src 数组引用导致调用方修改返回值污染输入。
+ * 同时当 dv 不是对象时（dst 缺该字段），对 sv 做深拷贝而非引用赋值，避免嵌套数组/对象共享。
+ */
+function mergeDeep(dst, src) {
+  if (!src || typeof src !== 'object') return dst;
+  for (const key of Object.keys(src)) {
+    const sv = src[key];
+    const dv = dst[key];
+    if (Array.isArray(sv)) {
+      // P0-11: 数组深拷贝（元素为对象时递归拷贝，避免共享引用）
+      dst[key] = sv.map(item => (item && typeof item === 'object' ? mergeDeep({}, item) : item));
+    } else if (sv && typeof sv === 'object') {
+      if (dv && typeof dv === 'object' && !Array.isArray(dv)) {
+        // 双方都是普通对象：递归合并
+        mergeDeep(dv, sv);
+      } else {
+        // dv 不存在或不是对象：深拷贝 sv（避免共享嵌套数组/对象引用）
+        dst[key] = mergeDeep({}, sv);
+      }
+    } else {
+      dst[key] = sv;
+    }
+  }
+  return dst;
 }
 
 /**
@@ -257,22 +302,46 @@ function validateExportParams(params) {
   }
   
   // HSL 验证 (兼容 hslParams 和旧 hsl 字段名)
+  // P0-9: 前置 typeof / Number.isFinite 检查，防止 NaN 通过（NaN < -180 为 false）
   const hslData = params.hslParams || params.hsl;
   if (hslData) {
     const hslChannels = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'magenta'];
     for (const channel of hslChannels) {
       const hsl = hslData[channel];
       if (hsl) {
-        if (hsl.hue !== undefined && (hsl.hue < -180 || hsl.hue > 180)) {
-          errors.push(`hslParams.${channel}.hue must be between -180 and 180`);
+        // hue: -180..180
+        if (hsl.hue !== undefined && hsl.hue !== null) {
+          if (typeof hsl.hue !== 'number' || !Number.isFinite(hsl.hue)) {
+            errors.push(`hslParams.${channel}.hue must be a finite number`);
+          } else if (hsl.hue < -180 || hsl.hue > 180) {
+            errors.push(`hslParams.${channel}.hue must be between -180 and 180`);
+          }
         }
-        if (hsl.saturation !== undefined && (hsl.saturation < -100 || hsl.saturation > 100)) {
-          errors.push(`hslParams.${channel}.saturation must be between -100 and 100`);
+        // saturation: -100..100
+        if (hsl.saturation !== undefined && hsl.saturation !== null) {
+          if (typeof hsl.saturation !== 'number' || !Number.isFinite(hsl.saturation)) {
+            errors.push(`hslParams.${channel}.saturation must be a finite number`);
+          } else if (hsl.saturation < -100 || hsl.saturation > 100) {
+            errors.push(`hslParams.${channel}.saturation must be between -100 and 100`);
+          }
         }
-        if (hsl.luminance !== undefined && (hsl.luminance < -100 || hsl.luminance > 100)) {
-          errors.push(`hslParams.${channel}.luminance must be between -100 and 100`);
+        // luminance: -100..100
+        if (hsl.luminance !== undefined && hsl.luminance !== null) {
+          if (typeof hsl.luminance !== 'number' || !Number.isFinite(hsl.luminance)) {
+            errors.push(`hslParams.${channel}.luminance must be a finite number`);
+          } else if (hsl.luminance < -100 || hsl.luminance > 100) {
+            errors.push(`hslParams.${channel}.luminance must be between -100 and 100`);
+          }
         }
       }
+    }
+  }
+
+  // P0-9: splitToning 验证（之前完全跳过，依赖 filmLabSplitTone.validateSplitToneParams）
+  if (params.splitToning) {
+    const stResult = validateSplitToneParams(params.splitToning);
+    for (const e of stResult.errors) {
+      errors.push(`splitToning.${e}`);
     }
   }
   
@@ -293,26 +362,28 @@ function validateExportParams(params) {
  * @returns {Object} 迁移后的参数
  */
 function migrateParams(params) {
+  // 注意：调用方（buildExportParams）现在在 migrate 之后才盖章 version，
+  // 这里读取的是数据自身的原始版本号，迁移分支可正常执行
   const version = params.version || 1;
   const migrated = { ...params };
-  
+
   // v1 -> v2: 添加 HSL 和 splitToning
   if (version < 2) {
     if (!migrated.hslParams && !migrated.hsl) {
-      migrated.hslParams = { ...DEFAULT_HSL_PARAMS };
+      migrated.hslParams = structuredClone(DEFAULT_HSL_PARAMS);
     }
     if (!migrated.splitToning) {
-      migrated.splitToning = { ...DEFAULT_SPLIT_TONING };
+      migrated.splitToning = structuredClone(DEFAULT_SPLIT_TONING);
     }
     migrated.version = 2;
   }
-  
+
   // v2 -> v3: 统一字段命名 + 添加 saturation
   if (version < 3) {
     migrated.saturation = migrated.saturation ?? 0;
     migrated.version = 3;
   }
-  
+
   // === 兼容性映射：hsl → hslParams ===
   if (migrated.hsl && !migrated.hslParams) {
     migrated.hslParams = migrated.hsl;
@@ -320,24 +391,24 @@ function migrateParams(params) {
   } else if (migrated.hsl) {
     delete migrated.hsl; // 优先 hslParams
   }
-  
+
   // === 旧 HSL 结构迁移 (按属性分组 → 按通道分组) ===
   if (migrated.hslParams && migrated.hslParams.hue && typeof migrated.hslParams.hue === 'object'
       && !migrated.hslParams.red) {
     migrated.hslParams = migrateOldHSLFormat(migrated.hslParams);
   }
-  
+
   // === 旧 splitToning 结构迁移 (flat → nested) ===
   if (migrated.splitToning && ('highlightHue' in migrated.splitToning || 'shadowHue' in migrated.splitToning)) {
     migrated.splitToning = migrateOldSplitToningFormat(migrated.splitToning);
   }
-  
-  // 确保所有必需字段存在
-  migrated.hslParams = migrated.hslParams || { ...DEFAULT_HSL_PARAMS };
-  migrated.splitToning = migrated.splitToning || { ...DEFAULT_SPLIT_TONING };
-  migrated.curves = migrated.curves || { ...DEFAULT_CURVES };
-  migrated.cropRect = migrated.cropRect || { ...DEFAULT_CROP_RECT };
-  
+
+  // 确保所有必需字段存在（深拷贝，避免返回的嵌套对象与模块常量共享引用）
+  migrated.hslParams = migrated.hslParams || structuredClone(DEFAULT_HSL_PARAMS);
+  migrated.splitToning = migrated.splitToning || structuredClone(DEFAULT_SPLIT_TONING);
+  migrated.curves = migrated.curves || structuredClone(DEFAULT_CURVES);
+  migrated.cropRect = migrated.cropRect || structuredClone(DEFAULT_CROP_RECT);
+
   return migrated;
 }
 
@@ -349,13 +420,18 @@ function migrateParams(params) {
  */
 function migrateOldHSLFormat(oldHSL) {
   const CHANNEL_MAP = { aqua: 'cyan' }; // 旧名→新名
-  const channels = ['red', 'orange', 'yellow', 'green', 'aqua', 'cyan', 'blue', 'purple', 'magenta'];
-  const result = { ...DEFAULT_HSL_PARAMS };
-  
-  for (const ch of channels) {
+  // 仅遍历数据中实际存在的通道，避免 aqua 与 cyan 双重迭代导致 aqua 值被 cyan 覆盖清零
+  const sourceChannels = new Set([
+    ...Object.keys(oldHSL.hue || {}),
+    ...Object.keys(oldHSL.saturation || {}),
+    ...Object.keys(oldHSL.luminance || {}),
+  ]);
+  const result = structuredClone(DEFAULT_HSL_PARAMS);
+
+  for (const ch of sourceChannels) {
     const canonicalCh = CHANNEL_MAP[ch] || ch;
     if (!DEFAULT_HSL_PARAMS[canonicalCh]) continue;
-    
+
     result[canonicalCh] = {
       hue: (oldHSL.hue && oldHSL.hue[ch]) || 0,
       saturation: (oldHSL.saturation && oldHSL.saturation[ch]) || 0,
@@ -420,21 +496,21 @@ function hasParamsDifference(params1, params2) {
     }
   }
   
-  // 曲线比较 (简化：比较 JSON)
-  if (JSON.stringify(p1.curves) !== JSON.stringify(p2.curves)) {
+  // 曲线比较 (P0-10: 用 stableSerializeParams 替代 JSON.stringify，键序无关)
+  if (stableSerializeParams(p1.curves) !== stableSerializeParams(p2.curves)) {
     return true;
   }
-  
+
   // HSL 比较 (统一使用 hslParams)
-  if (JSON.stringify(p1.hslParams) !== JSON.stringify(p2.hslParams)) {
+  if (stableSerializeParams(p1.hslParams) !== stableSerializeParams(p2.hslParams)) {
     return true;
   }
-  
+
   // 分离色调比较
-  if (JSON.stringify(p1.splitToning) !== JSON.stringify(p2.splitToning)) {
+  if (stableSerializeParams(p1.splitToning) !== stableSerializeParams(p2.splitToning)) {
     return true;
   }
-  
+
   return false;
 }
 
@@ -457,9 +533,9 @@ function serializeParams(params) {
  */
 function deserializeParams(data) {
   if (!data) {
-    return { ...DEFAULT_PROCESSING_PARAMS };
+    return createDefaultParams();
   }
-  
+
   const parsed = typeof data === 'string' ? JSON.parse(data) : data;
   return buildExportParams(null, parsed);
 }
@@ -476,15 +552,17 @@ module.exports = {
   DEFAULT_PROCESSING_PARAMS,
   DEFAULT_HSL_PARAMS,
   DEFAULT_SPLIT_TONING,
-  
+  createDefaultParams,
+
   // 构建和验证
   buildExportParams,
   validateExportParams,
   getPhotoProcessingParams,
-  
+
   // 迁移
   migrateParams,
-  
+  mergeDeep,
+
   // 比较和序列化
   hasParamsDifference,
   serializeParams,

@@ -224,52 +224,36 @@ function cpuExposure(rgb, exposure) {
 
 /**
  * Split Tone zone weights (匹配 GLSL applySplitTone / CPU calculateZoneWeights)
+ * 单位分解：shadow + midtone + highlight ≡ 1，连续 smoothstep 过渡
  * @param {number} lum - luminance (0-1)
  * @param {number} balance - balance value (-1..1, pre-divided by 100)
  * @returns {{shadow: number, midtone: number, highlight: number}}
  */
 function cpuSplitToneZoneWeights(lum, balance) {
   const balanceOffset = balance / 2.0;
-  const midpoint = 0.5 + balanceOffset;
   const shadowEnd = 0.25;
   const highlightStart = 0.75;
+  const midpoint = Math.min(Math.max(0.5 + balanceOffset, shadowEnd + 0.05), highlightStart - 0.05);
 
   let shadowWeight = 0;
-  let midtoneWeight = 0;
   let highlightWeight = 0;
 
-  // Shadow zone
-  if (lum < shadowEnd) {
+  // Shadow zone: 1 below shadowEnd, smooth ramp to 0 at midpoint
+  if (lum <= shadowEnd) {
     shadowWeight = 1;
   } else if (lum < midpoint) {
-    const d = Math.max(midpoint - shadowEnd, 0.001);
-    const st = cpuSmoothstep(Math.max(0, Math.min(1, (lum - shadowEnd) / d)));
-    shadowWeight = 1 - st;
-    midtoneWeight = st;
+    shadowWeight = 1 - cpuSmoothstep((lum - shadowEnd) / (midpoint - shadowEnd));
   }
 
-  // Highlight zone
-  if (lum > highlightStart) {
+  // Highlight zone: 1 above highlightStart, smooth ramp from 0 at midpoint
+  if (lum >= highlightStart) {
     highlightWeight = 1;
   } else if (lum > midpoint) {
-    const d = Math.max(highlightStart - midpoint, 0.001);
-    const st = cpuSmoothstep(Math.max(0, Math.min(1, (lum - midpoint) / d)));
-    highlightWeight = st;
-    midtoneWeight = Math.max(midtoneWeight, 1 - st);
+    highlightWeight = cpuSmoothstep((lum - midpoint) / (highlightStart - midpoint));
   }
 
-  // Midtone zone
-  if (lum >= shadowEnd && lum <= highlightStart) {
-    if (Math.abs(lum - midpoint) < 0.1) {
-      midtoneWeight = 1;
-    } else if (lum < midpoint) {
-      const d = Math.max(midpoint - shadowEnd, 0.001);
-      midtoneWeight = Math.max(midtoneWeight, cpuSmoothstep(Math.max(0, Math.min(1, (lum - shadowEnd) / d))));
-    } else {
-      const d = Math.max(highlightStart - midpoint, 0.001);
-      midtoneWeight = Math.max(midtoneWeight, 1 - cpuSmoothstep(Math.max(0, Math.min(1, (lum - midpoint) / d))));
-    }
-  }
+  // Midtone takes the remainder — weights always sum to 1
+  const midtoneWeight = 1 - shadowWeight - highlightWeight;
 
   return { shadow: shadowWeight, midtone: midtoneWeight, highlight: highlightWeight };
 }

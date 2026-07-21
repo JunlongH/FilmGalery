@@ -8,15 +8,16 @@
  * @since 2026-01-31
  */
 
-import { RenderCore } from '@filmgallery/shared';
+import { RenderCore, processCanvasChunkedSync, processBlock, PREVIEW_MAX_WIDTH_CLIENT, EXPORT_MAX_WIDTH } from '@filmgallery/shared';
 import { getApiBase } from '../api';
 
 // ============================================================================
 // 常量定义
 // ============================================================================
 
-const PREVIEW_MAX_WIDTH = 1400;
-const EXPORT_MAX_WIDTH = 4000;
+// P1-22: 从 shared 导入避免漂移（旧本地常量：PREVIEW_MAX_WIDTH=1400, EXPORT_MAX_WIDTH=4000
+// 与 shared PREVIEW_MAX_WIDTH_CLIENT=1200, EXPORT_MAX_WIDTH=8000 不一致）
+const PREVIEW_MAX_WIDTH = PREVIEW_MAX_WIDTH_CLIENT;
 const JPEG_QUALITY = 0.95;
 const JPEG_HQ_QUALITY = 1.0;
 
@@ -83,7 +84,9 @@ export async function loadImageToCanvas(imageUrl, maxWidth = null) {
  * @returns {HTMLCanvasElement} 变换后的 Canvas
  */
 export function applyGeometry(sourceCanvas, params) {
-  const rotation = (params.rotation || 0) + (params.orientation || 0);
+  // P0-5: 补 rotationOffset（FilmLab.jsx 所有几何用 rotation+orientation+rotationOffset）
+  // 旧实现漏 rotationOffset，CPU fallback 旋转角度与 GPU/主路径不一致
+  const rotation = (params.rotation || 0) + (params.orientation || 0) + (params.rotationOffset || 0);
   const cropRect = params.cropRect || { x: 0, y: 0, w: 1, h: 1 };
   
   // 无需变换的情况
@@ -143,38 +146,41 @@ export function applyGeometry(sourceCanvas, params) {
  * @returns {HTMLCanvasElement} 处理后的 Canvas（同一个）
  */
 export function processCanvasWithRenderCore(canvas, params) {
+  // SSOT 循环逻辑在 packages/shared/renderChunked.js（chunkRows=全图 = 同步单块）
+  processCanvasChunkedSync(canvas, params, { chunkRows: canvas.height || 64 });
+  return canvas;
+}
+
+/**
+ * 异步分块处理 Canvas（与 processCanvasWithRenderCore 等价，但周期性让出主线程）。
+ * 用于大图导出，避免 4000 万像素全分辨率导出阻塞 UI 数秒。
+ *
+ * @param {HTMLCanvasElement} canvas - 要处理的 Canvas
+ * @param {Object} params - RenderCore 参数
+ * @param {Object} [opts]
+ * @param {number} [opts.chunkRows=64] - 每块处理的行数（让出频率）
+ * @param {() => boolean} [opts.shouldAbort] - 可选中止谓词，返回 true 时提前退出
+ * @returns {Promise<HTMLCanvasElement>} 处理后的 Canvas（同一个）
+ */
+export async function processCanvasWithRenderCoreAsync(canvas, params, opts = {}) {
+  const { chunkRows = 64, shouldAbort = null } = opts;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-  
-  // 创建 RenderCore 实例并预计算 LUT
+  const width = canvas.width;
+  const height = canvas.height;
   const core = new RenderCore(params);
   core.prepareLUTs();
-  
-  // 像素处理 — float pipeline for CPU/GPU consistency
-  const length = data.length;
-  for (let i = 0; i < length; i += 4) {
-    // 跳过透明像素
-    if (data[i + 3] === 0) continue;
-    
-    // Normalize 8-bit sRGB to 0.0–1.0 float
-    // Note: Canvas data is already sRGB gamma-encoded.
-    // processPixelFloat expects linear input, but since the CPU client receives
-    // the same sRGB-encoded JPEG/PNG data as the GPU path, and the GPU shader
-    // operates in sRGB space (texture is not linearized), we pass sRGB values
-    // directly — matching the GPU behavior where textures are read as-is.
-    const r = data[i]     / 255;
-    const g = data[i + 1] / 255;
-    const b = data[i + 2] / 255;
-    
-    const [rF, gF, bF] = core.processPixelFloat(r, g, b);
-    
-    data[i]     = Math.min(255, Math.max(0, Math.round(rF * 255)));
-    data[i + 1] = Math.min(255, Math.max(0, Math.round(gF * 255)));
-    data[i + 2] = Math.min(255, Math.max(0, Math.round(bF * 255)));
+
+  // 按行分块处理，每块后 await 让出主线程。
+  // 块内处理复用 SSOT processBlock（与同步版数值一致）。
+  for (let y0 = 0; y0 < height; y0 += chunkRows) {
+    if (shouldAbort && shouldAbort()) break;
+    const y1 = Math.min(y0 + chunkRows, height);
+    const blockHeight = y1 - y0;
+    const imageData = ctx.getImageData(0, y0, width, blockHeight);
+    processBlock(imageData.data, core);
+    ctx.putImageData(imageData, 0, y0);
+    await new Promise(resolve => setTimeout(resolve, 0));
   }
-  
-  ctx.putImageData(imageData, 0, 0);
   return canvas;
 }
 
@@ -257,13 +263,13 @@ export async function localCpuPreview({ imageUrl, params, maxWidth = PREVIEW_MAX
     // 加载图片
     const { canvas, width, height } = await loadImageToCanvas(imageUrl, maxWidth);
     console.log(`[CpuRenderService] Image loaded: ${width}x${height}`);
-    
-    // 像素处理
-    processCanvasWithRenderCore(canvas, params);
-    
+
+    // 像素处理（异步分块，避免大图阻塞主线程）
+    await processCanvasWithRenderCoreAsync(canvas, params);
+
     // 应用几何变换
     const finalCanvas = applyGeometry(canvas, params);
-    
+
     // 转换为 Blob
     const { blob } = await canvasToBlob(finalCanvas, 'jpeg', JPEG_QUALITY);
     
@@ -292,13 +298,13 @@ export async function localCpuRender({ imageUrl, params, format = 'jpeg', maxWid
     const effectiveMaxWidth = (maxWidth === 0) ? 0 : (maxWidth || EXPORT_MAX_WIDTH);
     const { canvas, width, height } = await loadImageToCanvas(imageUrl, effectiveMaxWidth);
     console.log(`[CpuRenderService] Image loaded: ${width}x${height}`);
-    
-    // 像素处理
-    processCanvasWithRenderCore(canvas, params);
-    
+
+    // 像素处理（异步分块，避免大图阻塞主线程）
+    await processCanvasWithRenderCoreAsync(canvas, params);
+
     // 应用几何变换
     const finalCanvas = applyGeometry(canvas, params);
-    
+
     // 转换为 Blob
     const quality = format === 'jpeg' ? JPEG_HQ_QUALITY : undefined;
     const { blob, contentType, warning } = await canvasToBlob(finalCanvas, format, quality);

@@ -48,6 +48,24 @@ function renderBuffer(buffer, { width, height, channels, is16bit, wantTiff16, pa
   // is the correct contract: callers (and the worker pool) can safely
   // transfer these buffers' .buffer without copying.
   const jpeg8 = Buffer.allocUnsafeSlow(width * height * 3);
+  const tiff16 = wantTiff16 ? Buffer.allocUnsafeSlow(width * height * 3 * 2) : null;
+
+  // 单循环：processPixelFloat 只算一次，同时写 jpeg8（必要时 tiff16）。
+  // 旧实现 tiff16 路径独立循环，16-bit 输出 CPU 成本 ×2。
+  const writePixel = (j, rF, gF, bF) => {
+    jpeg8[j]     = Math.min(255, Math.max(0, Math.round(rF * 255)));
+    jpeg8[j + 1] = Math.min(255, Math.max(0, Math.round(gF * 255)));
+    jpeg8[j + 2] = Math.min(255, Math.max(0, Math.round(bF * 255)));
+    if (tiff16) {
+      const j16 = j * 2;
+      const r16 = Math.min(65535, Math.max(0, Math.round(rF * 65535)));
+      const g16 = Math.min(65535, Math.max(0, Math.round(gF * 65535)));
+      const b16 = Math.min(65535, Math.max(0, Math.round(bF * 65535)));
+      tiff16[j16]     = r16 & 0xFF; tiff16[j16 + 1] = (r16 >> 8) & 0xFF;
+      tiff16[j16 + 2] = g16 & 0xFF; tiff16[j16 + 3] = (g16 >> 8) & 0xFF;
+      tiff16[j16 + 4] = b16 & 0xFF; tiff16[j16 + 5] = (b16 >> 8) & 0xFF;
+    }
+  };
 
   if (is16bit) {
     const pixels = new Uint16Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 2);
@@ -55,51 +73,18 @@ function renderBuffer(buffer, { width, height, channels, is16bit, wantTiff16, pa
       const [rF, gF, bF] = core.processPixelFloat(
         pixels[i] / 65535, pixels[i + 1] / 65535, pixels[i + 2] / 65535
       );
-      jpeg8[j]     = Math.min(255, Math.max(0, Math.round(rF * 255)));
-      jpeg8[j + 1] = Math.min(255, Math.max(0, Math.round(gF * 255)));
-      jpeg8[j + 2] = Math.min(255, Math.max(0, Math.round(bF * 255)));
+      writePixel(j, rF, gF, bF);
     }
   } else {
     for (let i = 0, j = 0; i < buffer.length; i += channels, j += 3) {
       const [rF, gF, bF] = core.processPixelFloat(
         buffer[i] / 255, buffer[i + 1] / 255, buffer[i + 2] / 255
       );
-      jpeg8[j]     = Math.min(255, Math.max(0, Math.round(rF * 255)));
-      jpeg8[j + 1] = Math.min(255, Math.max(0, Math.round(gF * 255)));
-      jpeg8[j + 2] = Math.min(255, Math.max(0, Math.round(bF * 255)));
+      writePixel(j, rF, gF, bF);
     }
   }
 
   if (!wantTiff16) return { jpeg8 };
-
-  const tiff16 = Buffer.allocUnsafeSlow(width * height * 3 * 2);
-  let j16 = 0;
-  if (is16bit) {
-    const pixels = new Uint16Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 2);
-    for (let i = 0; i < pixels.length; i += channels) {
-      const [rF, gF, bF] = core.processPixelFloat(
-        pixels[i] / 65535, pixels[i + 1] / 65535, pixels[i + 2] / 65535
-      );
-      const r16 = Math.min(65535, Math.max(0, Math.round(rF * 65535)));
-      const g16 = Math.min(65535, Math.max(0, Math.round(gF * 65535)));
-      const b16 = Math.min(65535, Math.max(0, Math.round(bF * 65535)));
-      tiff16[j16++] = r16 & 0xFF; tiff16[j16++] = (r16 >> 8) & 0xFF;
-      tiff16[j16++] = g16 & 0xFF; tiff16[j16++] = (g16 >> 8) & 0xFF;
-      tiff16[j16++] = b16 & 0xFF; tiff16[j16++] = (b16 >> 8) & 0xFF;
-    }
-  } else {
-    for (let i = 0; i < buffer.length; i += channels) {
-      const [rF, gF, bF] = core.processPixelFloat(
-        buffer[i] / 255, buffer[i + 1] / 255, buffer[i + 2] / 255
-      );
-      const r16 = Math.min(65535, Math.max(0, Math.round(rF * 65535)));
-      const g16 = Math.min(65535, Math.max(0, Math.round(gF * 65535)));
-      const b16 = Math.min(65535, Math.max(0, Math.round(bF * 65535)));
-      tiff16[j16++] = r16 & 0xFF; tiff16[j16++] = (r16 >> 8) & 0xFF;
-      tiff16[j16++] = g16 & 0xFF; tiff16[j16++] = (g16 >> 8) & 0xFF;
-      tiff16[j16++] = b16 & 0xFF; tiff16[j16++] = (b16 >> 8) & 0xFF;
-    }
-  }
   return { jpeg8, tiff16 };
 }
 

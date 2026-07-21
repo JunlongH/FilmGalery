@@ -51,9 +51,15 @@ function hermite(t) {
  *
  * 各段通过 Hermite smoothstep 平滑过渡，保证 C¹ 连续。
  *
+ * ⚠️ 密度域 gamma 语义 (与 RGB 域 gamma 相反):
+ *   - gamma < 1: pow(densityNorm, gamma) 让中间密度值增大 → D_adj 增大 → T 减小 → 输出变暗
+ *   - gamma > 1: pow(densityNorm, gamma) 让中间密度值减小 → D_adj 减小 → T 增大 → 输出变亮
+ *   这与 sRGB gamma (gamma<1 提亮) 相反，因为操作在密度域 (D = -log10(T))。
+ *   典型负片 gamma ≈ 0.6 在密度域意味着"压缩高密度区域" (让暗部细节更可见)。
+ *
  * @param {number} value - 输入值 (0-255，代表透射率)
  * @param {Object} profile - 胶片曲线参数
- * @param {number} [profile.gamma=0.6]    - 主曲线 gamma 值
+ * @param {number} [profile.gamma=0.6]    - 主曲线 gamma 值 (密度域语义)
  * @param {number} [profile.dMin=0.1]     - 最小密度
  * @param {number} [profile.dMax=3.0]     - 最大密度
  * @param {number} [profile.toe=0]        - 趾部强度 (0–1)
@@ -69,26 +75,30 @@ function applyFilmCurve(value, profile = {}) {
     shoulder = 0,
   } = profile;
 
+  // P2-8: gamma 校验非零（gamma=0 时 pow(x,0)=1 输出恒定；<0.1 视为非法）
+  const safeGamma = Number.isFinite(gamma) && gamma >= 0.1 ? gamma : 0.6;
+
   // 1. 输入归一化 (避免 log(0))
   const normalized = clamp(value / 255, 0.001, 1);
 
   // 2. 计算密度 D = -log10(T)
   const density = -Math.log10(normalized);
 
-  // 3. 密度归一化到 dMin-dMax 范围
-  const densityNorm = clamp((density - dMin) / (dMax - dMin), 0, 1);
+  // 3. 密度归一化到 dMin-dMax 范围（防 dMax === dMin 除零）
+  const dRange = Math.max(dMax - dMin, 1e-6);
+  const densityNorm = clamp((density - dMin) / dRange, 0, 1);
 
   // 4. 三段式 gamma 应用
   let gammaApplied;
   if (toe <= 0 && shoulder <= 0) {
     // 无 toe/shoulder: 简单幂函数 (向后兼容)
-    gammaApplied = Math.pow(densityNorm, gamma);
+    gammaApplied = Math.pow(densityNorm, safeGamma);
   } else {
-    gammaApplied = _applyThreeSegmentGamma(densityNorm, gamma, toe, shoulder);
+    gammaApplied = _applyThreeSegmentGamma(densityNorm, safeGamma, toe, shoulder);
   }
 
   // 5. 将调整后的归一化密度转回密度值
-  const adjustedDensity = dMin + gammaApplied * (dMax - dMin);
+  const adjustedDensity = dMin + gammaApplied * dRange;
 
   // 6. 将密度转回透射率: T = 10^(-D)
   const outputT = Math.pow(10, -adjustedDensity);
@@ -115,18 +125,22 @@ function applyFilmCurveFloat(value, profile = {}) {
     shoulder = 0,
   } = profile;
 
+  // P2-8: gamma 校验非零（与 8-bit 版本一致）
+  const safeGamma = Number.isFinite(gamma) && gamma >= 0.1 ? gamma : 0.6;
+
   const normalized = clamp(value, 0.001, 1);
   const density = -Math.log10(normalized);
-  const densityNorm = clamp((density - dMin) / (dMax - dMin), 0, 1);
+  const dRange = Math.max(dMax - dMin, 1e-6);
+  const densityNorm = clamp((density - dMin) / dRange, 0, 1);
 
   let gammaApplied;
   if (toe <= 0 && shoulder <= 0) {
-    gammaApplied = Math.pow(densityNorm, gamma);
+    gammaApplied = Math.pow(densityNorm, safeGamma);
   } else {
-    gammaApplied = _applyThreeSegmentGamma(densityNorm, gamma, toe, shoulder);
+    gammaApplied = _applyThreeSegmentGamma(densityNorm, safeGamma, toe, shoulder);
   }
 
-  const adjustedDensity = dMin + gammaApplied * (dMax - dMin);
+  const adjustedDensity = dMin + gammaApplied * dRange;
   const outputT = Math.pow(10, -adjustedDensity);
   return clamp(outputT, 0, 1);
 }
@@ -141,6 +155,11 @@ function applyFilmCurveFloat(value, profile = {}) {
  *
  * 过渡区域使用 Hermite smoothstep 混合。
  *
+ * P2-shoulder 修复: 旧版 shBound = 1 - 0.25*shoulder，shoulder=0.5 时 shBound=0.875，
+ * 仅在 densityNorm > 0.875 (T < 0.6/255) 时生效，8-bit 下接近无效。
+ * 现改为 shBound = 1 - 0.5*shoulder，shoulder=0.5 时 shBound=0.75，
+ * densityNorm > 0.75 (T < 5/255) 时生效，覆盖更多有意义的高密度区域。
+ *
  * @param {number} d - 归一化密度 [0, 1]
  * @param {number} gamma - 主 gamma
  * @param {number} toe - 趾部强度 (0–1)
@@ -149,8 +168,8 @@ function applyFilmCurveFloat(value, profile = {}) {
  */
 function _applyThreeSegmentGamma(d, gamma, toe, shoulder) {
   // Segment boundaries (density-normalized)
-  const toeBound = 0.25 * toe;       // toe 占低密度区的比例
-  const shBound  = 1.0 - 0.25 * shoulder; // shoulder 从高密度区开始
+  const toeBound = 0.25 * toe;            // toe 占低密度区的比例
+  const shBound  = 1.0 - 0.5 * shoulder;  // P2-shoulder: 从 0.25 改为 0.5，扩大 shoulder 作用范围
 
   // Gamma variants for toe and shoulder
   const gammaToe = gamma * 1.5;      // toe: 更陡 → 压缩低密度响应
@@ -195,10 +214,19 @@ function _applyThreeSegmentGamma(d, gamma, toe, shoulder) {
  * @returns {[number, number, number]} 处理后的 RGB 值
  */
 function applyFilmCurveRGB(r, g, b, profile = {}) {
+  // 逐通道 gamma（彩负不同乳剂层感光特性），与 RenderCore 浮点路径同一语义：
+  // 显式 gammaR/G/B → 回退主 gamma
+  const {
+    gamma = 0.6,
+    gammaR,
+    gammaG,
+    gammaB,
+  } = profile;
+  const base = { ...profile, gamma };
   return [
-    applyFilmCurve(r, profile),
-    applyFilmCurve(g, profile),
-    applyFilmCurve(b, profile),
+    applyFilmCurve(r, { ...base, gamma: gammaR ?? gamma }),
+    applyFilmCurve(g, { ...base, gamma: gammaG ?? gamma }),
+    applyFilmCurve(b, { ...base, gamma: gammaB ?? gamma }),
   ];
 }
 

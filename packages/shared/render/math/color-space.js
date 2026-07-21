@@ -7,27 +7,31 @@
 /**
  * Converts Linear float values to sRGB (Gamma Corrected)
  * Implements the precise sRGB transfer function (IEC 61966-2-1).
+ * 负值 clamp 到 0（线性光下不应有负值；旧实现对 linear*12.92 分支返回负值会污染下游）。
  * @param {number} linear - Linear value (0.0 - 1.0+)
  * @returns {number} sRGB value (0.0 - 1.0)
  */
 function linearToSrgb(linear) {
+    if (linear < 0) linear = 0;
     if (linear <= 0.0031308) {
         return linear * 12.92;
     } else {
-        return 1.055 * Math.pow(Math.max(0, linear), 1.0 / 2.4) - 0.055;
+        return 1.055 * Math.pow(linear, 1.0 / 2.4) - 0.055;
     }
 }
 
 /**
  * Converts sRGB float values to Linear
+ * 负值 clamp 到 0。
  * @param {number} srgb - sRGB value (0.0 - 1.0)
  * @returns {number} Linear value (0.0 - 1.0+)
  */
 function srgbToLinear(srgb) {
+    if (srgb < 0) srgb = 0;
     if (srgb <= 0.04045) {
         return srgb / 12.92;
     } else {
-        return Math.pow((Math.max(0, srgb) + 0.055) / 1.055, 2.4);
+        return Math.pow((srgb + 0.055) / 1.055, 2.4);
     }
 }
 

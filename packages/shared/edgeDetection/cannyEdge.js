@@ -131,37 +131,28 @@ function hysteresisThreshold(edges, width, height, lowThreshold, highThreshold) 
     }
   }
   
-  // 第二遍: 边缘追踪
-  // 使用迭代而非递归，避免栈溢出
-  let changed = true;
-  let iterations = 0;
-  const maxIterations = 10; // 限制迭代次数
-  
-  while (changed && iterations < maxIterations) {
-    changed = false;
-    iterations++;
-    
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        const idx = y * width + x;
-        
-        if (output[idx] === WEAK) {
-          // 检查 8 邻域是否有强边缘
-          let hasStrong = false;
-          
-          for (let dy = -1; dy <= 1 && !hasStrong; dy++) {
-            for (let dx = -1; dx <= 1 && !hasStrong; dx++) {
-              if (dy === 0 && dx === 0) continue;
-              if (output[(y + dy) * width + (x + dx)] === STRONG) {
-                hasStrong = true;
-              }
-            }
-          }
-          
-          if (hasStrong) {
-            output[idx] = STRONG;
-            changed = true;
-          }
+  // 第二遍: 边缘追踪（滞后连接）
+  // 显式栈 BFS 洪泛：以所有 STRONG 像素为种子，连通的 WEAK 像素提升为 STRONG。
+  // 旧实现用"全图迭代×10"会截断长弱边链（>10px 即丢失），与 OpenCV/标准 Canny 不符。
+  const stack = [];
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      if (output[y * width + x] === STRONG) stack.push(x, y);
+    }
+  }
+  while (stack.length > 0) {
+    const y = stack.pop();
+    const x = stack.pop();
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dy === 0 && dx === 0) continue;
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 1 || ny < 1 || nx >= width - 1 || ny >= height - 1) continue;
+        const nidx = ny * width + nx;
+        if (output[nidx] === WEAK) {
+          output[nidx] = STRONG;
+          stack.push(nx, ny);
         }
       }
     }

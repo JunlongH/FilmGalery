@@ -56,20 +56,9 @@ const DEFAULT_WB_PARAMS = {
   tint: 0,          // -100 to 100 (Green <-> Magenta)
 };
 
-/** 默认片基校正增益 (Pre-Inversion, 独立于场景白平衡) */
-const DEFAULT_BASE_GAINS = {
-  baseRed: 1.0,
-  baseGreen: 1.0,
-  baseBlue: 1.0,
-};
-
-/** 默认片基校正模式和密度值 (对数域校正) */
-const DEFAULT_BASE_CORRECTION = {
-  baseMode: 'linear',     // 'linear' | 'log' - 片基校正模式
-  baseDensityR: 0.0,      // 红色通道片基密度 (对数域)
-  baseDensityG: 0.0,      // 绿色通道片基密度 (对数域)
-  baseDensityB: 0.0,      // 蓝色通道片基密度 (对数域)
-};
+// P1-32: 删除 DEFAULT_BASE_GAINS / DEFAULT_BASE_CORRECTION 死导出
+// 全仓库无任何消费者（filmLabExport.js 自行内联定义，且字段名/结构不同步）
+// 如需恢复，应从 filmLabExport.js 的 DEFAULT_PROCESSING_PARAMS.baseGains/baseDensity 获取
 
 /**
  * 反转模式显示名称映射
@@ -200,8 +189,6 @@ module.exports = {
   DEFAULT_TONE_PARAMS,
   CONTRAST_MID_GRAY,
   DEFAULT_WB_PARAMS,
-  DEFAULT_BASE_GAINS,
-  DEFAULT_BASE_CORRECTION,
   INVERSION_MODE_LABELS,
   DEFAULT_INVERSION_PARAMS,
   DEFAULT_CURVES,

@@ -193,22 +193,16 @@ describe('HSL channel weights — cosine transition', () => {
 
   test('magenta 中心色相 = 330° (BUG-06 修复验证)', () => {
     expect(HSL_CHANNELS.magenta.hueCenter).toBe(330);
-    // GLSL 中也应使用 330
+    // GLSL 中也应使用 330 (P2-1: range 从 30 调整为 50 以保证单位分解)
     const hslGLSL = require('../packages/shared/shaders/hslAdjust').HSL_ADJUST_GLSL;
-    expect(hslGLSL).toContain('hslChannelWeight(h, 330.0, 30.0)');
+    expect(hslGLSL).toContain('hslChannelWeight(h, 330.0, 50.0)');
   });
 
-  test('权重归一化: 重叠通道总权重 > 1 时被归一化', () => {
-    // 在 red/orange 边界 (hue=15), 两个通道都有权重
-    const wRed = cpuHslChannelWeight(15, 0, 30);
-    const wOrange = cpuHslChannelWeight(15, 30, 30);
-    // 验证两者都非零
-    expect(wRed).toBeGreaterThan(0);
-    expect(wOrange).toBeGreaterThan(0);
-    // GLSL 会在 totalWeight > 1 时归一化 — 在 helpers.js 我们只测 weight 函数
-    // 但 GLSL 中确实有 if (totalWeight > 1.0) 归一化
+  test('权重归一化: P2-1 修复后使用 max(1.0, totalWeight)', () => {
+    // P2-1: 旧版仅在 totalWeight > 1 时归一化，弱区 (total < 1) 不补偿
+    // 修复后统一除以 max(1.0, totalWeight)，消除弱响应区
     const hslGLSL = require('../packages/shared/shaders/hslAdjust').HSL_ADJUST_GLSL;
-    expect(hslGLSL).toContain('totalWeight > 1.0');
+    expect(hslGLSL).toContain('max(1.0, totalWeight)');
   });
 });
 
@@ -225,12 +219,12 @@ describe('Asymmetric HSL sat/lum formulas', () => {
     expect(glsl).toContain('s * (1.0 + satAdjust)');
   });
 
-  test('GLSL 包含非对称明度公式 (带 0.5 阻尼)', () => {
+  test('GLSL 包含非对称明度公式 (带 0.5 阻尼，satRamp 混合)', () => {
     const glsl = require('../packages/shared/shaders/hslAdjust').HSL_ADJUST_GLSL;
-    // 正值: l + (1 - l) * lumAdjust * 0.5
+    // 非对称增量分量仍存在（按 satRamp 与线性增量混合）
     expect(glsl).toContain('(1.0 - l) * lumAdjust * 0.5');
-    // 负值: l * (1 + lumAdjust * 0.5)
-    expect(glsl).toContain('l * (1.0 + lumAdjust * 0.5)');
+    expect(glsl).toContain('l * lumAdjust * 0.5');
+    expect(glsl).toContain('mix(linearDelta, asymDelta, satRamp)');
   });
 
   test('CPU filmLabHSL 与 GLSL 公式一致', () => {

@@ -19,15 +19,17 @@ const { DEFAULT_CURVES } = require('./filmLabConstants');
 
 /**
  * 创建自然三次样条插值函数
- * 
+ *
  * 使用 Thomas 算法求解三对角线性方程组，得到 C² 连续的三次多项式插值。
  * 相比 Fritsch-Carlson 单调样条，自然三次样条允许受控的过冲 (overshoot)，
  * 在 S 曲线拐点处产生更自然、更接近 Lightroom/Photoshop 的曲线形状。
- * 
+ *
  * 可选参数:
  * - monotoneClamp: 启用 Fritsch-Carlson 单调约束 (防止过冲)
- * - maxOvershoot: 允许的最大过冲比例 (默认 5%)
- * 
+ * - maxOvershoot: 允许的最大过冲比例 (默认 0.05 = 5%)
+ *   过冲 = 样条输出超出 [min(y), max(y)] 范围的部分，按 y 范围的比例限制。
+ *   仅在 monotoneClamp=false 时生效；monotoneClamp=true 时过冲已被 Fritsch-Carlson 消除。
+ *
  * @param {number[]} xs - X 坐标数组 (必须严格单调递增)
  * @param {number[]} ys - Y 坐标数组
  * @param {Object} [options] - 选项
@@ -38,12 +40,32 @@ const { DEFAULT_CURVES } = require('./filmLabConstants');
 function createSpline(xs, ys, options = {}) {
   const n = xs.length;
   const monotoneClamp = options.monotoneClamp ?? false;
-  
+  const maxOvershoot = options.maxOvershoot ?? 0.05;
+
   // 边界检查
   if (n < 2) {
     return (x) => (n === 1 ? ys[0] : x);
   }
-  
+
+  // 防御：重复/非递增 x 会导致 h=0 除零（NaN 扩散到全 LUT）。
+  // 按 x 升序去重（后写覆盖），保证严格单调递增
+  {
+    const pairs = xs.map((x, i) => [x, ys[i]]).sort((p, q) => p[0] - q[0]);
+    const ux = [pairs[0][0]];
+    const uy = [pairs[0][1]];
+    for (let i = 1; i < pairs.length; i++) {
+      if (pairs[i][0] === ux[ux.length - 1]) {
+        uy[uy.length - 1] = pairs[i][1]; // 重复 x：保留后者
+      } else {
+        ux.push(pairs[i][0]);
+        uy.push(pairs[i][1]);
+      }
+    }
+    if (ux.length < n) {
+      return createSpline(ux, uy, options);
+    }
+  }
+
   if (n === 2) {
     // 两点线性插值
     const slope = (ys[1] - ys[0]) / (xs[1] - xs[0]);
@@ -142,6 +164,17 @@ function createSpline(xs, ys, options = {}) {
     c3[i] = (m[i] + m[i + 1] - 2 * delta[i]) * invH * invH;
   }
   
+  // P2-11: maxOvershoot 实现 — 限制样条输出超出 [min(y), max(y)] 的过冲量
+  // 计算 y 范围和允许的上下界
+  let yMin = Infinity, yMax = -Infinity;
+  for (let i = 0; i < n; i++) {
+    if (ys[i] < yMin) yMin = ys[i];
+    if (ys[i] > yMax) yMax = ys[i];
+  }
+  const yRange = Math.max(1e-6, yMax - yMin);
+  const allowedHigh = yMax + yRange * maxOvershoot;
+  const allowedLow = yMin - yRange * maxOvershoot;
+
   // 返回插值函数
   return (x) => {
     // 二分查找段落索引 (比线性搜索更高效)
@@ -154,9 +187,17 @@ function createSpline(xs, ys, options = {}) {
         hi = mid;
       }
     }
-    
+
     const dt = x - xs[lo];
-    return ys[lo] + m[lo] * dt + c2[lo] * dt * dt + c3[lo] * dt * dt * dt;
+    const val = ys[lo] + m[lo] * dt + c2[lo] * dt * dt + c3[lo] * dt * dt * dt;
+
+    // P2-11: clamp 过冲到 [allowedLow, allowedHigh]
+    // 仅在 monotoneClamp=false 时生效 (monotoneClamp 已消除过冲)
+    if (!monotoneClamp) {
+      if (val > allowedHigh) return allowedHigh;
+      if (val < allowedLow) return allowedLow;
+    }
+    return val;
   };
 }
 

@@ -1,19 +1,17 @@
 /**
- * FilmLab 类型定义
- * 
- * TypeScript 类型定义，提供完整的类型安全和 IDE 支持
- * 
+ * FilmLab 类型定义（与运行时对齐 — 2026-07-21 重写）
+ *
+ * 本文件描述 client/src/components/FilmLab 与 packages/shared 的实际运行时结构。
+ * 凡运行时不存在的枚举值/字段不得出现在此（避免误导，参见 04-ui-edge-detection.md）。
+ *
  * @module types
- * @since 2026-01-30
  */
 
 // ============================================================================
-// 基础类型
+// 基础几何类型
 // ============================================================================
 
-/**
- * 裁剪区域（归一化 0-1）
- */
+/** 裁剪区域（归一化 0-1） */
 export interface CropRect {
   x: number;
   y: number;
@@ -21,47 +19,20 @@ export interface CropRect {
   h: number;
 }
 
-/**
- * 2D 点
- */
 export interface Point2D {
   x: number;
   y: number;
 }
 
-/**
- * 曲线控制点
- */
 export interface CurvePoint {
   x: number;
   y: number;
 }
 
-/**
- * RGB 颜色
- */
-export interface RGBColor {
-  r: number;
-  g: number;
-  b: number;
-}
-
-/**
- * HSL 颜色
- */
-export interface HSLColor {
-  h: number;  // 0-360
-  s: number;  // 0-1
-  l: number;  // 0-1
-}
-
 // ============================================================================
-// 参数类型
+// 参数类型（与 packages/shared/filmLabConstants.js / filmLabExport.js 对齐）
 // ============================================================================
 
-/**
- * 色调参数
- */
 export interface ToneParams {
   exposure: number;
   contrast: number;
@@ -71,9 +42,6 @@ export interface ToneParams {
   blacks: number;
 }
 
-/**
- * 白平衡参数
- */
 export interface WhiteBalanceParams {
   temp: number;
   tint: number;
@@ -83,10 +51,11 @@ export interface WhiteBalanceParams {
 }
 
 /**
- * 片基校正参数
+ * 片基校正参数。
+ * 运行时 baseMode 仅为 'linear' | 'log'（'off'/'auto' 在代码路径中不存在）。
  */
 export interface BaseCorrectionParams {
-  baseMode: 'off' | 'log' | 'linear' | 'auto';
+  baseMode: 'linear' | 'log';
   baseRed: number;
   baseGreen: number;
   baseBlue: number;
@@ -96,57 +65,66 @@ export interface BaseCorrectionParams {
 }
 
 /**
- * 反转参数
+ * 反转参数。
+ * 运行时 inversionMode 仅 'linear' | 'log'（'filmic' 已从 normalizeInversionMode 中剔除）。
  */
 export interface InversionParams {
   inverted: boolean;
-  inversionMode: 'linear' | 'log' | 'filmic';
+  inversionMode: 'linear' | 'log';
 }
 
 /**
- * 胶片曲线参数
+ * 胶片曲线参数（Q13 per-channel gamma + toe/shoulder）。
+ * gammaR/G/B、toe、shoulder 可选 — 缺省时由 FILM_CURVE_PROFILES[profile] 回退。
  */
 export interface FilmCurveParams {
   filmCurveEnabled: boolean;
   filmCurveProfile: string;
+  filmCurveGamma?: number;
+  filmCurveGammaR?: number;
+  filmCurveGammaG?: number;
+  filmCurveGammaB?: number;
+  filmCurveDMin?: number;
+  filmCurveDMax?: number;
+  filmCurveToe?: number;
+  filmCurveShoulder?: number;
 }
 
 /**
- * 几何变换参数
+ * 几何变换参数。
+ * orientation 运行时为 number（setOrientation 可累加 r±90，无界；显示前才模 360）。
+ * ratioMode 运行时包含 'original'（FilmLabControls 下拉项）。
  */
 export interface GeometryParams {
   rotation: number;
-  orientation: 0 | 90 | 180 | 270;
+  orientation: number;
+  rotationOffset: number;
   cropRect: CropRect;
   committedCrop: CropRect;
-  ratioMode: 'free' | '1:1' | '3:2' | '4:3' | '16:9' | '5:4' | '7:5' | '2:3' | '3:4';
+  ratioMode: 'free' | 'original' | '1:1' | '3:2' | '4:3' | '16:9' | '2:3' | '3:4';
   ratioSwap: boolean;
 }
 
 /**
- * 密度级别参数
+ * 密度域色阶（运行时为按通道嵌套 {red:{min,max}, ...}，非扁平 minR/maxR）。
  */
-export interface DensityLevels {
-  minR: number;
-  maxR: number;
-  minG: number;
-  maxG: number;
-  minB: number;
-  maxB: number;
+export interface DensityLevelsChannel {
+  min: number;
+  max: number;
 }
 
-/**
- * HSL 单通道参数
- */
+export interface DensityLevels {
+  red: DensityLevelsChannel;
+  green: DensityLevelsChannel;
+  blue: DensityLevelsChannel;
+}
+
 export interface HSLChannelParams {
   hue: number;
   saturation: number;
   luminance: number;
 }
 
-/**
- * 完整 HSL 参数
- */
 export interface HSLParams {
   red: HSLChannelParams;
   orange: HSLChannelParams;
@@ -158,17 +136,11 @@ export interface HSLParams {
   magenta: HSLChannelParams;
 }
 
-/**
- * 分离色调单区域参数
- */
 export interface SplitToneZone {
   hue: number;
   saturation: number;
 }
 
-/**
- * 分离色调完整参数
- */
 export interface SplitToneParams {
   highlights: SplitToneZone;
   midtones: SplitToneZone;
@@ -176,9 +148,6 @@ export interface SplitToneParams {
   balance: number;
 }
 
-/**
- * 曲线参数
- */
 export interface CurvesParams {
   rgb: CurvePoint[];
   red: CurvePoint[];
@@ -186,113 +155,112 @@ export interface CurvesParams {
   blue: CurvePoint[];
 }
 
-/**
- * 活动曲线通道
- */
 export type CurveChannel = 'rgb' | 'red' | 'green' | 'blue';
 
 // ============================================================================
-// 渲染参数
+// 渲染参数（client → FilmLabWebGL.processImageWebGL / RenderCore）
 // ============================================================================
 
-/**
- * WebGL 渲染参数
- */
 export interface RenderParams {
-  // 源图像
-  image: HTMLImageElement | ImageBitmap | HTMLCanvasElement;
-  
-  // 几何
+  image?: HTMLImageElement | ImageBitmap | HTMLCanvasElement;
+
   scale?: number;
   rotate?: number;
   cropRect?: CropRect;
-  
-  // 反转
+
   inverted?: boolean;
-  inversionMode?: 'linear' | 'log' | 'filmic';
-  
-  // 色调
+  inversionMode?: 'linear' | 'log';
+
   exposure?: number;
   contrast?: number;
   highlights?: number;
   shadows?: number;
   whites?: number;
   blacks?: number;
-  
-  // 白平衡
+
   temp?: number;
   tint?: number;
   red?: number;
   green?: number;
   blue?: number;
-  
-  // 片基校正
-  baseMode?: string;
+  gains?: [number, number, number];
+
+  baseMode?: 'linear' | 'log';
   baseRed?: number;
   baseGreen?: number;
   baseBlue?: number;
+  baseGains?: [number, number, number];
   baseDensityR?: number;
   baseDensityG?: number;
   baseDensityB?: number;
-  
-  // 密度级别
+  baseDensity?: [number, number, number];
+
   densityLevelsEnabled?: boolean;
   densityLevels?: DensityLevels;
-  
-  // 胶片曲线
+
   filmCurveEnabled?: boolean;
+  filmCurveProfile?: string;
   filmCurveGamma?: number;
+  filmCurveGammaR?: number;
+  filmCurveGammaG?: number;
+  filmCurveGammaB?: number;
   filmCurveDMin?: number;
   filmCurveDMax?: number;
-  
-  // 曲线
+  filmCurveToe?: number;
+  filmCurveShoulder?: number;
+
   curves?: CurvesParams;
-  
-  // HSL
+
   hslParams?: HSLParams;
-  
-  // 全局饱和度
+
   saturation?: number;
-  
-  // 分离色调
+
   splitToning?: SplitToneParams;
-  
-  // LUT
-  lut3dData?: Float32Array | Uint8Array;
-  lutSize?: number;
-  lutIntensity?: number;
+
+  /** 3D LUT（客户端 lut1/lut2 对象，含 size/data/intensity） */
+  lut1?: LUTObject | null;
+  lut2?: LUTObject | null;
+  lut1Intensity?: number;
+  lut2Intensity?: number;
+
+  /** Phase I：线性域反转（默认 false 保持当前观感；true 在线性光下做反转/片基校正） */
+  linearDomainInversion?: boolean;
+}
+
+/** 客户端 LUT 对象（handleLutUpload 产物） */
+export interface LUTObject {
+  name: string;
+  size: number;
+  data: Float32Array;
+  intensity: number;
+  domainMin?: [number, number, number];
+  domainMax?: [number, number, number];
 }
 
 // ============================================================================
-// 直方图类型
+// 直方图（运行时 FilmLab.jsx 内联实现：{r,g,b,rgb,maxCount}）
 // ============================================================================
 
-/**
- * 直方图数据
- */
 export interface HistogramData {
   r: number[];
   g: number[];
   b: number[];
-  luminance: number[];
+  rgb: number[];
+  maxCount: number;
 }
 
-/**
- * 直方图计算选项
- */
-export interface HistogramOptions {
-  bins?: number;
-  cropRect?: CropRect;
-  sampleRate?: number;
+export interface Histograms {
+  r: number[];
+  g: number[];
+  b: number[];
+  rgb: number[];
+  maxCount: number;
 }
 
 // ============================================================================
-// 事件类型
+// Pipeline 事件（与 useFilmLabPipeline.js 的 PipelineEvent/PipelinePriority 对齐）
 // ============================================================================
 
-/**
- * Pipeline 事件类型
- */
 export type PipelineEventType =
   | 'source_changed'
   | 'geometry_changed'
@@ -308,183 +276,112 @@ export type PipelineEventType =
   | 'split_tone_changed'
   | 'film_curve_changed'
   | 'lut_changed'
-  | 'output_changed';
+  | 'output_changed'
+  | 'density_levels_changed';
 
-/**
- * Pipeline 事件监听器
- */
 export type PipelineListener = (data: any) => void;
 
 // ============================================================================
-// Hook 返回类型
+// Hook 返回类型（与实际实现签名对齐）
 // ============================================================================
 
-/**
- * useFilmLabState Hook 返回类型
- */
 export interface UseFilmLabStateReturn {
-  // Tone
-  exposure: number;
-  setExposure: (value: number) => void;
-  contrast: number;
-  setContrast: (value: number) => void;
-  highlights: number;
-  setHighlights: (value: number) => void;
-  shadows: number;
-  setShadows: (value: number) => void;
-  whites: number;
-  setWhites: (value: number) => void;
-  blacks: number;
-  setBlacks: (value: number) => void;
-  
-  // White Balance
-  temp: number;
-  setTemp: (value: number) => void;
-  tint: number;
-  setTint: (value: number) => void;
-  red: number;
-  setRed: (value: number) => void;
-  green: number;
-  setGreen: (value: number) => void;
-  blue: number;
-  setBlue: (value: number) => void;
-  
-  // Base Correction
-  baseMode: string;
-  setBaseMode: (value: string) => void;
-  baseRed: number;
-  setBaseRed: (value: number) => void;
-  baseGreen: number;
-  setBaseGreen: (value: number) => void;
-  baseBlue: number;
-  setBaseBlue: (value: number) => void;
-  baseDensityR: number;
-  setBaseDensityR: (value: number) => void;
-  baseDensityG: number;
-  setBaseDensityG: (value: number) => void;
-  baseDensityB: number;
-  setBaseDensityB: (value: number) => void;
-  
-  // Inversion
-  inverted: boolean;
-  setInverted: (value: boolean) => void;
-  inversionMode: string;
-  setInversionMode: (value: string) => void;
-  
-  // Film Curve
-  filmCurveEnabled: boolean;
-  setFilmCurveEnabled: (value: boolean) => void;
-  filmCurveProfile: string;
-  setFilmCurveProfile: (value: string) => void;
-  
-  // Geometry
-  rotation: number;
-  setRotation: (value: number) => void;
-  orientation: number;
-  setOrientation: (value: number) => void;
-  cropRect: CropRect;
-  setCropRect: (value: CropRect) => void;
-  committedCrop: CropRect;
-  setCommittedCrop: (value: CropRect) => void;
-  ratioMode: string;
-  setRatioMode: (value: string) => void;
-  ratioSwap: boolean;
-  setRatioSwap: (value: boolean) => void;
-  
-  // Complex
-  curves: CurvesParams;
-  setCurves: (value: CurvesParams) => void;
-  hslParams: HSLParams;
-  setHslParams: (value: HSLParams) => void;
-  splitToning: SplitToneParams;
-  setSplitToning: (value: SplitToneParams) => void;
-  densityLevels: DensityLevels;
-  setDensityLevels: (value: DensityLevels) => void;
-  densityLevelsEnabled: boolean;
-  setDensityLevelsEnabled: (value: boolean) => void;
-  
-  // Utilities
+  exposure: number; setExposure: (v: number) => void;
+  contrast: number; setContrast: (v: number) => void;
+  highlights: number; setHighlights: (v: number) => void;
+  shadows: number; setShadows: (v: number) => void;
+  whites: number; setWhites: (v: number) => void;
+  blacks: number; setBlacks: (v: number) => void;
+  temp: number; setTemp: (v: number) => void;
+  tint: number; setTint: (v: number) => void;
+  red: number; setRed: (v: number) => void;
+  green: number; setGreen: (v: number) => void;
+  blue: number; setBlue: (v: number) => void;
+  baseMode: 'linear' | 'log'; setBaseMode: (v: 'linear' | 'log') => void;
+  baseRed: number; setBaseRed: (v: number) => void;
+  baseGreen: number; setBaseGreen: (v: number) => void;
+  baseBlue: number; setBaseBlue: (v: number) => void;
+  baseDensityR: number; setBaseDensityR: (v: number) => void;
+  baseDensityG: number; setBaseDensityG: (v: number) => void;
+  baseDensityB: number; setBaseDensityB: (v: number) => void;
+  inverted: boolean; setInverted: (v: boolean) => void;
+  inversionMode: 'linear' | 'log'; setInversionMode: (v: 'linear' | 'log') => void;
+  filmCurveEnabled: boolean; setFilmCurveEnabled: (v: boolean) => void;
+  filmCurveProfile: string; setFilmCurveProfile: (v: string) => void;
+  rotation: number; setRotation: (v: number) => void;
+  orientation: number; setOrientation: (updater: number | ((r: number) => number)) => void;
+  cropRect: CropRect; setCropRect: (v: CropRect) => void;
+  committedCrop: CropRect; setCommittedCrop: (v: CropRect) => void;
+  ratioMode: GeometryParams['ratioMode']; setRatioMode: (v: GeometryParams['ratioMode']) => void;
+  ratioSwap: boolean; setRatioSwap: (v: boolean) => void;
+  curves: CurvesParams; setCurves: (v: CurvesParams) => void;
+  hslParams: HSLParams; setHslParams: (v: HSLParams) => void;
+  splitToning: SplitToneParams; setSplitToning: (v: SplitToneParams) => void;
+  densityLevels: DensityLevels; setDensityLevels: (v: DensityLevels) => void;
+  densityLevelsEnabled: boolean; setDensityLevelsEnabled: (v: boolean) => void;
   serializeState: () => Record<string, any>;
   deserializeState: (params: Record<string, any>) => void;
   resetAllState: () => void;
   hasModifications: boolean;
 }
 
-/**
- * useFilmLabPipeline Hook 返回类型
- */
 export interface UseFilmLabPipelineReturn {
   on: (event: PipelineEventType, callback: PipelineListener) => () => void;
   off: (event: PipelineEventType, callback: PipelineListener) => void;
   emit: (event: PipelineEventType, data?: any, options?: { immediate?: boolean; cascade?: boolean }) => void;
   flush: () => void;
-  
   emitGeometryChanged: (data?: any) => void;
   emitCropChanged: (cropRect: CropRect) => void;
   emitColorChanged: (data?: any) => void;
   emitInversionChanged: (data?: any) => void;
   emitSourceChanged: (data?: any) => void;
-  
   getRenderOrder: string[];
   validateOrder: (operations: string[]) => boolean;
-  
   PipelineEvent: Record<string, PipelineEventType>;
   PipelinePriority: Record<string, number>;
 }
 
-/**
- * useHistogram Hook 返回类型
- */
+/** useHistogram 返回（与 useHistogram.js 实际导出对齐） */
 export interface UseHistogramReturn {
-  histogram: HistogramData;
-  updateHistogram: () => void;
-  calculateFromCanvas: (canvas: HTMLCanvasElement, options?: HistogramOptions) => HistogramData;
-  calculateFromWebGL: (gl: WebGLRenderingContext, options?: HistogramOptions) => HistogramData;
+  histograms: Histograms;
+  calculateNow: () => Histograms;
+  refresh: () => void;
+  reset: () => void;
+  isCalculating: boolean;
+  lastUpdated: number;
 }
 
-/**
- * useFilmLabRenderer Hook 返回类型
- */
 export interface UseFilmLabRendererReturn {
-  canvasRef: React.RefObject<HTMLCanvasElement>;
   isRendering: boolean;
   lastRenderTime: number;
-  requestRender: () => void;
-  renderNow: () => void;
+  renderError: string | null;
+  canUseWebGL: boolean;
+  webglAvailable: boolean;
+  requestRender: (params: any, options?: { immediate?: boolean; force?: boolean }) => HTMLCanvasElement | null;
+  renderNow: (params: any) => HTMLCanvasElement | null;
   clearCache: () => void;
+  getRenderedCanvas: () => HTMLCanvasElement | null;
+  readPixels: (x: number, y: number, width?: number, height?: number) => ImageData | null;
 }
 
 // ============================================================================
-// 导出配置类型
+// 导出 / 预设
 // ============================================================================
 
-/**
- * 图像导出选项
- */
 export interface ExportOptions {
-  format: 'jpeg' | 'png' | 'webp' | 'tiff';
-  quality?: number;  // 0-1, 仅 jpeg/webp
-  maxSize?: number | null;  // 最大尺寸限制
+  format: 'jpeg' | 'png' | 'tiff' | 'tiff16';
+  quality?: number;
+  maxSize?: number | null;
   filename?: string;
-  metadata?: boolean;  // 是否保留元数据
+  metadata?: boolean;
 }
 
-/**
- * LUT 导出选项
- */
 export interface LUTExportOptions {
-  format: 'cube' | '3dl';
+  format: 'cube';
   size: 17 | 33 | 65;
   title?: string;
 }
 
-// ============================================================================
-// 预设类型
-// ============================================================================
-
-/**
- * FilmLab 预设
- */
 export interface FilmLabPreset {
   id: string;
   name: string;
@@ -494,44 +391,9 @@ export interface FilmLabPreset {
   version?: number;
   createdAt?: string;
   updatedAt?: string;
-  
-  // 参数
-  params: {
-    tone?: Partial<ToneParams>;
-    whiteBalance?: Partial<WhiteBalanceParams>;
-    baseCorrection?: Partial<BaseCorrectionParams>;
-    inversion?: Partial<InversionParams>;
-    filmCurve?: Partial<FilmCurveParams>;
-    curves?: Partial<CurvesParams>;
-    hsl?: Partial<HSLParams>;
-    hslParams?: Partial<HSLParams>;
-    saturation?: number;
-    splitTone?: Partial<SplitToneParams>;
-    splitToning?: Partial<SplitToneParams>;
-  };
+  params: Record<string, any>;
 }
 
-// ============================================================================
-// 工具类型
-// ============================================================================
-
-/**
- * 使参数部分可选
- */
-export type PartialParams<T> = {
-  [P in keyof T]?: T[P];
-};
-
-/**
- * 深度部分可选
- */
-export type DeepPartial<T> = {
-  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
-};
-
-/**
- * 只读参数
- */
-export type ReadonlyParams<T> = {
-  readonly [P in keyof T]: T[P];
-};
+export type PartialParams<T> = { [P in keyof T]?: T[P] };
+export type DeepPartial<T> = { [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P] };
+export type ReadonlyParams<T> = { readonly [P in keyof T]: T[P] };

@@ -27,6 +27,7 @@ const { gaussianBlur, toGrayscale, toGrayscaleEnhanced, normalizeRect } = requir
  * @property {Object} cropRect - 归一化裁剪区域 {x, y, w, h} (0-1)
  * @property {number} rotation - 检测到的倾斜角度 (度)
  * @property {number} confidence - 置信度 (0-1)
+ * @property {boolean} borderDetected - 是否检测到明确边框（false=全图回退）
  * @property {Object} [debugInfo] - 调试信息
  */
 
@@ -38,7 +39,8 @@ const DEFAULT_OPTIONS = {
   filmFormat: 'auto',
   expectDarkBorder: true,
   maxWidth: 1200,
-  returnDebugInfo: false
+  returnDebugInfo: false,
+  verbose: false
 };
 
 /**
@@ -60,7 +62,10 @@ function getThresholdsFromSensitivity(sensitivity) {
 
 /**
  * 根据底片格式获取期望的宽高比范围
+ * 
  * @param {string} filmFormat - 底片格式
+ *   'auto' | '35mm' | '120' | '120_645' | '120_66' | '120_67' | '4x5'
+ *   '120' 是 '120_66' (6×6, 方形) 的别名，因 120 系最常见为 6×6
  * @returns {{minAspect: number, maxAspect: number}}
  */
 function getExpectedAspectRatio(filmFormat) {
@@ -69,6 +74,8 @@ function getExpectedAspectRatio(filmFormat) {
     '120_645': { minAspect: 1.2, maxAspect: 1.4 },   // 6x4.5 ≈ 1.33
     '120_66': { minAspect: 0.9, maxAspect: 1.1 },    // 6x6 = 1.0
     '120_67': { minAspect: 1.1, maxAspect: 1.3 },    // 6x7 ≈ 1.17
+    // '120' 别名：覆盖 120 系最宽范围（6×6 ~ 6×7）
+    '120': { minAspect: 0.9, maxAspect: 1.4 },
     '4x5': { minAspect: 1.2, maxAspect: 1.35 },      // 4:5 = 1.25
     'auto': { minAspect: 0.5, maxAspect: 2.5 }       // 宽松范围
   };
@@ -105,9 +112,7 @@ function detectEdges(imageData, options = {}) {
   const sensitivityFactor = 1 - (opts.sensitivity / 100) * 0.5; // 0.5 ~ 1.0
   const houghThreshold = Math.round(Math.min(width, height) * 0.10 * sensitivityFactor);
   const lines = houghTransform.detect(edges, width, height, houghThreshold);
-  
-  console.log(`🔍 Edge detection: Found ${lines.length} lines (threshold: ${houghThreshold}, sensitivity: ${opts.sensitivity})`);
-  
+
   // 5. 从直线中找到最佳矩形
   const aspectRatioRange = getExpectedAspectRatio(opts.filmFormat);
   const rectangleResult = rectangleFinder.findBestRectangle(
@@ -116,37 +121,60 @@ function detectEdges(imageData, options = {}) {
     height, 
     aspectRatioRange
   );
-  
-  console.log('📐 Rectangle result:', rectangleResult ? 
-    `Found rectangle with confidence ${rectangleResult.confidence.toFixed(2)}` : 
-    'No rectangle found');
-  
+
+  // 5.5 密度法 fallback（Hough 失败时启用，避免边框可检测但 findBestRectangle 漏掉）
+  const densityResult = !rectangleResult
+    ? rectangleFinder.findRectangleByDensity(edges, width, height)
+    : null;
+
+  if (opts.verbose) {
+    console.log(`🔍 Edge detection: Found ${lines.length} lines (threshold: ${houghThreshold}, sensitivity: ${opts.sensitivity})`);
+    console.log('📐 Rectangle result:', rectangleResult
+      ? `Found rectangle with confidence ${rectangleResult.confidence.toFixed(2)}`
+      : (densityResult ? `Fallback density rectangle confidence ${densityResult.confidence.toFixed(2)}` : 'No rectangle found'));
+  }
+
   // 6. 归一化结果
-  let cropRect, rotation, confidence;
-  
+  let cropRect, rotation, confidence, borderDetected;
+
   if (rectangleResult) {
-    // 找到了明确的矩形边框
+    // Hough + 矩形查找成功
     cropRect = normalizeRect(rectangleResult.rect, width, height);
     rotation = rectangleResult.rotation;
     confidence = rectangleResult.confidence;
+    borderDetected = true;
+  } else if (densityResult) {
+    // 密度法 fallback：赋予中等置信度（高于"无边框"的 0.1，低于 Hough 的明确检测）
+    cropRect = normalizeRect(densityResult.rect, width, height);
+    rotation = densityResult.rotation;
+    confidence = densityResult.confidence;
+    borderDetected = true;
+    if (opts.verbose) {
+      console.log('⚠️ Hough rectangle not found, using density fallback.');
+    }
   } else {
     // 没有找到矩形，可能是无边框图片
-    // 提供一个保守的默认裁剪，但置信度设为 0.25（介于有效和无效之间）
+    // 提供一个保守的默认裁剪，但置信度设为很低，表示"没有检测到边框"
     cropRect = { x: 0, y: 0, w: 1, h: 1 }; // 不裁剪
     rotation = 0;
-    confidence = 0.1; // 很低的置信度，表示"没有检测到边框"
-    
-    console.log('⚠️ No rectangle detected - image may have no borders. Suggesting no crop.');
+    confidence = 0.1;
+    borderDetected = false;
+    if (opts.verbose) {
+      console.log('⚠️ No rectangle detected - image may have no borders. Suggesting no crop.');
+    }
   }
-  
-  console.log('📊 Final normalized cropRect:', cropRect);
-  
+
+  if (opts.verbose) {
+    console.log('📊 Final normalized cropRect:', cropRect);
+  }
+
   const result = {
     cropRect,
     rotation,
-    confidence
+    confidence,
+    borderDetected
   };
-  
+
   // 调试信息
   if (opts.returnDebugInfo) {
     result.debugInfo = {
@@ -154,10 +182,11 @@ function detectEdges(imageData, options = {}) {
       edgePixelCount: edges.filter(v => v > 0).length,
       linesDetected: lines.length,
       thresholds,
-      imageSize: { width, height }
+      imageSize: { width, height },
+      fallbackUsed: !rectangleResult && !!densityResult
     };
   }
-  
+
   return result;
 }
 
@@ -175,65 +204,52 @@ function detectEdgesBatch(imageDataArray, options = {}) {
 /**
  * 验证检测结果是否合理
  * 
+ * 判定逻辑（基于 borderDetected 显式标志）：
+ *   - borderDetected=false（无边框回退）：使用宽松阈值（minConfidence 默认 0.1）
+ *     仅检查几何形状合理性，允许全图 cropRect
+ *   - borderDetected=true（明确检测到边框）：使用 minConfidence（默认 0.5）
+ *     严格检查所有约束
+ * 
+ * 兼容老调用方：result 无 borderDetected 字段时按 true 处理（严格路径）
+ * 
  * @param {EdgeDetectionResult} result - 检测结果
- * @param {number} minConfidence - 最低置信度阈值
+ * @param {number} minConfidence - 最低置信度阈值（borderDetected=true 时使用）
  * @returns {boolean} 是否有效
  */
 function isResultValid(result, minConfidence = 0.5) {
   if (!result || !result.cropRect) {
-    console.log('❌ Result validation failed: no result or cropRect');
+    if (result && result.verbose !== false) {
+      // 仅在显式开启 verbose 时打印（保留向后兼容）
+    }
     return false;
   }
-  
-  const { cropRect, confidence, rotation } = result;
-  
-  // 置信度检查
-  if (confidence < minConfidence) {
-    console.log(`❌ Result validation failed: confidence ${confidence.toFixed(2)} < ${minConfidence}`);
-    return false;
-  }
-  
-  // 裁剪区域合理性检查
+
+  const { cropRect, confidence, rotation, borderDetected } = result;
+
+  // 几何基础校验（所有路径都必须通过）
   if (cropRect.w < 0.1 || cropRect.h < 0.1) {
-    console.log(`❌ Result validation failed: crop too small (w=${cropRect.w}, h=${cropRect.h})`);
     return false;
   }
-  
-  // 允许全图裁剪（无边框情况）- 但要求置信度非常低或非常高
-  if (cropRect.w > 0.98 && cropRect.h > 0.98 && cropRect.x < 0.02 && cropRect.y < 0.02) {
-    // 这是"无边框"的情况
-    if (confidence < 0.2) {
-      console.log(`⚠️ Result is full-image (no borders detected), confidence=${confidence.toFixed(2)}`);
-      // 对于无边框情况，降低验证标准
-      return true; // 允许通过，让用户知道没有检测到边框
-    }
-  }
-  
-  // 正常情况：不应该是完整图像
-  if (cropRect.w > 0.99 || cropRect.h > 0.99) {
-    console.log(`⚠️ Result validation warning: crop almost full image (w=${cropRect.w}, h=${cropRect.h})`);
-    // 如果几乎是全图，但置信度很低，说明没有检测到边框
-    if (confidence < 0.3) {
-      return true; // 允许通过，但会提示用户
-    }
-  }
-  
   if (cropRect.x < 0 || cropRect.y < 0) {
-    console.log(`❌ Result validation failed: negative position (x=${cropRect.x}, y=${cropRect.y})`);
     return false;
   }
-  if (cropRect.x + cropRect.w > 1.01 || cropRect.y + cropRect.h > 1.01) { // 允许小误差
-    console.log(`❌ Result validation failed: crop out of bounds`);
+  if (cropRect.x + cropRect.w > 1.01 || cropRect.y + cropRect.h > 1.01) {
     return false;
   }
-  
-  // 旋转角度合理性检查 (通常底片倾斜不超过 ±15°)
   if (Math.abs(rotation) > 15) {
-    console.log(`❌ Result validation failed: rotation ${rotation.toFixed(1)}° too large`);
     return false;
   }
-  
-  console.log(`✅ Result validation passed: confidence=${confidence.toFixed(2)}, rotation=${rotation.toFixed(1)}°`);
+
+  // 无边框回退路径：confidence 通常很低（0.1），允许通过让用户知道
+  if (borderDetected === false) {
+    return true;
+  }
+
+  // borderDetected=true：严格置信度检查
+  if (confidence < minConfidence) {
+    return false;
+  }
+
   return true;
 }
 

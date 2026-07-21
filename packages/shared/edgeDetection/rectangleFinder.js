@@ -6,7 +6,8 @@
  * @module packages/shared/edgeDetection/rectangleFinder
  */
 
-const { lineIntersection, arePerpendicular, areParallel } = require('./utils');
+// P3: arePerpendicular/areParallel 死导入已删除（rectangleFinder 自带 angleDiffWrap 内联，从不调用这两个工具函数）
+const { lineIntersection } = require('./utils');
 const { classifyLines, parallelLineDistance, mergeLines } = require('./houghTransform');
 
 /**
@@ -179,15 +180,20 @@ function computePairScore(h1, h2, v1, v2, hDist, vDist, width, height) {
   const centerPenalty = 0; // 暂时不计算，需要交点
   score -= centerPenalty;
   
-  // 4. 平行度权重
-  const hAngleDiff = Math.abs(h1.theta - h2.theta);
-  const vAngleDiff = Math.abs(v1.theta - v2.theta);
+  // 4. 平行度权重（θ 轴周期性：-89° 与 +89° 是平行线，直接求差会得 ~3.14 rad）
+  const angleDiffWrap = (a, b) => {
+    let d = Math.abs(a - b) % Math.PI;
+    return Math.min(d, Math.PI - d);
+  };
+  const hAngleDiff = angleDiffWrap(h1.theta, h2.theta);
+  const vAngleDiff = angleDiffWrap(v1.theta, v2.theta);
   score -= (hAngleDiff + vAngleDiff) * 100;
-  
+
   // 5. 垂直度权重
-  const perpAngle = Math.abs(Math.abs(h1.theta - v1.theta) - Math.PI / 2);
+  const perpRaw = Math.abs(angleDiffWrap(h1.theta, v1.theta));
+  const perpAngle = Math.abs(perpRaw - Math.PI / 2);
   score -= perpAngle * 50;
-  
+
   return score;
 }
 
@@ -201,26 +207,28 @@ function computePairScore(h1, h2, v1, v2, hDist, vDist, width, height) {
  * @returns {Quadrilateral|null}
  */
 function computeCorners(h1, h2, v1, v2) {
-  // 确保 h1 在上，h2 在下
-  if (h1.rho > h2.rho) {
-    [h1, h2] = [h2, h1];
-  }
-  
-  // 确保 v1 在左，v2 在右
-  if (v1.rho > v2.rho) {
-    [v1, v2] = [v2, v1];
-  }
-  
-  const topLeft = lineIntersection(h1, v1);
-  const topRight = lineIntersection(h1, v2);
-  const bottomLeft = lineIntersection(h2, v1);
-  const bottomRight = lineIntersection(h2, v2);
-  
-  if (!topLeft || !topRight || !bottomLeft || !bottomRight) {
+  // 计算全部 4 个交点（不依赖 ρ 排序 —— ρ 在 θ≈-90° 时方向相反，旧实现误判上下导致自交）
+  const p1 = lineIntersection(h1, v1);
+  const p2 = lineIntersection(h1, v2);
+  const p3 = lineIntersection(h2, v1);
+  const p4 = lineIntersection(h2, v2);
+
+  if (!p1 || !p2 || !p3 || !p4) {
     return null;
   }
-  
-  return { topLeft, topRight, bottomLeft, bottomRight };
+
+  // 按实际坐标排序：先按 y 分上下两行，再按 x 分左右
+  // 取 y 较小的两点为 top，y 较大的两点为 bottom
+  const sortedByY = [p1, p2, p3, p4].sort((a, b) => a.y - b.y);
+  const topPair = sortedByY.slice(0, 2).sort((a, b) => a.x - b.x);
+  const bottomPair = sortedByY.slice(2, 4).sort((a, b) => a.x - b.x);
+
+  return {
+    topLeft: topPair[0],
+    topRight: topPair[1],
+    bottomLeft: bottomPair[0],
+    bottomRight: bottomPair[1],
+  };
 }
 
 /**

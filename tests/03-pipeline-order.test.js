@@ -128,14 +128,22 @@ describe('Pipeline structure — GL1 vs GL2', () => {
     expect(mainGL2).toContain('fragColor');
   });
 
-  test('GL1 使用 u_useLut3d, GL2 使用 u_hasLut3d', () => {
+  test('GL1 使用 u_useLut3d, GL2(useNativeLUT3D) 使用 u_hasLut3d', () => {
     expect(mainGL1).toContain('u_useLut3d');
     expect(mainGL2).toContain('u_hasLut3d');
   });
 
-  test('GL1 调用 sampleLUT3D(), GL2 使用 texture(u_lut3dTex)', () => {
+  test('GL1 调用 sampleLUT3D(), GL2(useNativeLUT3D) 使用 texture(u_lut3dTex)', () => {
     expect(mainGL1).toContain('sampleLUT3D');
     expect(mainGL2).toContain('u_lut3dTex');
+  });
+
+  test('GL2(useNativeLUT3D=false) 回退到 packed-2D 路径（客户端使用）', () => {
+    const mainGL2Packed = shaders.buildFragmentShader({ isGL2: true, useNativeLUT3D: false });
+    expect(mainGL2Packed).toContain('u_useLut3d');
+    expect(mainGL2Packed).toContain('sampleLUT3D');
+    expect(mainGL2Packed).not.toContain('u_hasLut3d');
+    expect(mainGL2Packed).not.toContain('u_lut3dTex');
   });
 });
 

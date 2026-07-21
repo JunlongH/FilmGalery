@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createSpline } from './utils';
 
 export default function ToneCurveEditor({
@@ -20,7 +20,8 @@ export default function ToneCurveEditor({
   const curveHeight = 150;
 
   // Generate Histogram Path (outline, not filled) with adaptive vertical scaling
-  const getHistogramPath = () => {
+  // P1-23: useMemo 避免每帧重算（256 次循环 + 字符串拼接）
+  const histogramPath = useMemo(() => {
     const currentHist = (histograms && histograms[activeChannel]) ? histograms[activeChannel] : new Array(256).fill(0);
     // Find local max to stretch the histogram vertically per-channel
     let localMax = 0;
@@ -41,7 +42,7 @@ export default function ToneCurveEditor({
       else d += ` L ${x} ${y}`;
     }
     return d || `M 0 ${curveHeight} L ${curveWidth} ${curveHeight}`;
-  };
+  }, [histograms, activeChannel, curveWidth, curveHeight]);
 
   const getCurveColor = () => {
     switch(activeChannel) {
@@ -71,7 +72,8 @@ export default function ToneCurveEditor({
   };
 
   // Generate path string using spline
-  const getCurvePath = () => {
+  // P1-23: useMemo 避免每帧重算（createSpline + 260 次循环）
+  const curvePath = useMemo(() => {
     const currentPoints = curves[activeChannel];
     const sortedPoints = [...currentPoints].sort((a, b) => a.x - b.x);
     let d = '';
@@ -79,7 +81,7 @@ export default function ToneCurveEditor({
       const xs = sortedPoints.map(p => p.x);
       const ys = sortedPoints.map(p => p.y);
       const spline = createSpline(xs, ys);
-      
+
       d = `M 0 ${curveHeight - (spline(0) / 255) * curveHeight}`;
       for (let i = 1; i <= curveWidth; i++) {
         const xVal = (i / curveWidth) * 255;
@@ -91,7 +93,7 @@ export default function ToneCurveEditor({
       d = `M 0 ${curveHeight} L ${curveWidth} 0`;
     }
     return d;
-  };
+  }, [curves, activeChannel, curveWidth, curveHeight]);
 
   const handleAddPoint = (e) => {
     // Only add if clicking on background (not dragging a point)
@@ -245,12 +247,12 @@ export default function ToneCurveEditor({
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
         >
           <path
-            d={`${getHistogramPath()} L ${curveWidth} ${curveHeight} L 0 ${curveHeight} Z`}
+            d={`${histogramPath} L ${curveWidth} ${curveHeight} L 0 ${curveHeight} Z`}
             fill={getHistogramFill()}
             stroke="none"
           />
           <path
-            d={getHistogramPath()}
+            d={histogramPath}
             fill="none"
             stroke={getHistogramStroke()}
             strokeWidth="0.8"
@@ -282,7 +284,7 @@ export default function ToneCurveEditor({
         )}
 
         <svg width="100%" height="100%" viewBox={`0 0 ${curveWidth} ${curveHeight}`} preserveAspectRatio="none" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
-          <path d={getCurvePath()} stroke={getCurveColor()} strokeWidth="2" fill="none" />
+          <path d={curvePath} stroke={getCurveColor()} strokeWidth="2" fill="none" />
         </svg>
         
         {/* Control Points */}

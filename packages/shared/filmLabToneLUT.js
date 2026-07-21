@@ -40,7 +40,10 @@ function buildToneLUT(params = {}) {
   
   // 预计算因子
   const expFactor = Math.pow(2, (Number(exposure) || 0) / 50);
-  const ctr = Number(contrast) || 0;
+  // 对比度 UI 值 (-100..100) 缩放到标准公式域 (-255..255)，与 GPU shader 一致 (BUG-11)
+  // P2-3: clamp ctr 到 [-258, 258] 防止 259-ctr=0 除零（绕过 validateExportParams 直接调用时）
+  const ctrRaw = (Number(contrast) || 0) * 2.55;
+  const ctr = Math.max(-258, Math.min(258, ctrRaw));
   const contrastFactor = (259 * (ctr + 255)) / (255 * (259 - ctr));
   const blackPoint = -(Number(blacks) || 0) * 0.002;
   const whitePoint = 1 - (Number(whites) || 0) * 0.002;
@@ -61,14 +64,18 @@ function buildToneLUT(params = {}) {
       val = (val - blackPoint) / (whitePoint - blackPoint);
     }
 
+    // Bernstein 基函数在 clamp 后的值上计算（与 processPixelFloat / GPU shader 一致），
+    // 避免 val 超出 [0,1] 时权重符号反转；增量仍加到未 clamp 的 val 上
+    const vc = Math.min(1, Math.max(0, val));
+
     // 4. 阴影 (Bernstein 基函数，峰值在 ~0.33)
     if (sFactor !== 0) {
-      val += sFactor * Math.pow(1 - val, 2) * val * 4;
+      val += sFactor * Math.pow(1 - vc, 2) * vc * 4;
     }
 
     // 5. 高光 (Bernstein 基函数，峰值在 ~0.67)
     if (hFactor !== 0) {
-      val += hFactor * Math.pow(val, 2) * (1 - val) * 4;
+      val += hFactor * Math.pow(vc, 2) * (1 - vc) * 4;
     }
 
     lut[i] = Math.min(255, Math.max(0, Math.round(val * 255)));

@@ -236,6 +236,9 @@ function convolve3x3(data, width, height, kernel) {
 /**
  * 将像素坐标的矩形归一化为 0-1 范围
  * 
+ * 保证四个分量均在 [0,1] 且 x+w ≤ 1、y+h ≤ 1
+ * （下游 isResultValid 依赖 x+w 不超界以避免误判）
+ * 
  * @param {Object} rect - 像素坐标矩形 {x, y, w, h} 或 {x, y, width, height}
  * @param {number} imageWidth - 图像宽度
  * @param {number} imageHeight - 图像高度
@@ -244,13 +247,19 @@ function convolve3x3(data, width, height, kernel) {
 function normalizeRect(rect, imageWidth, imageHeight) {
   const w = rect.w !== undefined ? rect.w : rect.width;
   const h = rect.h !== undefined ? rect.h : rect.height;
-  
-  return {
-    x: Math.max(0, Math.min(1, rect.x / imageWidth)),
-    y: Math.max(0, Math.min(1, rect.y / imageHeight)),
-    w: Math.max(0, Math.min(1, w / imageWidth)),
-    h: Math.max(0, Math.min(1, h / imageHeight))
-  };
+
+  let nx = Math.max(0, Math.min(1, rect.x / imageWidth));
+  let ny = Math.max(0, Math.min(1, rect.y / imageHeight));
+  let nw = Math.max(0, Math.min(1, w / imageWidth));
+  let nh = Math.max(0, Math.min(1, h / imageHeight));
+
+  // 保证 x+w ≤ 1、y+h ≤ 1（防止右/下越界）
+  if (nx + nw > 1) nw = 1 - nx;
+  if (ny + nh > 1) nh = 1 - ny;
+  if (nw < 0) nw = 0;
+  if (nh < 0) nh = 0;
+
+  return { x: nx, y: ny, w: nw, h: nh };
 }
 
 /**

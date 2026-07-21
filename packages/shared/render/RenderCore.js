@@ -95,14 +95,16 @@ class RenderCore {
       inversionMode: input.inversionMode ?? 'linear',
 
       // Film Curve
+      // 注意：gamma/dMin/dMax 默认 undefined，让 profile 回退生效（FILM_CURVE_PROFILES）；
+      // 最终缺省值由解析层（processPixel*/getGLSLUniforms）统一兜底
       filmCurveEnabled: input.filmCurveEnabled ?? false,
       filmCurveProfile: input.filmCurveProfile ?? 'default',
-      filmCurveGamma: input.filmCurveGamma ?? DEFAULT_FILM_CURVE.gamma,
+      filmCurveGamma: input.filmCurveGamma ?? undefined, // falls back to profile, then DEFAULT_FILM_CURVE
       filmCurveGammaR: input.filmCurveGammaR ?? undefined, // Q13: per-channel, falls back to profile
       filmCurveGammaG: input.filmCurveGammaG ?? undefined,
       filmCurveGammaB: input.filmCurveGammaB ?? undefined,
-      filmCurveDMin: input.filmCurveDMin ?? DEFAULT_FILM_CURVE.dMin,
-      filmCurveDMax: input.filmCurveDMax ?? DEFAULT_FILM_CURVE.dMax,
+      filmCurveDMin: input.filmCurveDMin ?? undefined,
+      filmCurveDMax: input.filmCurveDMax ?? undefined,
       filmCurveToe: input.filmCurveToe ?? undefined,       // Q13: 3-segment toe
       filmCurveShoulder: input.filmCurveShoulder ?? undefined, // Q13: 3-segment shoulder
 
@@ -162,6 +164,12 @@ class RenderCore {
       rotation: input.rotation ?? 0,
       orientation: input.orientation ?? 0,
       cropRect: input.cropRect ?? DEFAULT_CROP_RECT,
+
+      // Phase I：线性域反转（opt-in，默认 false 保持现有观感）
+      // true 时：片基校正 + 反转在线性光下进行（sRGB→linear→操作→linear→sRGB），
+      // 与 darktable negadoctor / RawTherapee filmnegative 的物理正确做法一致。
+      // 注：GPU shader 路径尚未实现此模式（getGLSLUniforms 透传标志，shader 端为 RFC）。
+      linearDomainInversion: input.linearDomainInversion ?? false,
     };
   }
 
@@ -295,9 +303,18 @@ class RenderCore {
       }
     }
 
+    // Phase I：线性域反转 — 片基校正与反转在线性光下进行（物理正确，对齐 darktable/RawTherapee）。
+    // 默认 false 保持现有观感；true 时仅包装 ②/②.5/③ 三步，① 与 ③b+ 仍在 sRGB 域。
+    if (p.linearDomainInversion) {
+      r = MathOps.srgbToLinear(r);
+      g = MathOps.srgbToLinear(g);
+      b = MathOps.srgbToLinear(b);
+    }
+
     // ② Base Correction (neutralize film base color)
     if (p.baseMode === 'log') {
-      // Log domain density subtraction (more accurate)
+      // 注：log 模式的密度域减法在线性域语义更准确（D=-log10(T_linear)）；
+      // linearDomainInversion 下 T 已是线性透射率，密度计算物理正确。
       if (p.baseDensityR !== 0 || p.baseDensityG !== 0 || p.baseDensityB !== 0) {
         const log10 = Math.log(10);
         const minT = 0.001;
@@ -335,11 +352,18 @@ class RenderCore {
         g = 1.0 - Math.log(g * 255 + 1) / log256;
         b = 1.0 - Math.log(b * 255 + 1) / log256;
       } else {
-        // Linear inversion
+        // Linear inversion（linearDomainInversion 下这是线性光反转，物理正确）
         r = 1.0 - r;
         g = 1.0 - g;
         b = 1.0 - b;
       }
+    }
+
+    // Phase I：转回 sRGB 编码域（LUT/WB/Tone 在 sRGB 域处理，保持与现有观感一致）
+    if (p.linearDomainInversion) {
+      r = MathOps.linearToSrgb(r);
+      g = MathOps.linearToSrgb(g);
+      b = MathOps.linearToSrgb(b);
     }
 
     // ③b 3D LUT (after inversion — supports "Inversion LUT" workflows)
@@ -371,7 +395,8 @@ class RenderCore {
     b *= expFactor;
 
     // 5b. Contrast (around perceptual mid-grey — Q11: 18% reflectance ≈ sRGB 0.46)
-    const ctr = Number(p.contrast) || 0;
+    // UI 值 (-100..100) ×2.55 缩放到标准公式域 (-255..255)，与 GPU shader / buildToneLUT 一致 (BUG-11)
+    const ctr = (Number(p.contrast) || 0) * 2.55;
     if (ctr !== 0) {
       const contrastFactor = (259 * (ctr + 255)) / (255 * (259 - ctr));
       r = (r - CONTRAST_MID_GRAY) * contrastFactor + CONTRAST_MID_GRAY;
@@ -618,6 +643,10 @@ class RenderCore {
     // 计算白平衡增益 (归一化到 0-1 范围)
     const wbGains = [luts.rBal, luts.gBal, luts.bBal];
 
+    // Film Curve 参数解析：显式参数 → profile 回退 → 全局缺省（与 processPixelFloat 同一语义）
+    const fcProfile = FILM_CURVE_PROFILES[p.filmCurveProfile] || null;
+    const fcGammaMain = p.filmCurveGamma ?? fcProfile?.gamma ?? DEFAULT_FILM_CURVE.gamma;
+
     return {
       // 反转
       u_inverted: p.inverted ? 1.0 : 0.0,
@@ -625,14 +654,14 @@ class RenderCore {
 
       // Film Curve (per-channel gamma + toe/shoulder, matching shared shader)
       u_filmCurveEnabled: p.filmCurveEnabled ? 1.0 : 0.0,
-      u_filmCurveGamma: p.filmCurveGamma ?? 0.6,
-      u_filmCurveGammaR: p.filmCurveGammaR ?? p.filmCurveGamma ?? 0.6,
-      u_filmCurveGammaG: p.filmCurveGammaG ?? p.filmCurveGamma ?? 0.6,
-      u_filmCurveGammaB: p.filmCurveGammaB ?? p.filmCurveGamma ?? 0.6,
-      u_filmCurveDMin: p.filmCurveDMin ?? 0.1,
-      u_filmCurveDMax: p.filmCurveDMax ?? 3.0,
-      u_filmCurveToe: p.filmCurveToe ?? 0,
-      u_filmCurveShoulder: p.filmCurveShoulder ?? 0,
+      u_filmCurveGamma: fcGammaMain,
+      u_filmCurveGammaR: p.filmCurveGammaR ?? fcProfile?.gammaR ?? fcGammaMain,
+      u_filmCurveGammaG: p.filmCurveGammaG ?? fcProfile?.gammaG ?? fcGammaMain,
+      u_filmCurveGammaB: p.filmCurveGammaB ?? fcProfile?.gammaB ?? fcGammaMain,
+      u_filmCurveDMin: p.filmCurveDMin ?? fcProfile?.dMin ?? DEFAULT_FILM_CURVE.dMin,
+      u_filmCurveDMax: p.filmCurveDMax ?? fcProfile?.dMax ?? DEFAULT_FILM_CURVE.dMax,
+      u_filmCurveToe: p.filmCurveToe ?? fcProfile?.toe ?? 0,
+      u_filmCurveShoulder: p.filmCurveShoulder ?? fcProfile?.shoulder ?? 0,
 
       // 片基校正 (Pre-Inversion)
       u_baseMode: p.baseMode === 'log' ? 1.0 : 0.0,
@@ -694,278 +723,12 @@ class RenderCore {
       // 3D LUT (需要调用者上传纹理)
       u_hasLut3d: p.lut1 ? 1.0 : 0.0,
       u_lutIntensity: p.lut1Intensity ?? 1.0,
+
+      // Phase I：线性域反转标志（CPU + GPU 客户端均消费，shader main 中 srgbToLinear/linearToSrb 切换）
+      u_linearDomainInversion: p.linearDomainInversion ? 1.0 : 0.0,
     };
   }
 
-  /**
-   * 获取 HSL GLSL 代码片段
-   * 
-   * @deprecated 使用 packages/shared/shaders/hslAdjust.js (单一事实来源)
-   * 此方法保留以兼容旧代码。新代码应使用 buildFragmentShader() 。
-   * @returns {string} HSL 处理的 GLSL 代码
-   */
-  static getHSLGLSL() {
-    console.warn('[RenderCore] getHSLGLSL() is deprecated. Use packages/shared/shaders/hslAdjust.js instead.');
-    return `
-// HSL Channel definitions (hueCenter, hueRange)
-const vec2 HSL_RED     = vec2(0.0,   30.0);
-const vec2 HSL_ORANGE  = vec2(30.0,  30.0);
-const vec2 HSL_YELLOW  = vec2(60.0,  30.0);
-const vec2 HSL_GREEN   = vec2(120.0, 45.0);
-const vec2 HSL_CYAN    = vec2(180.0, 30.0);
-const vec2 HSL_BLUE    = vec2(240.0, 45.0);
-const vec2 HSL_PURPLE  = vec2(280.0, 30.0);
-const vec2 HSL_MAGENTA = vec2(330.0, 30.0);
-
-// RGB to HSL conversion
-vec3 rgb2hsl(vec3 c) {
-  float maxC = max(max(c.r, c.g), c.b);
-  float minC = min(min(c.r, c.g), c.b);
-  float l = (maxC + minC) / 2.0;
-  
-  if (maxC == minC) {
-    return vec3(0.0, 0.0, l);
-  }
-  
-  float d = maxC - minC;
-  float s = l > 0.5 ? d / (2.0 - maxC - minC) : d / (maxC + minC);
-  
-  float h;
-  if (maxC == c.r) {
-    h = (c.g - c.b) / d + (c.g < c.b ? 6.0 : 0.0);
-  } else if (maxC == c.g) {
-    h = (c.b - c.r) / d + 2.0;
-  } else {
-    h = (c.r - c.g) / d + 4.0;
-  }
-  h /= 6.0;
-  
-  return vec3(h * 360.0, s, l);
-}
-
-// HSL to RGB conversion
-vec3 hsl2rgb(vec3 hsl) {
-  float h = mod(hsl.x, 360.0) / 360.0;
-  float s = clamp(hsl.y, 0.0, 1.0);
-  float l = clamp(hsl.z, 0.0, 1.0);
-  
-  if (s == 0.0) {
-    return vec3(l);
-  }
-  
-  float q = l < 0.5 ? l * (1.0 + s) : l + s - l * s;
-  float p = 2.0 * l - q;
-  
-  float hk = h;
-  vec3 t = vec3(hk + 1.0/3.0, hk, hk - 1.0/3.0);
-  t = fract(t + 1.0);
-  
-  vec3 c;
-  for (int i = 0; i < 3; i++) {
-    float ti = t[i];
-    if (ti < 1.0/6.0) {
-      c[i] = p + (q - p) * 6.0 * ti;
-    } else if (ti < 0.5) {
-      c[i] = q;
-    } else if (ti < 2.0/3.0) {
-      c[i] = p + (q - p) * (2.0/3.0 - ti) * 6.0;
-    } else {
-      c[i] = p;
-    }
-  }
-  
-  return c;
-}
-
-// Calculate HSL weight for a channel
-float hslChannelWeight(float hue, vec2 channel) {
-  float center = channel.x;
-  float range = channel.y;
-  
-  float dist = min(abs(hue - center), min(abs(hue - center + 360.0), abs(hue - center - 360.0)));
-  
-  if (dist > range) return 0.0;
-  
-  // Cosine smooth transition
-  return 0.5 * (1.0 + cos(3.14159265 * dist / range));
-}
-
-// Apply HSL adjustment
-// hslParams: array of 8 vec3 (hueShift, saturation, luminance) for each channel
-vec3 applyHSL(vec3 color, vec3 hslParams[8]) {
-  vec3 hsl = rgb2hsl(color);
-  float h = hsl.x;
-  float s = hsl.y;
-  float l = hsl.z;
-  
-  float totalHueShift = 0.0;
-  float satAdjust = 0.0;
-  float lumAdjust = 0.0;
-  float totalWeight = 0.0;
-  
-  vec2 channels[8];
-  channels[0] = HSL_RED;
-  channels[1] = HSL_ORANGE;
-  channels[2] = HSL_YELLOW;
-  channels[3] = HSL_GREEN;
-  channels[4] = HSL_CYAN;
-  channels[5] = HSL_BLUE;
-  channels[6] = HSL_PURPLE;
-  channels[7] = HSL_MAGENTA;
-  
-  for (int i = 0; i < 8; i++) {
-    float w = hslChannelWeight(h, channels[i]);
-    if (w > 0.0) {
-      totalHueShift += hslParams[i].x * w;
-      satAdjust += (hslParams[i].y / 100.0) * w;
-      lumAdjust += (hslParams[i].z / 100.0) * w;
-      totalWeight += w;
-    }
-  }
-  
-  if (totalWeight > 1.0) {
-    totalHueShift /= totalWeight;
-    satAdjust /= totalWeight;
-    lumAdjust /= totalWeight;
-  }
-  
-  if (totalWeight > 0.0) {
-    h = mod(h + totalHueShift, 360.0);
-    
-    // Saturation: asymmetric mapping (matching CPU filmLabHSL.js)
-    if (satAdjust > 0.0) {
-      s = s + (1.0 - s) * satAdjust;
-    } else if (satAdjust < 0.0) {
-      s = s * (1.0 + satAdjust);
-    }
-    s = clamp(s, 0.0, 1.0);
-    
-    // Luminance: asymmetric mapping with 0.5 damping (matching CPU filmLabHSL.js)
-    if (lumAdjust > 0.0) {
-      l = l + (1.0 - l) * lumAdjust * 0.5;
-    } else if (lumAdjust < 0.0) {
-      l = l * (1.0 + lumAdjust * 0.5);
-    }
-    l = clamp(l, 0.0, 1.0);
-  }
-  
-  return hsl2rgb(vec3(h, s, l));
-}
-`;
-  }
-
-  /**
-   * 获取分离色调 GLSL 代码片段
-   * 
-   * @deprecated 使用 packages/shared/shaders/splitTone.js (单一事实来源)
-   * 此方法保留以兼容旧代码。新代码应使用 buildFragmentShader() 。
-   * @returns {string} Split Toning 处理的 GLSL 代码
-   */
-  static getSplitToneGLSL() {
-    console.warn('[RenderCore] getSplitToneGLSL() is deprecated. Use packages/shared/shaders/splitTone.js instead.');
-    return `
-// Calculate luminance (Rec. 709, matching CPU filmLabSplitTone.js)
-float calcLuminance(vec3 c) {
-  return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-}
-
-// Smoothstep helper (matching CPU Hermite smoothstep)
-float splitToneSmoothstep(float t) {
-  t = clamp(t, 0.0, 1.0);
-  return t * t * (3.0 - 2.0 * t);
-}
-
-// Apply split toning — lerp-to-tint blend (matching CPU filmLabSplitTone.js)
-vec3 applySplitTone(vec3 color, float highlightHue, float highlightSat, 
-                     float shadowHue, float shadowSat, float balance) {
-  float lum = calcLuminance(color);
-  
-  // Zone weights (matching CPU calculateZoneWeights)
-  float balanceOffset = balance / 2.0;
-  float midpoint = 0.5 + balanceOffset;
-  float shadowEnd = 0.25;
-  float highlightStart = 0.75;
-  
-  float shadowWeight = 0.0;
-  float midtoneWeight = 0.0;
-  float highlightWeight = 0.0;
-  
-  if (lum < shadowEnd) {
-    shadowWeight = 1.0;
-  } else if (lum < midpoint) {
-    float d = max(midpoint - shadowEnd, 0.001);
-    float st = splitToneSmoothstep(clamp((lum - shadowEnd) / d, 0.0, 1.0));
-    shadowWeight = 1.0 - st;
-    midtoneWeight = st;
-  }
-  if (lum > highlightStart) {
-    highlightWeight = 1.0;
-  } else if (lum > midpoint) {
-    float d = max(highlightStart - midpoint, 0.001);
-    float st = splitToneSmoothstep(clamp((lum - midpoint) / d, 0.0, 1.0));
-    highlightWeight = st;
-    midtoneWeight = max(midtoneWeight, 1.0 - st);
-  }
-  
-  vec3 highlightTint = hsl2rgb(vec3(highlightHue * 360.0, 1.0, 0.5));
-  vec3 shadowTint = hsl2rgb(vec3(shadowHue * 360.0, 1.0, 0.5));
-  
-  // Lerp-to-tint blend (matching CPU: result + (tint - result) * strength * 0.3)
-  vec3 result = color;
-  if (shadowWeight > 0.0 && shadowSat > 0.0) {
-    float strength = shadowSat * shadowWeight;
-    result += (shadowTint - result) * strength * 0.3;
-  }
-  if (highlightWeight > 0.0 && highlightSat > 0.0) {
-    float strength = highlightSat * highlightWeight;
-    result += (highlightTint - result) * strength * 0.3;
-  }
-  
-  return clamp(result, 0.0, 1.0);
-}
-`;
-  }
-
-  // ==========================================================================
-  // Pipeline 描述
-  // ==========================================================================
-
-  /**
-   * 获取 Pipeline 描述 (用于调试和 UI 显示)
-   * 
-   * @returns {Object} Pipeline 描述
-   */
-  getPipelineDescription() {
-    const p = this.params;
-    const steps = [];
-
-    if (p.inverted && p.filmCurveEnabled) {
-      steps.push({ name: 'Film Curve (H&D)', active: true, profile: p.filmCurveProfile });
-    }
-    if (p.inverted) {
-      steps.push({ name: 'Inversion', active: true, mode: p.inversionMode });
-    }
-    steps.push({ name: 'White Balance', active: true, gains: [p.red, p.green, p.blue] });
-    steps.push({ name: 'Tone Mapping', active: true });
-    if (this._hasCurves(p.curves)) {
-      steps.push({ name: 'Curves', active: true });
-    }
-    if (!isDefaultHSL(p.hslParams)) {
-      steps.push({ name: 'HSL Adjustment', active: true });
-    }
-    if (!isDefaultSplitTone(p.splitToning)) {
-      steps.push({ name: 'Split Toning', active: true });
-    }
-    if (p.lut1) {
-      steps.push({ name: '3D LUT', active: true });
-    }
-
-    return {
-      steps,
-      params: this.params,
-      version: '2.0.0',
-    };
-  }
 
   // ==========================================================================
   // 私有辅助方法
@@ -979,24 +742,6 @@ vec3 applySplitTone(vec3 color, float highlightHue, float highlightSat,
   // Float Pipeline Helper Methods
   // ==========================================================================
 
-  /**
-   * Film curve (H&D density model) — float version
-   * Operates on 0.0–1.0 transmittance values without 8-bit quantization.
-   *
-   * @param {number} val - Transmittance (0.0–1.0)
-   * @param {number} gamma - Curve gamma
-   * @param {number} dMin  - Minimum density
-   * @param {number} dMax  - Maximum density
-   * @returns {number} Adjusted transmittance (0.0–1.0)
-   */
-  _applyFilmCurveFloat(val, gamma, dMin, dMax) {
-    const normalized = Math.max(0.001, Math.min(1, val));
-    const density = -Math.log10(normalized);
-    const densityNorm = Math.max(0, Math.min(1, (density - dMin) / (dMax - dMin)));
-    const gammaApplied = Math.pow(densityNorm, gamma);
-    const adjustedDensity = dMin + gammaApplied * (dMax - dMin);
-    return Math.max(0, Math.min(1, Math.pow(10, -adjustedDensity)));
-  }
 
   /**
    * Density levels — float version (0.0–1.0 transmittance)
@@ -1110,21 +855,6 @@ vec3 applySplitTone(vec3 color, float highlightHue, float highlightSat,
     ];
   }
 
-  /**
-   * Sample a 256-entry curve LUT with float linear interpolation.
-   * Gives smooth float output from the discrete 8-bit LUT data.
-   *
-   * @param {number} val - Input value (0.0–1.0)
-   * @param {Uint8Array} lut - 256-entry curve LUT (0–255)
-   * @returns {number} Interpolated output (0.0–1.0)
-   */
-  _sampleCurveLUTFloat(val, lut) {
-    const pos = Math.max(0, Math.min(1, val)) * 255;
-    const lo = Math.floor(pos);
-    const hi = Math.min(255, lo + 1);
-    const frac = pos - lo;
-    return ((1 - frac) * lut[lo] + frac * lut[hi]) / 255;
-  }
 
   /**
    * Sample a Float32 curve LUT with linear interpolation.

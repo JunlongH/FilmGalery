@@ -16,19 +16,26 @@
 
 /**
  * HSL 通道定义
- * 
+ *
  * hueCenter: 色相中心 (0-360)
  * hueRange: 影响范围 (度数，单侧)
+ *
+ * P2-1 修复: 相邻通道 range 之和 ≥ 中心距，保证权重构成 (近) 单位分解。
+ * 旧定义在 h=90/150/210/300 等中点处总权重仅 0.25 (弱响应区)，
+ * 用户调整强度比中心弱 4 倍。Adobe LR HSL 面板保证相邻覆盖无弱区。
+ *
+ * 精确单位分解要求两侧 range 均等于中心距；由于 range 对称，
+ * 取 max(左距, 右距) — 短侧会过覆盖 (total > 1)，由归一化处理。
  */
 const HSL_CHANNELS = {
-  red:     { hueCenter: 0,   hueRange: 30, name: '红色' },
-  orange:  { hueCenter: 30,  hueRange: 30, name: '橙色' },
-  yellow:  { hueCenter: 60,  hueRange: 30, name: '黄色' },
-  green:   { hueCenter: 120, hueRange: 45, name: '绿色' },
-  cyan:    { hueCenter: 180, hueRange: 30, name: '青色' },
-  blue:    { hueCenter: 240, hueRange: 45, name: '蓝色' },
-  purple:  { hueCenter: 280, hueRange: 30, name: '紫色' },
-  magenta: { hueCenter: 330, hueRange: 30, name: '品红' },
+  red:     { hueCenter: 0,   hueRange: 30, name: '红色' },   // 邻: magenta(330,d30) orange(30,d30) → max=30
+  orange:  { hueCenter: 30,  hueRange: 30, name: '橙色' },   // 邻: red(0,d30) yellow(60,d30) → max=30
+  yellow:  { hueCenter: 60,  hueRange: 60, name: '黄色' },   // 邻: orange(30,d30) green(120,d60) → max=60 (was 30)
+  green:   { hueCenter: 120, hueRange: 60, name: '绿色' },   // 邻: yellow(60,d60) cyan(180,d60) → max=60 (was 45)
+  cyan:    { hueCenter: 180, hueRange: 60, name: '青色' },   // 邻: green(120,d60) blue(240,d60) → max=60 (was 30)
+  blue:    { hueCenter: 240, hueRange: 60, name: '蓝色' },   // 邻: cyan(180,d60) purple(280,d40) → max=60 (was 45)
+  purple:  { hueCenter: 280, hueRange: 50, name: '紫色' },   // 邻: blue(240,d40) magenta(330,d50) → max=50 (was 30)
+  magenta: { hueCenter: 330, hueRange: 50, name: '品红' },   // 邻: purple(280,d50) red(360,d30) → max=50 (was 30)
 };
 
 /** HSL 通道顺序 (用于 UI) */
@@ -187,71 +194,62 @@ function applyHSL(r, g, b, hslParams = {}) {
   
   // 转换到 HSL
   let [h, s, l] = rgbToHsl(r, g, b);
-  
-  // 跳过低饱和度像素 (灰色无法调整色相)
-  if (s < 0.05) {
-    // 仍可调整明度
-    let lumAdjust = 0;
-    for (const [channelKey, channel] of HSL_CHANNELS_ENTRIES) {
-      const params = hslParams[channelKey];
-      if (params && params.luminance !== 0) {
-        const weight = calculateChannelWeight(h, channel);
-        if (weight > 0) {
-          lumAdjust += (params.luminance / 100) * weight;
-        }
-      }
-    }
-    
-    if (lumAdjust !== 0) {
-      l = Math.max(0, Math.min(1, l + lumAdjust * 0.5));
-      return hslToRgb(h, s, l);
-    }
-    return [r, g, b];
-  }
-  
+
   // 计算各通道的调整
   let hueAdjust = 0;
   let satAdjust = 0;
   let lumAdjust = 0;
   let totalWeight = 0;
-  
+
   for (const [channelKey, channel] of HSL_CHANNELS_ENTRIES) {
     const params = hslParams[channelKey];
     if (!params) continue;
-    
+
     const weight = calculateChannelWeight(h, channel);
     if (weight <= 0) continue;
-    
+
     totalWeight += weight;
-    
+
     // 色相偏移 (-180 to 180)
     if (params.hue !== 0) {
       hueAdjust += params.hue * weight;
     }
-    
+
     // 饱和度 (-100 to 100)
     if (params.saturation !== 0) {
       satAdjust += (params.saturation / 100) * weight;
     }
-    
+
     // 明度 (-100 to 100)
     if (params.luminance !== 0) {
       lumAdjust += (params.luminance / 100) * weight;
     }
   }
-  
-  // 归一化权重
-  if (totalWeight > 1) {
-    hueAdjust /= totalWeight;
-    satAdjust /= totalWeight;
-    lumAdjust /= totalWeight;
+
+  if (totalWeight <= 0) {
+    return [r, g, b];
   }
-  
+
+  // P2-1: 归一化权重 — 除以 max(1, totalWeight)
+  // 旧版仅在 totalWeight > 1 时除，弱响应区 (total < 1) 不补偿 → 调整强度被低估
+  // 现在统一除以 max(1, total)：重叠区缩放，弱区不放大（安全）
+  const norm = Math.max(1, totalWeight);
+  hueAdjust /= norm;
+  satAdjust /= norm;
+  lumAdjust /= norm;
+
+  // 连续饱和度斜坡：近灰像素 (s→0) 逐渐衰减色相/饱和度调整，
+  // 替代旧版 s<0.05 硬切换（会在近中性区域产生阶跃）。与 GPU hslAdjust.js 一致。
+  const rampT = Math.min(Math.max(s / 0.1, 0), 1);
+  const satRamp = rampT * rampT * (3 - 2 * rampT);
+  hueAdjust *= satRamp;
+  satAdjust *= satRamp;
+
   // 应用调整
   if (hueAdjust !== 0) {
     h = (h + hueAdjust + 360) % 360;
   }
-  
+
   if (satAdjust !== 0) {
     // 饱和度调整使用乘法混合
     if (satAdjust > 0) {
@@ -261,17 +259,15 @@ function applyHSL(r, g, b, hslParams = {}) {
     }
     s = Math.max(0, Math.min(1, s));
   }
-  
+
   if (lumAdjust !== 0) {
-    // 明度调整
-    if (lumAdjust > 0) {
-      l = l + (1 - l) * lumAdjust * 0.5;
-    } else {
-      l = l * (1 + lumAdjust * 0.5);
-    }
-    l = Math.max(0, Math.min(1, l));
+    // 明度调整：低饱和像素用线性增量（旧灰像素行为），
+    // 高饱和像素用非对称增量，两者之间按 satRamp 连续混合
+    const linearDelta = lumAdjust * 0.5;
+    const asymDelta = lumAdjust > 0 ? (1 - l) * lumAdjust * 0.5 : l * lumAdjust * 0.5;
+    l = Math.max(0, Math.min(1, l + linearDelta + (asymDelta - linearDelta) * satRamp));
   }
-  
+
   // 转回 RGB
   return hslToRgb(h, s, l);
 }
@@ -312,8 +308,9 @@ function applyHSLToArray(data, hslParams, options = {}) {
   if (isDefaultHSL(hslParams)) {
     return data;
   }
-  
-  const output = new Uint8Array(data.length);
+
+  // 保留输入类型（Uint8Array 或 Uint8ClampedArray），避免调用方处理两种返回类型
+  const output = new data.constructor(data.length);
   
   for (let i = 0; i < data.length; i += channels) {
     const r = data[i];

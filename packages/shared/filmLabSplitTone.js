@@ -93,56 +93,45 @@ function hslToRgb(h, s, l) {
 
 /**
  * 计算分区权重 (带平衡调整)
- * 
+ *
+ * 单位分解 (partition of unity)：shadow + midtone + highlight ≡ 1，
+ * 全域连续（smoothstep 互补过渡），避免过渡带权重不守恒/跳变导致的色带。
+ * 参照 darktable split-toning 的互补权重原则。
+ *
  * @param {number} luminance - 亮度 (0-1)
  * @param {number} balance - 平衡值 (-100 到 100)
  * @returns {{ shadow: number, midtone: number, highlight: number }} 权重
  */
 function calculateZoneWeights(luminance, balance = 0) {
-  // 根据 balance 调整过渡点
+  // 根据 balance 调整过渡点；钳制在固定边界内，保证过渡区宽度 > 0
   const balanceOffset = balance / 200; // -0.5 到 0.5
-  const midpoint = 0.5 + balanceOffset;
-  
+  const midpoint = Math.min(
+    Math.max(0.5 + balanceOffset, LUMINANCE_CONFIG.shadowEnd + 0.05),
+    LUMINANCE_CONFIG.highlightStart - 0.05
+  );
+
   let shadowWeight = 0;
-  let midtoneWeight = 0;
   let highlightWeight = 0;
-  
-  // 阴影区权重
-  if (luminance < LUMINANCE_CONFIG.shadowEnd) {
+
+  // 阴影区权重：[shadowEnd, midpoint] 内从 1 平滑降到 0
+  if (luminance <= LUMINANCE_CONFIG.shadowEnd) {
     shadowWeight = 1;
   } else if (luminance < midpoint) {
-    // 阴影到中间调过渡
     const t = (luminance - LUMINANCE_CONFIG.shadowEnd) / (midpoint - LUMINANCE_CONFIG.shadowEnd);
     shadowWeight = 1 - smoothstep(t);
-    midtoneWeight = smoothstep(t);
   }
-  
-  // 中间调区权重 (在中点附近最强)
-  if (luminance >= LUMINANCE_CONFIG.shadowEnd && luminance <= LUMINANCE_CONFIG.highlightStart) {
-    if (luminance >= midpoint - 0.1 && luminance <= midpoint + 0.1) {
-      // 中心区域完全是中间调
-      midtoneWeight = 1;
-    } else if (luminance < midpoint) {
-      // 从阴影过渡到中间调
-      const t = (luminance - LUMINANCE_CONFIG.shadowEnd) / (midpoint - LUMINANCE_CONFIG.shadowEnd);
-      midtoneWeight = Math.max(midtoneWeight, smoothstep(t));
-    } else {
-      // 从中间调过渡到高光
-      const t = (luminance - midpoint) / (LUMINANCE_CONFIG.highlightStart - midpoint);
-      midtoneWeight = Math.max(midtoneWeight, 1 - smoothstep(t));
-    }
-  }
-  
-  // 高光区权重
-  if (luminance > LUMINANCE_CONFIG.highlightStart) {
+
+  // 高光区权重：[midpoint, highlightStart] 内从 0 平滑升到 1
+  if (luminance >= LUMINANCE_CONFIG.highlightStart) {
     highlightWeight = 1;
   } else if (luminance > midpoint) {
-    // 中间调到高光过渡
     const t = (luminance - midpoint) / (LUMINANCE_CONFIG.highlightStart - midpoint);
     highlightWeight = smoothstep(t);
-    midtoneWeight = Math.max(midtoneWeight, 1 - smoothstep(t));
   }
-  
+
+  // 中间调取余量，保证三者之和恒为 1
+  const midtoneWeight = 1 - shadowWeight - highlightWeight;
+
   return { shadow: shadowWeight, midtone: midtoneWeight, highlight: highlightWeight };
 }
 
@@ -210,19 +199,20 @@ function applySplitTone(r, g, b, params = {}) {
   const midtoneColor = hslToRgb(midtoneHue, 1, 0.5);
   const shadowColor = hslToRgb(shadowHue, 1, 0.5);
   
-  // 混合
+  // 混合（顺序 shadow → midtone → highlight，与 GPU shader 保持一致；
+  // 权重为单位分解，顺序差异已最小化）
   let outR = r;
   let outG = g;
   let outB = b;
-  
-  // 高光着色
-  if (highlightSat > 0 && weights.highlight > 0) {
-    const strength = highlightSat * weights.highlight;
-    outR = outR + (highlightColor[0] - outR) * strength * 0.3;
-    outG = outG + (highlightColor[1] - outG) * strength * 0.3;
-    outB = outB + (highlightColor[2] - outB) * strength * 0.3;
+
+  // 阴影着色
+  if (shadowSat > 0 && weights.shadow > 0) {
+    const strength = shadowSat * weights.shadow;
+    outR = outR + (shadowColor[0] - outR) * strength * 0.3;
+    outG = outG + (shadowColor[1] - outG) * strength * 0.3;
+    outB = outB + (shadowColor[2] - outB) * strength * 0.3;
   }
-  
+
   // 中间调着色
   if (midtoneSat > 0 && weights.midtone > 0) {
     const strength = midtoneSat * weights.midtone;
@@ -230,13 +220,13 @@ function applySplitTone(r, g, b, params = {}) {
     outG = outG + (midtoneColor[1] - outG) * strength * 0.3;
     outB = outB + (midtoneColor[2] - outB) * strength * 0.3;
   }
-  
-  // 阴影着色
-  if (shadowSat > 0 && weights.shadow > 0) {
-    const strength = shadowSat * weights.shadow;
-    outR = outR + (shadowColor[0] - outR) * strength * 0.3;
-    outG = outG + (shadowColor[1] - outG) * strength * 0.3;
-    outB = outB + (shadowColor[2] - outB) * strength * 0.3;
+
+  // 高光着色
+  if (highlightSat > 0 && weights.highlight > 0) {
+    const strength = highlightSat * weights.highlight;
+    outR = outR + (highlightColor[0] - outR) * strength * 0.3;
+    outG = outG + (highlightColor[1] - outG) * strength * 0.3;
+    outB = outB + (highlightColor[2] - outB) * strength * 0.3;
   }
   
   // 钳制输出
@@ -262,8 +252,9 @@ function applySplitToneToArray(data, params, options = {}) {
   if (isDefaultSplitTone(params)) {
     return data;
   }
-  
-  const output = new Uint8Array(data.length);
+
+  // 保留输入类型（Uint8Array 或 Uint8ClampedArray）
+  const output = new data.constructor(data.length);
   // Q18: Precompute tint colors once (instead of per-pixel)
   const ctx = prepareSplitTone(params);
   
@@ -330,11 +321,12 @@ function applySplitToneFast(r, g, b, ctx) {
 
   let outR = r, outG = g, outB = b;
 
-  if (ctx.highlightSat > 0 && weights.highlight > 0) {
-    const s = ctx.highlightSat * weights.highlight * 0.3;
-    outR += (ctx.highlightColor[0] - outR) * s;
-    outG += (ctx.highlightColor[1] - outG) * s;
-    outB += (ctx.highlightColor[2] - outB) * s;
+  // 顺序 shadow → midtone → highlight，与 GPU shader 一致
+  if (ctx.shadowSat > 0 && weights.shadow > 0) {
+    const s = ctx.shadowSat * weights.shadow * 0.3;
+    outR += (ctx.shadowColor[0] - outR) * s;
+    outG += (ctx.shadowColor[1] - outG) * s;
+    outB += (ctx.shadowColor[2] - outB) * s;
   }
   if (ctx.midtoneSat > 0 && weights.midtone > 0) {
     const s = ctx.midtoneSat * weights.midtone * 0.3;
@@ -342,11 +334,11 @@ function applySplitToneFast(r, g, b, ctx) {
     outG += (ctx.midtoneColor[1] - outG) * s;
     outB += (ctx.midtoneColor[2] - outB) * s;
   }
-  if (ctx.shadowSat > 0 && weights.shadow > 0) {
-    const s = ctx.shadowSat * weights.shadow * 0.3;
-    outR += (ctx.shadowColor[0] - outR) * s;
-    outG += (ctx.shadowColor[1] - outG) * s;
-    outB += (ctx.shadowColor[2] - outB) * s;
+  if (ctx.highlightSat > 0 && weights.highlight > 0) {
+    const s = ctx.highlightSat * weights.highlight * 0.3;
+    outR += (ctx.highlightColor[0] - outR) * s;
+    outG += (ctx.highlightColor[1] - outG) * s;
+    outB += (ctx.highlightColor[2] - outB) * s;
   }
 
   return [
@@ -372,6 +364,10 @@ function mergeSplitToneParams(base, overlay) {
     highlights: {
       hue: overlay?.highlights?.hue ?? base?.highlights?.hue ?? DEFAULT_SPLIT_TONE_PARAMS.highlights.hue,
       saturation: overlay?.highlights?.saturation ?? base?.highlights?.saturation ?? DEFAULT_SPLIT_TONE_PARAMS.highlights.saturation,
+    },
+    midtones: {
+      hue: overlay?.midtones?.hue ?? base?.midtones?.hue ?? DEFAULT_SPLIT_TONE_PARAMS.midtones?.hue ?? 0,
+      saturation: overlay?.midtones?.saturation ?? base?.midtones?.saturation ?? DEFAULT_SPLIT_TONE_PARAMS.midtones?.saturation ?? 0,
     },
     shadows: {
       hue: overlay?.shadows?.hue ?? base?.shadows?.hue ?? DEFAULT_SPLIT_TONE_PARAMS.shadows.hue,
@@ -418,6 +414,20 @@ function validateSplitToneParams(params) {
     if (params.shadows.saturation !== undefined) {
       if (typeof params.shadows.saturation !== 'number' || params.shadows.saturation < 0 || params.shadows.saturation > 100) {
         errors.push('shadows.saturation must be between 0 and 100');
+      }
+    }
+  }
+
+  // 验证中间调
+  if (params.midtones) {
+    if (params.midtones.hue !== undefined) {
+      if (typeof params.midtones.hue !== 'number' || params.midtones.hue < 0 || params.midtones.hue > 360) {
+        errors.push('midtones.hue must be between 0 and 360');
+      }
+    }
+    if (params.midtones.saturation !== undefined) {
+      if (typeof params.midtones.saturation !== 'number' || params.midtones.saturation < 0 || params.midtones.saturation > 100) {
+        errors.push('midtones.saturation must be between 0 and 100');
       }
     }
   }

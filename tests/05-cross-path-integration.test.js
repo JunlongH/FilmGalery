@@ -141,8 +141,8 @@ describe('FilmLabWebGL.js — client preview path', () => {
     expect(webglSource).toMatch(/VERTEX_SHADER/);
   });
 
-  test('使用 buildFragmentShader({ isGL2: false }) (WebGL1)', () => {
-    expect(webglSource).toMatch(/buildFragmentShader\s*\(\s*\{\s*isGL2\s*:\s*false\s*\}/);
+  test('使用 buildFragmentShader({ isGL2, precision: "highp" }) (Phase F: 移动端精度)', () => {
+    expect(webglSource).toMatch(/buildFragmentShader\s*\(\s*\{\s*isGL2,\s*precision:\s*['"]highp['"]/);
   });
 
   test('不包含内联 GLSL precision 声明 (已移除)', () => {
@@ -230,19 +230,20 @@ describe('RenderCore.getGLSLUniforms() — cross-path uniform map', () => {
 });
 
 // ============================================================================
-// 5. Deprecated APIs
+// 5. Deprecated APIs (Phase O: deleted, no longer deprecated)
 // ============================================================================
 
-describe('Deprecated API warnings', () => {
-  test('RenderCore.getHSLGLSL() 已标记 @deprecated', () => {
+describe('Dead code removed (Phase O P1-25)', () => {
+  test('RenderCore.getHSLGLSL() 已删除（dead code 清理）', () => {
     const filePath = path.join(__dirname, '..', 'packages', 'shared', 'render', 'RenderCore.js');
     const source = fs.readFileSync(filePath, 'utf-8');
-    // 应包含 @deprecated JSDoc
-    const hslGLSLSection = source.substring(
-      source.indexOf('getHSLGLSL'),
-      source.indexOf('getHSLGLSL') + 200
-    );
-    expect(source).toContain('@deprecated');
+    // 应不再包含该方法（已删除，使用 packages/shared/shaders/hslAdjust.js）
+    expect(source).not.toContain('getHSLGLSL');
+    expect(source).not.toContain('getSplitToneGLSL');
+    expect(source).not.toMatch(/_applyFilmCurveFloat\s*\(/);
+    expect(source).not.toMatch(/_sampleCurveLUTFloat\s*\(/);
+    // _sampleCurveLUTFloatHQ 仍在使用，不应删除
+    expect(source).toContain('_sampleCurveLUTFloatHQ');
   });
 
   test('filmlab-core.js 已标记 @deprecated', () => {

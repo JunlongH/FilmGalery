@@ -104,50 +104,14 @@ function kelvinToRGB(kelvin) {
   let G = -0.9692660 * X + 1.8760108 * Y + 0.0415560 * Z;
   let B =  0.0556434 * X - 0.2040259 * Y + 1.0572252 * Z;
 
-  // ⚠️ CRITICAL FIX (v2.3.0+): Preserve absolute luminance in XYZ space
-  // ==================================================================================
-  // 原问题: 简单 max-channel 归一化会丢失 XYZ→RGB 转换中的亮度信息，导致
-  //        色温调整时整体亮度变化 (±15%)。这与 Adobe Lightroom/Photoshop 的
-  //        行为不符。
-  //
-  // LR/PS 标准: 使用 von Kries chromatic adaptation + Y-channel 保持
-  //            确保白平衡调整时亮度 < 1% 变化。
-  //
-  // 修复方法: 在 XYZ 空间中直接计算，分离亮度(Y)和色度(X,Z)
-  //         - Y 通道: 保留原始强度不变
-  //         - X,Z 通道: 根据色度调整
-  //         然后转换回 RGB
-  // ==================================================================================
-  
-  // 保存原始 Y 值 (亮度) 以确保白平衡不改变总体亮度
-  const Y_original = Y;
-  
-  // 计算 X, Z 对应的线性 RGB 色度 (忽略亮度)
-  // 这里我们只关心色度关系，所以对 X, Z 应用标准化
-  // 但保留 Y (亮度) 完全不变
-  
-  // 重新计算 XYZ→RGB，但分离处理亮度
-  // 方法: 使用 von Kries 色度适应 (仅在 X,Z 平面调整，Y 不动)
-  
-  // 标准化 RGB 为单位向量形式 (用于色度计算)
-  const sumRGB = R + G + B;
-  if (sumRGB > 0.001) {
-    // 保存色度比 (色域信息)
-    const r_chroma = R / sumRGB;
-    const g_chroma = G / sumRGB;
-    const b_chroma = B / sumRGB;
-    
-    // 应用亮度: 保留原始 Y，根据它重新缩放 RGB
-    // Y_original 保持不变，RGB 的相对比例保留
-    const luminance_scale = Y_original;
-    R = r_chroma * luminance_scale * 3.0;  // 3.0 是经验系数，使结果合理
-    G = g_chroma * luminance_scale * 3.0;
-    B = b_chroma * luminance_scale * 3.0;
-  }
-  
-  // 二次安全归一化 (最大通道 ≈ 1.0，但保持亮度信息)
-  const maxC = Math.max(R, Math.max(G, B));
-  if (maxC > 1.0) {
+  // P1-30: 删除 von Kries 死代码块（恒等于 max 通道归一化）
+  // 旧实现声称"Y 通道保持"，但 Y=1.0 恒定 → Y_original=1.0 → r_chroma*1.0*3.0
+  // → max 归一化抵消 3.0 系数 → 整个块等价于 max 通道归一化
+  // 亮度补偿已在 computeWBGains 中完成（基于 Rec.709 luma 加权）
+
+  // Max-channel 归一化（保留色度，归一化到 [0, 1]）
+  const maxC = Math.max(R, G, B);
+  if (maxC > 0) {
     R /= maxC;
     G /= maxC;
     B /= maxC;
@@ -225,12 +189,19 @@ function computeWBGains(params = {}, options = {}) {
     const bTempGain = bRef / Math.max(0.001, bTemp);
     
     // 4. 色调调整 (绿-品红轴)
+    // P2-2 修复: tint 增益随 targetKelvin 缩放
+    // 旧版 tint 用固定增益 (0.15/0.30/0.15)，极端色温下 tint 效果被 Rec.709
+    // 亮度补偿部分抵消 (因 R/B 通道在极端色温下权重大，tint 对 G 的影响被稀释)。
+    // Adobe LR 约定: tint 在全色温范围保持感知一致。
+    // 修复: tint 增益乘以 tempScale = avgKelvinRGB / 0.5
+    //   (当色温偏离 D65 时，RGB 通道不对称加剧，tint 需要更强增益)
     // tint > 0: 更品红 (减绿加红蓝)
     // tint < 0: 更绿 (加绿减红蓝)
     const n = N / 100; // 归一化到 -1..1
-    const tintR = 1 + n * 0.15;
-    const tintG = 1 - n * 0.30;
-    const tintB = 1 + n * 0.15;
+    const tempScale = Math.max(0.5, Math.min(2.0, (rTemp + gTemp + bTemp) / 1.5));
+    const tintR = 1 + n * 0.15 * tempScale;
+    const tintG = 1 - n * 0.30 * tempScale;
+    const tintB = 1 + n * 0.15 * tempScale;
     
     // 5. 组合所有增益
     rGain = R * rTempGain * tintR;

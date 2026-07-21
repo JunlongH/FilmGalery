@@ -14,56 +14,15 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import FilmLabWebGL, { isWebGLAvailable } from '../FilmLabWebGL';
+import FilmLabWebGL, { isWebGLAvailable, processImageWebGL, disposeWebGL } from '../FilmLabWebGL';
 import { RenderCore } from '@filmgallery/shared';
+import { stableSerializeParams } from '../utils';
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const PREVIEW_MAX_WIDTH = 2000;
-const RENDER_DEBOUNCE_MS = 16; // ~60fps
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * 深度比较渲染参数是否变化
- */
-function paramsEqual(a, b) {
-  if (!a || !b) return false;
-  
-  // 快速检查基本参数
-  const basicKeys = [
-    'inverted', 'inversionMode', 'exposure', 'contrast',
-    'highlights', 'shadows', 'whites', 'blacks',
-    'rotate', 'filmCurveEnabled',
-  ];
-  
-  for (const key of basicKeys) {
-    if (a[key] !== b[key]) return false;
-  }
-  
-  // 检查数组参数
-  if (a.gains && b.gains) {
-    for (let i = 0; i < 3; i++) {
-      if (a.gains[i] !== b.gains[i]) return false;
-    }
-  }
-  
-  // 检查裁剪区域
-  if (a.cropRect && b.cropRect) {
-    if (a.cropRect.x !== b.cropRect.x || 
-        a.cropRect.y !== b.cropRect.y ||
-        a.cropRect.w !== b.cropRect.w || 
-        a.cropRect.h !== b.cropRect.h) {
-      return false;
-    }
-  }
-  
-  return true;
-}
 
 // ============================================================================
 // Hook Implementation
@@ -154,8 +113,9 @@ export function useFilmLabRenderer(options = {}) {
 
       const elapsed = performance.now() - startTime;
       setLastRenderTime(elapsed);
-      lastParamsRef.current = { ...params };
-      
+      // 存序列化快照而非浅拷贝（浅拷贝共享嵌套对象引用，原地修改会漏判）
+      lastParamsRef.current = stableSerializeParams(params);
+
       return canvas;
     } catch (e) {
       console.error('[useFilmLabRenderer] Render error:', e);
@@ -172,8 +132,9 @@ export function useFilmLabRenderer(options = {}) {
   const requestRender = useCallback((params, options = {}) => {
     const { immediate = false, force = false } = options;
 
-    // 检查参数是否变化
-    if (!force && paramsEqual(params, lastParamsRef.current)) {
+    // 检查参数是否变化（与序列化快照比较）
+    if (!force && lastParamsRef.current !== null &&
+        stableSerializeParams(params) === lastParamsRef.current) {
       return processedCanvasRef.current;
     }
 
@@ -213,7 +174,6 @@ export function useFilmLabRenderer(options = {}) {
     processedCanvasRef.current = null;
     lastParamsRef.current = null;
   }, []);
-
   /**
    * 获取当前渲染结果
    */
@@ -240,16 +200,23 @@ export function useFilmLabRenderer(options = {}) {
     }
   }, []);
 
-  // 清理
+  // 清理 — P0-2: 调用 disposeWebGL 释放 GL 资源（program + 6 张纹理 + buffer）
+  // 旧实现只 cancelAnimationFrame，导致每次组件卸载/换图泄漏 GL 资源至页面卸载
   useEffect(() => {
     return () => {
       if (frameRequestRef.current) {
-        cancelAnimationFrame(frameRequestRef.current);
+        cancelAnimationFrame(frameRequest.current);
+      }
+      // 释放 WebGL 资源（canvas 引用存在时）
+      if (processedCanvasRef.current) {
+        disposeWebGL(processedCanvasRef.current);
       }
     };
   }, []);
 
-  // 当图像变化时清除缓存
+  // 当图像变化时清除缓存 + 释放旧 GL 资源
+  // 注意：不在此处 disposeWebGL，因为同一 canvas 可能复用 program/纹理
+  // clearCache 只清 JS 层缓存，GL 资源由组件卸载时统一释放
   useEffect(() => {
     clearCache();
   }, [image, clearCache]);
