@@ -323,6 +323,6 @@ const ToneCurveEditor = React.memo(function ToneCurveEditor({
       </div>
     </div>
   );
-};
+});
 
 export default ToneCurveEditor;
