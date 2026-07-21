@@ -202,61 +202,82 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Create or update release
+      - name: Create release via GitHub API
         run: |
           set -eu
 
-          # Collect installer files
+          TAG="${{ github.ref_name }}"
+          REPO="JunlongH/FilmGallery"
+          COMMIT_SHA="${{ github.sha }}"
+          API="https://api.github.com/repos/$REPO"
+
           INSTALLERS=()
           while IFS= read -r f; do
             INSTALLERS+=("$f")
           done < <(find artifacts/ -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.zip" \) | sort)
-
           echo "Installers to upload (${#INSTALLERS[@]}):"
           printf '  %s\n' "${INSTALLERS[@]}"
 
-          TAG="${{ github.ref_name }}"
-          REPO="${{ github.repository }}"
-          COMMIT_SHA="${{ github.sha }}"
-
-          # Clean up any stale untagged/orphaned release from a previous run
-          # (gh can create "untagged-*" releases when the tag is deleted/recreated)
-          if gh release view "$TAG" --repo "$REPO" &>/dev/null; then
-            echo "Release $TAG already exists, deleting and recreating..."
-            gh release delete "$TAG" --repo "$REPO" --yes --cleanup-tag 2>/dev/null || true
-            # Give GitHub a moment to process the deletion
-            sleep 3
+          # Delete any existing release for this tag (including stale untagged ones)
+          echo "Cleaning up any existing release for $TAG..."
+          EXISTING=$(curl -sfL -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "$API/releases/tags/$TAG" 2>/dev/null || true)
+          if [ -n "$EXISTING" ]; then
+            RELEASE_ID=$(echo "$EXISTING" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+            echo "Deleting existing release id=$RELEASE_ID"
+            curl -sfL -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" \
+              "$API/releases/$RELEASE_ID" >/dev/null || true
+            sleep 2
           fi
 
-          # Also clean up any orphaned untagged releases that may point to this tag
-          echo "Cleaning up any stale untagged releases..."
-          gh release list --repo "$REPO" --limit 100 2>/dev/null | grep 'untagged-' | while read -r line; do
-            UNTAGGED=$(echo "$line" | awk '{print $4}')
-            echo "Deleting stale untagged release: $UNTAGGED"
-            gh release delete "$UNTAGGED" --repo "$REPO" --yes 2>/dev/null || true
+          # Create release directly via GitHub API (avoids gh CLI tag resolution issues)
+          echo "Creating release $TAG..."
+          RESP=$(curl -sfL -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "$API/releases" \
+            -d "$(python3 -c "
+import json
+print(json.dumps({
+    'tag_name': '$TAG',
+    'target_commitish': '$COMMIT_SHA',
+    'name': '$TAG',
+    'draft': False,
+    'prerelease': False
+}))
+            ")")
+
+          RELEASE_ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          UPLOAD_URL=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'].replace('{?name,label}', ''))")
+          echo "Release created: id=$RELEASE_ID"
+
+          # Upload each asset
+          for f in "${INSTALLERS[@]}"; do
+            BASENAME=$(basename "$f")
+            # Determine content type
+            case "$BASENAME" in
+              *.exe) CT="application/vnd.microsoft.portable-executable" ;;
+              *.dmg) CT="application/x-apple-diskimage" ;;
+              *.AppImage) CT="application/octet-stream" ;;
+              *.deb) CT="application/vnd.debian.binary-package" ;;
+              *.zip) CT="application/zip" ;;
+              *) CT="application/octet-stream" ;;
+            esac
+            echo "Uploading $BASENAME..."
+            curl -sfL -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Content-Type: $CT" \
+              "$UPLOAD_URL?name=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$BASENAME'))")" \
+              --data-binary "@$f" >/dev/null
+            echo "  done"
           done
-          sleep 2
 
-          # Create release with --target to explicitly associate with the commit
-          # This prevents gh from creating an "untagged" release when the tag
-          # was recently pushed (especially after delete+recreate).
-          echo "Creating release $TAG at commit $COMMIT_SHA..."
-          gh release create "$TAG" "${INSTALLERS[@]}" \
-            --repo "$REPO" \
-            --target "$COMMIT_SHA" \
-            --draft \
-            --generate-notes \
-            --title "$TAG"
-
-          echo "Release created: https://github.com/$REPO/releases/tag/$TAG"
+          echo "Release published: https://github.com/$REPO/releases/tag/$TAG"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
