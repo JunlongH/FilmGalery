@@ -1,11 +1,49 @@
 const sharp = require('sharp');
 sharp.cache(false);
 
-// 使用共享模块的白平衡计算
 const { computeWBGains } = require('../../packages/shared');
-
-// RAW 解码器
 const rawDecoder = require('./raw-decoder');
+
+function decodeBmp(buffer) {
+  if (buffer.length < 54 || buffer[0] !== 0x42 || buffer[1] !== 0x4D) {
+    throw new Error('Not a valid BMP file');
+  }
+
+  const pixelOffset = buffer.readUInt32LE(10);
+  const width = buffer.readInt32LE(18);
+  const rawHeight = buffer.readInt32LE(22);
+  const bpp = buffer.readUInt16LE(28);
+  const compression = buffer.readUInt32LE(30);
+
+  if (compression !== 0) {
+    throw new Error(`Unsupported BMP compression: ${compression} (only BI_RGB/uncompressed supported)`);
+  }
+  if (bpp !== 24 && bpp !== 32) {
+    throw new Error(`Unsupported BMP depth: ${bpp}-bit (only 24/32-bit supported)`);
+  }
+
+  const height = Math.abs(rawHeight);
+  const topDown = rawHeight < 0;
+  const rowSize = Math.floor((bpp * width + 31) / 32) * 4;
+  const channels = 3;
+  const out = Buffer.allocUnsafe(width * height * channels);
+
+  for (let row = 0; row < height; row++) {
+    const srcRow = topDown ? row : (height - 1 - row);
+    const srcOffset = pixelOffset + srcRow * rowSize;
+    const dstOffset = row * width * channels;
+
+    for (let col = 0; col < width; col++) {
+      const si = srcOffset + col * (bpp / 8);
+      const di = dstOffset + col * channels;
+      out[di]     = buffer[si + 2];
+      out[di + 1] = buffer[si + 1];
+      out[di + 2] = buffer[si];
+    }
+  }
+
+  return { data: out, width, height, channels };
+}
 
 /**
  * 获取图像输入源
@@ -16,14 +54,14 @@ const rawDecoder = require('./raw-decoder');
  */
 async function getImageInput(inputPath) {
   const isRaw = rawDecoder.isRawFile(inputPath);
-  
+
   if (isRaw) {
     const available = await rawDecoder.isAvailable();
     if (!available) {
       console.warn('[FilmLab] RAW decoder not available, Sharp will try to handle directly');
       return { input: inputPath, isRaw: true };
     }
-    
+
     try {
       console.log(`[FilmLab] Decoding RAW file: ${inputPath}`);
       const tiffBuffer = await rawDecoder.decode(inputPath, { outputFormat: 'tiff' });
@@ -35,12 +73,14 @@ async function getImageInput(inputPath) {
     }
   }
 
-  // For non-RAW files, probe Sharp first. If Sharp can't read it (e.g. some
-  // TIFF variants, BigTIFF, special compressions), fall back to LibRaw.
+  // For non-RAW files, probe Sharp first. If Sharp can't read it, try
+  // LibRaw (TIFF variants) then pure-JS BMP decoder as final fallback.
   try {
     await sharp(inputPath).metadata();
   } catch (probeErr) {
-    console.warn(`[FilmLab] Sharp cannot read "${inputPath}" (${probeErr.message}), trying RAW decoder fallback...`);
+    console.warn(`[FilmLab] Sharp cannot read "${inputPath}" (${probeErr.message}), trying fallbacks...`);
+
+    // Attempt 1: LibRaw
     const available = await rawDecoder.isAvailable();
     if (available) {
       try {
@@ -48,11 +88,24 @@ async function getImageInput(inputPath) {
         console.log(`[FilmLab] Decoded via RAW decoder: ${(tiffBuffer.length / 1024 / 1024).toFixed(2)} MB`);
         return { input: tiffBuffer, isRaw: false };
       } catch (decodeErr) {
-        console.error('[FilmLab] RAW decoder also failed:', decodeErr.message);
+        console.warn('[FilmLab] RAW decoder failed:', decodeErr.message);
       }
     }
+
+    // Attempt 2: pure-JS BMP decoder
+    try {
+      const fs = require('fs');
+      const fileBuffer = fs.readFileSync(inputPath);
+      const { data, width, height, channels } = decodeBmp(fileBuffer);
+      const rawInput = { raw: { width, height, channels } };
+      const pngBuffer = await sharp(data, rawInput).png().toBuffer();
+      console.log(`[FilmLab] BMP decoded via JS: ${width}x${height} → PNG ${(pngBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+      return { input: pngBuffer, isRaw: false };
+    } catch (bmpErr) {
+      console.error('[FilmLab] BMP decode also failed:', bmpErr.message);
+    }
   }
-  
+
   return { input: inputPath, isRaw: false };
 }
 
