@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 function isUsableEnvValue(v) {
   if (!v || typeof v !== 'string') return false;
@@ -7,6 +8,18 @@ function isUsableEnvValue(v) {
   if (!s) return false;
   if (s.toLowerCase() === 'undefined' || s.toLowerCase() === 'null') return false;
   return true;
+}
+
+function canWriteToDir(dir) {
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const testFile = path.join(dir, '.write-test-' + Date.now());
+    fs.writeFileSync(testFile, '');
+    fs.unlinkSync(testFile);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 function getDbPath() {
@@ -27,6 +40,7 @@ function getDbPath() {
     const dir = path.dirname(dbPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   } else {
+    // Fallback: try server-local first, but only if writable
     dbPath = path.join(__dirname, '../film.db');
   }
 
@@ -34,6 +48,18 @@ function getDbPath() {
   try {
     const dir = path.dirname(dbPath);
     if (dir && !fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  } catch (_) {}
+
+  // If the resolved directory is not writable (e.g., inside Program Files),
+  // fall back to a user-writable location
+  try {
+    const dir = path.dirname(dbPath);
+    if (!canWriteToDir(dir)) {
+      const homeDir = path.join(os.homedir(), '.filmgallery');
+      dbPath = path.join(homeDir, 'film.db');
+      if (!fs.existsSync(homeDir)) fs.mkdirSync(homeDir, { recursive: true });
+      console.log('[DB-CONFIG] Resolved path not writable, falling back to:', dbPath);
+    }
   } catch (_) {}
 
   return dbPath;

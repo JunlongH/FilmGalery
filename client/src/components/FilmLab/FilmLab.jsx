@@ -188,6 +188,13 @@ export default function FilmLab({
   const histogramScratchRef = useRef(null);
   // 追踪当前图片 effect 创建的 blob URL，用于切换照片/卸载时 revoke，避免数 MB/张的泄漏
   const currentBlobUrlRef = useRef(null);
+  // P2-18: 复用直方图数组（避免每帧 4× new Array(256) = 8KB 分配）
+  const histBuffersRef = useRef({
+    rgb: new Array(256).fill(0),
+    red: new Array(256).fill(0),
+    green: new Array(256).fill(0),
+    blue: new Array(256).fill(0),
+  });
 
   // 当 sourceType 变化时，清除 WebGL 缓存以避免显示旧的渲染结果
   // 这是修复"正片模式下先显示正片然后跳到负片"问题的关键
@@ -1333,15 +1340,7 @@ export default function FilmLab({
     // P0-3: Use 256×256 scratch canvas instead of full-canvas getImageData (12MB → 256KB)
     // Both WebGL and CPU paths share this approach after canvas has processed pixels
     let imageData = null;
-    let data = null; // Kept for backward compat with existing variable references (unused in new flow)
-    
-  // P2-18: 复用直方图数组（避免每帧 4× new Array(256) = 8KB 分配）
-  const histBuffersRef = useRef({
-    rgb: new Array(256).fill(0),
-    red: new Array(256).fill(0),
-    green: new Array(256).fill(0),
-    blue: new Array(256).fill(0),
-  });
+    let data = null;
 
     // P2-18: 复用直方图数组（useRef 持久化，每帧 fill(0) 重置而非 new Array）
     const histBuffers = histBuffersRef.current;

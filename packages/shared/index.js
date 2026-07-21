@@ -6,7 +6,7 @@
  */
 
 // 核心处理模块
-const RenderCore = require('./render/RenderCore');
+const { RenderCore } = require('./render/RenderCore');
 const { renderBuffer } = require('./render/render-buffer');
 const saturation = require('./filmLabSaturation');
 const constants = require('./filmLabConstants');

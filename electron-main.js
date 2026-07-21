@@ -277,19 +277,27 @@ function stopServer() {
         port: loopbackHttpPort(),
         path: '/api/shutdown',
         method: 'POST',
-        timeout: 2000
+        timeout: 5000
       }, (res) => {
         LOG('[stopServer] Shutdown endpoint responded:', res.statusCode);
         res.resume();
         
         const gracefulTimeout = setTimeout(() => {
-          LOG('[stopServer] Graceful timeout, force killing...');
+          LOG('[stopServer] Graceful timeout (8s), force killing...');
           if (serverProcess && !serverProcess.killed) {
-            try { serverProcess.kill('SIGKILL'); } catch (e) {}
+            try { serverProcess.kill('SIGTERM'); } catch (e) {}
+            setTimeout(() => {
+              if (serverProcess && !serverProcess.killed) {
+                LOG('[stopServer] SIGTERM ineffective, sending SIGKILL...');
+                try { serverProcess.kill('SIGKILL'); } catch (e) {}
+              }
+              if (serverProcess) serverProcess = null;
+              resolve();
+            }, 2000);
+          } else {
+            resolve();
           }
-          serverProcess = null;
-          resolve();
-        }, 3000);
+        }, 8000);
         
         if (serverProcess) {
           serverProcess.once('exit', () => {
@@ -302,12 +310,19 @@ function stopServer() {
       });
       
       req.on('error', (e) => {
-        LOG('[stopServer] Shutdown endpoint error:', e.message, '- force killing');
+        LOG('[stopServer] Shutdown endpoint error:', e.message, '- sending SIGTERM');
         if (serverProcess && !serverProcess.killed) {
-          try { serverProcess.kill('SIGKILL'); } catch (e) {}
+          try { serverProcess.kill('SIGTERM'); } catch (e) {}
+          setTimeout(() => {
+            if (serverProcess && !serverProcess.killed) {
+              try { serverProcess.kill('SIGKILL'); } catch (e) {}
+            }
+            serverProcess = null;
+            resolve();
+          }, 3000);
+        } else {
+          resolve();
         }
-        serverProcess = null;
-        resolve();
       });
       
       req.end();

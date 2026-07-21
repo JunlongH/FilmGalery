@@ -27,29 +27,64 @@ conflictResolver.autoCleanup(dataDir).catch(err => {
   console.error('[DB] Conflict cleanup error:', err.message);
 });
 
+// Pre-open WAL recovery: SIGKILL during a migration or mid-transaction can
+// leave corrupted WAL/shm/journal files that prevent the DB from opening on
+// next startup (SQLITE_IOERR). These files are ephemeral — deleting them loses
+// only uncommitted transactions (which are already lost after SIGKILL).
+// Heuristic: if the DB file exists and is untouched for >60s while WAL/shm is
+// newer, the WAL likely belongs to a crashed session and should be cleaned up.
+(function recoverStaleWAL() {
+  if (!fs.existsSync(dbPath)) return;
+  const journalSuffixes = ['-wal', '-shm', '-journal'];
+  let hasJournals = false;
+  for (const suffix of journalSuffixes) {
+    const p = dbPath + suffix;
+    if (fs.existsSync(p)) { hasJournals = true; break; }
+  }
+  if (!hasJournals) return;
+  try {
+    const dbStat = fs.statSync(dbPath);
+    const now = Date.now();
+    // If DB file hasn't been touched in >60s, any WAL is stale (crash artifact)
+    if (now - dbStat.mtimeMs > 60000) {
+      console.warn('[DB] DB file last modified >60s ago, cleaning up stale journal files...');
+      for (const suffix of journalSuffixes) {
+        try {
+          const p = dbPath + suffix;
+          if (fs.existsSync(p)) { fs.unlinkSync(p); console.log('[DB] Deleted stale journal:', p); }
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+})();
+
 // [MIGRATION] Logic moved to server/utils/migration.js and called from server.js startup
 // This file now assumes the DB is ready to be opened.
 
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Could not connect to database', err);
-  } else {
-    console.log('Connected to database at', dbPath);
-    
-    // For OneDrive paths: checkpoint any existing WAL before switching modes
-    if (isOneDrivePath && writeThrough) {
-      db.run('PRAGMA busy_timeout = 30000', () => {
-        db.run('PRAGMA wal_checkpoint(TRUNCATE)', (checkpointErr) => {
-          if (checkpointErr) {
-            console.warn('[DB] Pre-checkpoint warning:', checkpointErr.message);
-          } else {
-            console.log('[DB] Pre-mode-switch checkpoint done');
-          }
+function createDatabase() {
+  return new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      console.error('Could not connect to database', err);
+    } else {
+      console.log('Connected to database at', dbPath);
+      
+      // For OneDrive paths: checkpoint any existing WAL before switching modes
+      if (isOneDrivePath && writeThrough) {
+        db.run('PRAGMA busy_timeout = 30000', () => {
+          db.run('PRAGMA wal_checkpoint(TRUNCATE)', (checkpointErr) => {
+            if (checkpointErr) {
+              console.warn('[DB] Pre-checkpoint warning:', checkpointErr.message);
+            } else {
+              console.log('[DB] Pre-mode-switch checkpoint done');
+            }
+          });
         });
-      });
+      }
     }
-  }
-});
+  });
+}
+
+const db = createDatabase();
 
 // Ensure tables exist
 db.serialize(() => {
@@ -73,7 +108,7 @@ db.serialize(() => {
             console.error('[DB] Failed to set TRUNCATE journal mode:', err);
             console.log('[DB] Continuing with current journal mode (likely WAL)');
           } else {
-            console.log('[DB] ✅ Write-through mode: TRUNCATE journal');
+            console.log('[DB] Write-through mode: TRUNCATE journal');
           }
         });
       };
@@ -101,7 +136,7 @@ db.serialize(() => {
         if (err) {
           console.error('[DB] Failed to enable WAL mode:', err);
         } else {
-          console.log('[DB] ✅ WAL mode enabled');
+          console.log('[DB] WAL mode enabled');
         }
       });
     
@@ -136,7 +171,7 @@ db.serialize(() => {
       const autocheckpointPages = isOneDrivePath ? 100 : 1000;
       db.run(`PRAGMA wal_autocheckpoint = ${autocheckpointPages}`, (err) => {
         if (err) console.error('[DB] WAL autocheckpoint failed:', err);
-        else console.log(`[DB] ✅ WAL autocheckpoint set to ${autocheckpointPages} pages`);
+        else console.log(`[DB] WAL autocheckpoint set to ${autocheckpointPages} pages`);
       });
     }
 
@@ -252,7 +287,7 @@ function startWalCheckpoint() {
       if (err) {
         console.error('[DB] WAL checkpoint error:', err.message);
       } else {
-        console.log('[DB] 🔄 WAL checkpoint completed');
+        console.log('[DB] WAL checkpoint completed');
       }
     });
   }, WAL_CHECKPOINT_INTERVAL);
@@ -260,7 +295,7 @@ function startWalCheckpoint() {
   // (otherwise test workers and one-shot CLI scripts hang on shutdown).
   checkpointInterval.unref();
   
-  console.log('[DB] ✅ WAL checkpoint scheduler started (every 5 minutes)');
+  console.log('[DB] WAL checkpoint scheduler started (every 5 minutes)');
 }
 
 function stopWalCheckpoint() {
