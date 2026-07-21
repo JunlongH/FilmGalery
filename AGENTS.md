@@ -5,7 +5,7 @@
 When you encounter a task that matches one of the specialized subagents below, **delegate it** via the Task tool (`subagent_type`). This saves context, uses the right model, and improves quality.
 
 ### `vision` — Visual Analysis
-- **Model**: GLM-4.6V (vision-capable, attached image input)
+- **Model**: MiniMax-M3 (vision-capable, multimodal, via paratera)
 - **When**: Any time you need to read, describe, OCR, or reason about an image file (PNG/JPG/WebP/PDF). You (the primary agent) have NO vision — `vision` is your only way to see images.
 - **Triggers**: "what's on this screenshot", "read the error in this image", "describe this poster", "what text is visible in this UI", "check the generated image for X"
 - **Permissions**: read, glob, grep, list (read-only, no edits, no bash)

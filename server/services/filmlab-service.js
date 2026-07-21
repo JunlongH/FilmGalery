@@ -14,6 +14,8 @@ const rawDecoder = require('./raw-decoder');
  * @param {string} inputPath - 输入文件路径
  * @returns {Promise<{input: string|Buffer, isRaw: boolean}>}
  */
+const TIFF_RE = /\.(tiff?|TIFF?)$/i;
+
 async function getImageInput(inputPath) {
   const isRaw = rawDecoder.isRawFile(inputPath);
   
@@ -26,14 +28,32 @@ async function getImageInput(inputPath) {
     
     try {
       console.log(`[FilmLab] Decoding RAW file: ${inputPath}`);
-      // 解码为 TIFF（无损）以保持最高质量
       const tiffBuffer = await rawDecoder.decode(inputPath, { outputFormat: 'tiff' });
       console.log(`[FilmLab] RAW decoded to TIFF buffer: ${(tiffBuffer.length / 1024 / 1024).toFixed(2)} MB`);
       return { input: tiffBuffer, isRaw: true };
     } catch (err) {
       console.error('[FilmLab] RAW decode failed:', err.message);
-      // 回退到让 Sharp 直接处理（可能失败，但给它一个机会）
       return { input: inputPath, isRaw: true };
+    }
+  }
+
+  // For TIFF files, check if Sharp can handle them; if not, try RAW decoder
+  if (TIFF_RE.test(inputPath)) {
+    try {
+      const probe = sharp(inputPath, { failOn: 'none' });
+      await probe.metadata();
+    } catch (probeErr) {
+      console.warn(`[FilmLab] Sharp cannot read TIFF (${probeErr.message}), trying RAW decoder fallback...`);
+      const available = await rawDecoder.isAvailable();
+      if (available) {
+        try {
+          const tiffBuffer = await rawDecoder.decode(inputPath, { outputFormat: 'tiff' });
+          console.log(`[FilmLab] TIFF decoded via RAW decoder: ${(tiffBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+          return { input: tiffBuffer, isRaw: false };
+        } catch (decodeErr) {
+          console.error('[FilmLab] RAW decoder also failed on TIFF:', decodeErr.message);
+        }
+      }
     }
   }
   
