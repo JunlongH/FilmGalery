@@ -123,21 +123,4 @@ function recommendDiscoveryMode(ip) {
 
 // ==================== 导出 ====================
 
-export {
-  // 常量
-  APP_IDENTIFIER,
-  DISCOVERY_ENDPOINT,
-  DEFAULT_PORT,
-  PORT_SCAN_RANGE,
-  DISCOVERY_TIMEOUT,
-  MDNS_CONFIG,
-  DISCOVERY_MODE,
-  
-  // 工具函数
-  buildDiscoverUrl,
-  cleanIpAddress,
-  extractPort,
-  buildUrl,
-  isPrivateIp,
-  recommendDiscoveryMode
-}
+export { APP_IDENTIFIER, DISCOVERY_ENDPOINT, DEFAULT_PORT, PORT_SCAN_RANGE, DISCOVERY_TIMEOUT, MDNS_CONFIG, DISCOVERY_MODE, buildDiscoverUrl, cleanIpAddress, extractPort, buildUrl, isPrivateIp, recommendDiscoveryMode };

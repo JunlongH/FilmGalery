@@ -304,15 +304,4 @@ function getAvailableSourceTypes(photo) {
 // 模块导出
 // ============================================================================
 
-export {
-  // 常量
-  SOURCE_TYPE,
-  SOURCE_PATH_FIELDS,
-  
-  // 核心函数
-  getStrictSourcePath,
-  getEffectiveInverted,
-  validateSourceMatch,
-  canUseSourceType,
-  getAvailableSourceTypes
-}
+export { SOURCE_TYPE, SOURCE_PATH_FIELDS, getStrictSourcePath, getEffectiveInverted, validateSourceMatch, canUseSourceType, getAvailableSourceTypes };

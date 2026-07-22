@@ -101,6 +101,4 @@ vec3 applyHSLAdjustment(vec3 color) {
 }
 `;
 
-export {
-  HSL_ADJUST_GLSL,
-}
+export { HSL_ADJUST_GLSL };

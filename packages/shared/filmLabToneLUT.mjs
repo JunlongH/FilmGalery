@@ -100,4 +100,4 @@ function applyToneMapping(value, params = {}) {
 // 模块导出 (CommonJS)
 // ============================================================================
 
-export { buildToneLUT, applyToneMapping }
+export { buildToneLUT, applyToneMapping };

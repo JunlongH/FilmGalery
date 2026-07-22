@@ -77,4 +77,4 @@ function parseCubeLUT(text) {
   return { size, data: new Float32Array(data), domainMin, domainMax };
 }
 
-export { parseCubeLUT }
+export { parseCubeLUT };

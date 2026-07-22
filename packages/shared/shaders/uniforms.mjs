@@ -93,6 +93,4 @@ uniform float u_splitShadowSat;
 uniform float u_splitBalance;
 `;
 
-export {
-  UNIFORMS_GLSL,
-}
+export { UNIFORMS_GLSL };

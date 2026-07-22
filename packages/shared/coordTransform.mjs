@@ -77,10 +77,4 @@ function gcj02ToWgs84(gcjLat, gcjLng) {
   return { lat: wgsLat, lng: wgsLng };
 }
 
-export {
-  wgs84ToGcj02,
-  gcj02ToWgs84,
-  isInChina,
-  transformLat,
-  transformLng,
-}
+export { wgs84ToGcj02, gcj02ToWgs84, isInChina, transformLat, transformLng };

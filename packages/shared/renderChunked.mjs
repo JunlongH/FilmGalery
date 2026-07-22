@@ -73,4 +73,4 @@ function processCanvasChunkedSync(fakeCanvas, params, opts = {}) {
   return fakeCanvas;
 }
 
-export { processBlock, processCanvasChunkedSync }
+export { processBlock, processCanvasChunkedSync };

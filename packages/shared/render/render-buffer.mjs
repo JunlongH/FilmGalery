@@ -88,4 +88,4 @@ function renderBuffer(buffer, { width, height, channels, is16bit, wantTiff16, pa
   return { jpeg8, tiff16 };
 }
 
-export { renderBuffer }
+export { renderBuffer };

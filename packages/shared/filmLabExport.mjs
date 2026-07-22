@@ -536,27 +536,4 @@ function deserializeParams(data) {
 // 模块导出
 // ============================================================================
 
-export {
-  // 参数版本
-  PARAMS_VERSION,
-  
-  // 默认值
-  DEFAULT_PROCESSING_PARAMS,
-  DEFAULT_HSL_PARAMS,
-  DEFAULT_SPLIT_TONING,
-  createDefaultParams,
-
-  // 构建和验证
-  buildExportParams,
-  validateExportParams,
-  getPhotoProcessingParams,
-
-  // 迁移
-  migrateParams,
-  mergeDeep,
-
-  // 比较和序列化
-  hasParamsDifference,
-  serializeParams,
-  deserializeParams,
-}
+export { PARAMS_VERSION, DEFAULT_PROCESSING_PARAMS, DEFAULT_HSL_PARAMS, DEFAULT_SPLIT_TONING, createDefaultParams, buildExportParams, validateExportParams, getPhotoProcessingParams, migrateParams, mergeDeep, hasParamsDifference, serializeParams, deserializeParams };

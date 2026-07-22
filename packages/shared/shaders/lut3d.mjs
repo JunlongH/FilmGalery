@@ -94,6 +94,4 @@ vec3 sampleLUT3D(vec3 c) {
 }
 `;
 
-export {
-  LUT3D_GLSL,
-}
+export { LUT3D_GLSL };

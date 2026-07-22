@@ -1146,8 +1146,4 @@ class RenderCore {
 // 模块导出
 // ============================================================================
 
-export {
-  RenderCore,
-  DEFAULT_FILM_CURVE,
-  DEFAULT_CROP_RECT,
-}
+export { RenderCore, DEFAULT_FILM_CURVE, DEFAULT_CROP_RECT };

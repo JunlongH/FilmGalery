@@ -51,7 +51,4 @@ function getSaturationMainCall() {
 `;
 }
 
-export {
-  getSaturationGLSL,
-  getSaturationMainCall,
-}
+export { getSaturationGLSL, getSaturationMainCall };

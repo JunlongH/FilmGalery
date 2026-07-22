@@ -123,8 +123,4 @@ function remapDetectedCropRect(detectedRect, detectedRotation, ctx) {
   return { cropRect: { x, y, w: Math.max(0, w), h: Math.max(0, h) }, rotation: newClientRotation };
 }
 
-export {
-  remapDetectedCropRect,
-  nearestOrthogonal,
-  norm2pi,
-}
+export { remapDetectedCropRect, nearestOrthogonal, norm2pi };

@@ -48,7 +48,4 @@ function renderParamsEqual(a, b) {
   return stableSerializeParams(a) === stableSerializeParams(b);
 }
 
-export {
-  stableSerializeParams,
-  renderParamsEqual,
-}
+export { stableSerializeParams, renderParamsEqual };

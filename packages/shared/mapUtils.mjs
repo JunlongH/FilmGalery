@@ -192,14 +192,4 @@ function formatLatLng(lat, lng, format = 'decimal') {
   return `${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`;
 }
 
-export {
-  MAP_PROVIDERS,
-  TILE_LAYERS,
-  buildTileLayerUrl,
-  clusterRadiusFromDelta,
-  gridCluster,
-  isValidLatitude,
-  isValidLongitude,
-  isValidLatLng,
-  formatLatLng,
-}
+export { MAP_PROVIDERS, TILE_LAYERS, buildTileLayerUrl, clusterRadiusFromDelta, gridCluster, isValidLatitude, isValidLongitude, isValidLatLng, formatLatLng };

@@ -122,11 +122,4 @@ function requiresServerDecode(filename) {
   return type === 'raw' || type === 'tiff';
 }
 
-export {
-  RAW_EXTENSIONS,
-  isRawFile,
-  getRawFormatInfo,
-  detectFileType,
-  isBrowserLoadable,
-  requiresServerDecode
-}
+export { RAW_EXTENSIONS, isRawFile, getRawFormatInfo, detectFileType, isBrowserLoadable, requiresServerDecode };

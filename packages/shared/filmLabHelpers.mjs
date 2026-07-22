@@ -417,22 +417,4 @@ vec3 sampleLUT3DWithIntensity(vec3 c, float intensity) {
 // 模块导出
 // ============================================================================
 
-export {
-  // 反转状态
-  getEffectiveInverted,
-  isPositiveMode,
-  shouldShowInversionControls,
-  
-  // 3D LUT
-  getLUT3DIndex,
-  packLUT3DForWebGL,
-  buildCombinedLUT,
-  sampleLUT3D,
-  
-  // 参数验证
-  normalizeSourceType,
-  normalizeInversionMode,
-  
-  // GLSL 代码生成
-  getLUT3DSamplingGLSL,
-}
+export { getEffectiveInverted, isPositiveMode, shouldShowInversionControls, getLUT3DIndex, packLUT3DForWebGL, buildCombinedLUT, sampleLUT3D, normalizeSourceType, normalizeInversionMode, getLUT3DSamplingGLSL };

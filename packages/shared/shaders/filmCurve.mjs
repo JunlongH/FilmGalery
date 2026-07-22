@@ -85,6 +85,4 @@ float applyFilmCurveLegacy(float value) {
 }
 `;
 
-export {
-  FILM_CURVE_GLSL,
-}
+export { FILM_CURVE_GLSL };

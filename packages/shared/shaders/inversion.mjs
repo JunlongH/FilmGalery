@@ -35,6 +35,4 @@ vec3 applyInversion(vec3 col) {
 }
 `;
 
-export {
-  INVERSION_GLSL,
-}
+export { INVERSION_GLSL };

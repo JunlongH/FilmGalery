@@ -235,16 +235,4 @@ function applyLinearBaseCorrectionRGB(r, g, b, gainR, gainG, gainB) {
 // 模块导出 (CommonJS)
 // ============================================================================
 
-export {
-  invertLinear,
-  invertLog,
-  applyInversion,
-  applyInversionRGB,
-  buildInversionLUT,
-  // 对数域片基校正
-  calculateBaseDensity,
-  applyLogBaseCorrection,
-  applyLogBaseCorrectionRGB,
-  applyLinearBaseCorrection,
-  applyLinearBaseCorrectionRGB,
-}
+export { invertLinear, invertLog, applyInversion, applyInversionRGB, buildInversionLUT, calculateBaseDensity, applyLogBaseCorrection, applyLogBaseCorrectionRGB, applyLinearBaseCorrection, applyLinearBaseCorrectionRGB };

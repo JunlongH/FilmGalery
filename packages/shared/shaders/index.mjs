@@ -312,27 +312,4 @@ void main() {
 }
 `;
 
-export {
-  // 构建函数
-  buildFragmentShader,
-  buildMainFunction,
-  
-  // 顶点着色器
-  VERTEX_SHADER,
-  VERTEX_SHADER_GL2,
-  
-  // 独立模块（用于自定义组合）
-  colorMath,
-  hslAdjust,
-  splitTone,
-  saturation,
-  filmCurve,
-  tonemap,
-  lut3d,
-  inversion,
-  baseDensity,
-  uniforms,
-  
-  // 着色器版本标识（用于缓存失效）
-  SHADER_VERSION: '2026-02-08-v3',
-}
+export { buildFragmentShader, buildMainFunction, VERTEX_SHADER, VERTEX_SHADER_GL2, colorMath, hslAdjust, splitTone, saturation, filmCurve, tonemap, lut3d, inversion, baseDensity, uniforms };

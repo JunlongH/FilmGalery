@@ -496,25 +496,4 @@ const SPLIT_TONE_PRESETS = {
 // 模块导出
 // ============================================================================
 
-export {
-  // 常量
-  DEFAULT_SPLIT_TONE_PARAMS,
-  LUMINANCE_CONFIG,
-  SPLIT_TONE_PRESETS,
-  
-  // 核心函数
-  applySplitTone,
-  applySplitToneToArray,
-  isDefaultSplitTone,
-  
-  // Q18: Precomputed per-frame factory (avoids per-pixel hslToRgb)
-  prepareSplitTone,
-  applySplitToneFast,
-  
-  // 工具函数
-  calculateLuminance,
-  calculateZoneWeights,
-  smoothstep,
-  mergeSplitToneParams,
-  validateSplitToneParams,
-}
+export { DEFAULT_SPLIT_TONE_PARAMS, LUMINANCE_CONFIG, SPLIT_TONE_PRESETS, applySplitTone, applySplitToneToArray, isDefaultSplitTone, prepareSplitTone, applySplitToneFast, calculateLuminance, calculateZoneWeights, smoothstep, mergeSplitToneParams, validateSplitToneParams };

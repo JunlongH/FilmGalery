@@ -104,6 +104,4 @@ vec3 linearToSrgb(vec3 c) {
 }
 `;
 
-export {
-  COLOR_MATH_GLSL,
-}
+export { COLOR_MATH_GLSL };

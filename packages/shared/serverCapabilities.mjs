@@ -107,14 +107,4 @@ function getCapabilities() {
   };
 }
 
-export {
-  SERVER_MODES,
-  API_CATEGORIES,
-  COMPUTE_ROUTES,
-  COMPUTE_ROUTE_PATTERNS,
-  DATA_ROUTES,
-  getServerMode,
-  isComputeEnabled,
-  isComputeRoute,
-  getCapabilities
-}
+export { SERVER_MODES, API_CATEGORIES, COMPUTE_ROUTES, COMPUTE_ROUTE_PATTERNS, DATA_ROUTES, getServerMode, isComputeEnabled, isComputeRoute, getCapabilities };

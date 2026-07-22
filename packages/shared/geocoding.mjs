@@ -435,22 +435,4 @@ async function getCityCoordinates(country, city, opts = {}) {
   return null;
 }
 
-export {
-  searchAddress,
-  reverseGeocode,
-  getCityCoordinates,
-  // Individual providers (exported for unit tests)
-  searchWithAmap,
-  searchWithPhoton,
-  searchWithNominatim,
-  reverseWithAmap,
-  reverseWithPhoton,
-  reverseWithNominatim,
-  reverseWithBigDataCloud,
-  // Constants
-  PHOTON_BASE,
-  NOMINATIM_BASE,
-  AMAP_BASE,
-  DEFAULT_TIMEOUT,
-  NOMINATIM_RATE_LIMIT_MS,
-}
+export { searchAddress, reverseGeocode, getCityCoordinates, searchWithAmap, searchWithPhoton, searchWithNominatim, reverseWithAmap, reverseWithPhoton, reverseWithNominatim, reverseWithBigDataCloud, PHOTON_BASE, NOMINATIM_BASE, AMAP_BASE, DEFAULT_TIMEOUT, NOMINATIM_RATE_LIMIT_MS };

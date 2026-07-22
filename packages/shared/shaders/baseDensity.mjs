@@ -110,6 +110,4 @@ vec3 applyDensityLevels(vec3 col) {
 }
 `;
 
-export {
-  BASE_DENSITY_GLSL,
-}
+export { BASE_DENSITY_GLSL };
