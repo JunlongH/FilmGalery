@@ -123,5 +123,9 @@ export default defineConfig({
     outDir: 'build',
     sourcemap: false,
     chunkSizeWarningLimit: 2000, // three.js/globe routes are large by design
+    commonjsOptions: {
+      include: [/packages\/shared/, /node_modules/],
+      transformMixedEsModules: true,
+    },
   },
 });
