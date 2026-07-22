@@ -119,11 +119,6 @@ export default defineConfig({
     port: 3000,
     strictPort: true, // electron-main.js:582 hard-references :3000
   },
-  optimizeDeps: {
-    include: [
-      '@filmgallery/shared',
-    ],
-  },
   build: {
     outDir: 'build',
     sourcemap: false,
