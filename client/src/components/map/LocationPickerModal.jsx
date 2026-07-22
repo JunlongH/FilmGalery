@@ -26,10 +26,13 @@ const TILE_STYLES = ['light', 'dark', 'satellite'];
 
 /**
  * Read map provider config from localStorage (desktop convention).
- * The shared geocoding module is pure — config is injected here.
+ * Q4 fix: default to 'amap' instead of 'osm' — OSM tile servers are often
+ * unreachable in China, causing the map to load as blank gray tiles.
+ * AMap tiles (高德) are served from Chinese CDN and are always accessible.
+ * Users who explicitly set 'osm' in Settings are respected.
  */
 function getMapConfig() {
-  const provider = localStorage.getItem('map_provider') || 'osm';
+  const provider = localStorage.getItem('map_provider') || 'amap';
   const amapKey = localStorage.getItem('amap_web_key') || '';
   return { provider, amapKey };
 }

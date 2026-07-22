@@ -10,6 +10,23 @@ const isDev = process.env.ELECTRON_DEV === 'true' || !app.isPackaged;
 // Ensure Windows uses our packaged icon for taskbar/start shortcuts
 // Must be set before any BrowserWindow is created
 try { app.setAppUserModelId('com.yourorg.filmgallery'); } catch (_) {}
+
+// Q2: Enable WebGL / GPU acceleration under Windows Remote Desktop (RDP).
+// RDP uses the "Microsoft Remote Display Adapter" (software driver) which
+// Electron/Chromium detects as a blocked GPU, silently disabling WebGL.
+// On a machine with a physical 4080 GPU accessed via RDP, this causes both
+// the FilmLab WebGL preview and the GPU export window to fail.
+//
+// These flags must be set BEFORE app.whenReady (Chromium reads them during
+// GPU init at startup). They are safe on non-RDP systems too — they just
+// prevent Chromium from disabling GPU acceleration.
+try {
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+  app.commandLine.appendSwitch('use-gl', 'desktop');
+  // Allow WebGL in the hidden GPU worker window even without a display
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+} catch (_) { /* commandLine switches are best-effort */ }
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
@@ -971,7 +988,17 @@ _ipcMainAlias.on('filmlab-gpu:result', async (_e, result) => {
           // Use absolute path for showInFolder, fall back to relative path
           const filePath = data.positive_abs_path || data.positive_rel_path;
           LOG('[GPU-RESULT] Upload successful, filePath:', filePath);
-          return done({ ok: true, stored: true, photo: data.photo || null, filePath });
+          // Unified result shape (matches CpuRenderService.localCpuExport):
+          //   { ok, source, stored, photo, filePath, width, height }
+          return done({
+            ok: true,
+            source: 'local-gpu',         // unified: matches ComputeService convention
+            stored: true,                 // uploaded to backend storage
+            photo: data.photo || null,
+            filePath,
+            width: result.width,          // GPU renderer reported dimensions
+            height: result.height,
+          });
         } else {
            // If backend returned error, propagate it
            LOG('[GPU-RESULT] Backend returned error:', data.error);
@@ -984,7 +1011,7 @@ _ipcMainAlias.on('filmlab-gpu:result', async (_e, result) => {
       }
     }
 
-    // Fallback: write to userData/gpu-exports
+    // Fallback: write to userData/gpu-exports (no backend upload)
     LOG('[GPU-RESULT] No photoId, writing to local export folder');
     const outName = `gpu_${Date.now()}.jpg`;
     const outDir = path.join(app.getPath('userData'), 'gpu-exports');
@@ -997,7 +1024,16 @@ _ipcMainAlias.on('filmlab-gpu:result', async (_e, result) => {
         return done({ ok:false, error: err.message });
       }
       LOG('[GPU-RESULT] Write successful');
-      done({ ok:true, filePath: outPath, width: result.width, height: result.height });
+      // Unified result shape (matches CpuRenderService.localCpuExport):
+      //   { ok, source, stored, filePath, width, height }
+      done({
+        ok: true,
+        source: 'local-gpu',           // unified: matches ComputeService convention
+        stored: false,                  // written to local disk, not backend
+        filePath: outPath,
+        width: result.width,
+        height: result.height,
+      });
     });
   } catch (e) {
     LOG('[GPU-RESULT] Exception:', e.message);

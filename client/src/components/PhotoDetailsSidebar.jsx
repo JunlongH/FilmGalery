@@ -327,7 +327,11 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
   );
 
   return (
-    <div role="presentation" onClick={handleClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.25)', zIndex:10019 }}>
+    <div
+      role="presentation"
+      onClick={() => { if (!showLocationPicker) handleClose(); }}
+      style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.25)', zIndex:10019 }}
+    >
     <aside
       ref={panelRef}
       className={`fg-sidepanel ${closing ? 'fade-slide-exit-active' : 'fade-slide-enter-active'}`}

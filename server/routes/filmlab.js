@@ -202,17 +202,12 @@ router.post('/render', async (req, res, next) => {
     }
 
     // Save to positive file
+    // Unified naming: {rollId}_{frameNum}.jpg — matches all other endpoints
+    // (ingest-positive, update-positive, export-positive, filmlab/export).
     const rollDir = path.dirname(path.join(uploadsDir, relSource));
-    const ext = path.extname(row.filename || 'image.jpg') || '.jpg';
-    const base = path.basename(row.filename || 'image.jpg', ext);
-    
-    // Use consistent naming: if already has _pos, keep it; otherwise add _pos
-    let newName;
-    if (base.includes('_pos')) {
-      newName = `${base}${ext}`;
-    } else {
-      newName = `${base}_pos${ext}`;
-    }
+    const rollIdRender = row.roll_id;
+    const frameNumRender = row.frame_number || '00';
+    const newName = `${rollIdRender}_${frameNumRender}.jpg`;
     
     let outDir = rollDir;
     if (relSource.includes('/negative')) {
@@ -237,14 +232,15 @@ router.post('/render', async (req, res, next) => {
       console.error('[FILMLAB] render thumb generation failed:', thumbErr.message);
     }
 
-    // Update DB: filename, positive_rel_path, full_rel_path, positive_thumb_rel_path, and updated_at
+    // Update DB: positive_rel_path, full_rel_path, positive_thumb_rel_path.
+    // Do NOT update filename — it should remain the original upload name.
     await new Promise((resolve, reject) => {
         const sql = relThumb
-          ? 'UPDATE photos SET filename = ?, positive_rel_path = ?, full_rel_path = ?, positive_thumb_rel_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-          : 'UPDATE photos SET filename = ?, positive_rel_path = ?, full_rel_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+          ? 'UPDATE photos SET positive_rel_path = ?, full_rel_path = ?, positive_thumb_rel_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+          : 'UPDATE photos SET positive_rel_path = ?, full_rel_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
         const params = relThumb
-          ? [newName, relOut, relOut, relThumb, photoId]
-          : [newName, relOut, relOut, photoId];
+          ? [relOut, relOut, relThumb, photoId]
+          : [relOut, relOut, photoId];
         db.run(sql, params, (err) => err ? reject(err) : resolve());
     });
 
@@ -347,10 +343,12 @@ router.post('/export', async (req, res, next) => {
     }
     if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
-    // Build consistent file name based on existing filename
-    const ext = path.extname(row.filename || 'image.jpg') || '.jpg';
-    const base = path.basename(row.filename || 'image.jpg', ext);
-    const outName = base.includes('_pos') ? `${base}${ext}` : `${base}_pos${ext}`;
+    // Unified naming: {rollId}_{frameNum}.jpg — matches ingest-positive,
+    // update-positive, and export-positive endpoints. Previously this used
+    // {base}_pos{ext} which caused the "xxx-pos" vs original name inconsistency.
+    const rollId = row.roll_id;
+    const frameNum = row.frame_number || '00';
+    const outName = `${rollId}_${frameNum}.jpg`;
     const outPath = path.join(outDir, outName);
 
     await sharp(out, { raw: { width, height, channels: 3 } }).jpeg({ quality: 95 }).toFile(outPath);
@@ -366,14 +364,16 @@ router.post('/export', async (req, res, next) => {
       console.error('[FILMLAB] export thumb generation failed:', thumbErr.message);
     }
 
-    // Update DB: filename, positive_rel_path, full_rel_path, positive_thumb_rel_path, and updated_at
+    // Update DB: positive_rel_path, full_rel_path, positive_thumb_rel_path.
+    // Do NOT update filename — it should remain the original upload name.
+    // (Matches ingest-positive and export-positive behavior.)
     try {
       const sql = relThumb
-        ? 'UPDATE photos SET filename = ?, positive_rel_path = ?, full_rel_path = ?, positive_thumb_rel_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-        : 'UPDATE photos SET filename = ?, positive_rel_path = ?, full_rel_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+        ? 'UPDATE photos SET positive_rel_path = ?, full_rel_path = ?, positive_thumb_rel_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        : 'UPDATE photos SET positive_rel_path = ?, full_rel_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
       const params = relThumb
-        ? [outName, relOut, relOut, relThumb, photoId]
-        : [outName, relOut, relOut, photoId];
+        ? [relOut, relOut, relThumb, photoId]
+        : [relOut, relOut, photoId];
       await new Promise((resolve, reject) => {
         db.run(sql, params, (err) => (err ? reject(err) : resolve()));
       });

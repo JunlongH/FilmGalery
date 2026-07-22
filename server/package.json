@@ -1,6 +1,6 @@
 {
   "name": "film-gallery",
-    "version": "3.5.1",
+  "version": "3.5.2",
   "description": "Film Manager desktop app (Electron + Express backend + React frontend)",
   "main": "server.js",
   "engines": {

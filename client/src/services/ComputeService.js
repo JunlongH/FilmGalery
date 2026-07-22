@@ -428,11 +428,14 @@ async function localExportPositive(photoId, params, { format = 'jpeg', sourceTyp
       
       if (result?.ok) {
         console.log('[ComputeService] GPU export successful');
+        // Unified result shape: GPU result already has { ok, source, stored, photo, filePath }
+        // from electron-main.js. Just pass through, adding source if missing.
         return { 
           ok: true, 
           photo: result.photo,
           filePath: result.filePath,
-          source: 'local-gpu' 
+          source: result.source || 'local-gpu',
+          stored: result.stored,
         };
       }
       

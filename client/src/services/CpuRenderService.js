@@ -354,6 +354,14 @@ export async function localCpuRender({ imageUrl, params, format = 'jpeg', maxWid
 
 /**
  * 本地 CPU 导出渲染（含上传）
+ * 
+ * Unified result shape (matches electron-main.js GPU export):
+ *   { ok, source, stored, photo, filePath, blob, contentType, width, height }
+ * - source: always 'local-cpu' or 'local-cpu-uploaded'
+ * - stored: true if uploaded to backend, false if local-only
+ * - blob: the rendered Blob (for download without re-fetch)
+ * - width/height: rendered image dimensions
+ *
  * @param {Object} options - 渲染选项
  * @param {Function} uploadFn - 上传函数
  * @returns {Promise<{ok: boolean, photo?: object, filePath?: string, error?: string, source: string}>}
@@ -382,7 +390,8 @@ export async function localCpuExport({ photoId, imageUrl, params, format = 'jpeg
           ok: false, 
           error: uploadResult.error || 'Upload failed',
           blob: renderResult.blob,
-          source: 'local-cpu-no-upload'
+          source: 'local-cpu',
+          stored: false,
         };
       }
       
@@ -390,7 +399,10 @@ export async function localCpuExport({ photoId, imageUrl, params, format = 'jpeg
         ok: true,
         photo: uploadResult.photo,
         filePath: uploadResult.filePath,
-        source: 'local-cpu-uploaded'
+        source: 'local-cpu-uploaded',
+        stored: true,
+        blob: renderResult.blob,
+        contentType: renderResult.contentType,
       };
     }
     
@@ -399,11 +411,12 @@ export async function localCpuExport({ photoId, imageUrl, params, format = 'jpeg
       ok: true,
       blob: renderResult.blob,
       contentType: renderResult.contentType,
-      source: 'local-cpu'
+      source: 'local-cpu',
+      stored: false,
     };
   } catch (e) {
     console.error('[CpuRenderService] CPU export failed:', e);
-    return { ok: false, error: e.message || 'CPU export failed', source: 'local-cpu' };
+    return { ok: false, error: e.message || 'CPU export failed', source: 'local-cpu', stored: false };
   }
 }
 

@@ -1540,46 +1540,75 @@ export default function FilmLab({
   };
 
   const handleAutoLevels = () => {
-    if (!image) return;
+    if (!canvasRef.current) return;
     pushToHistory();
     
-    // Use current histograms to find min/max
-    // We want to stretch the histogram to fill 0-255
-    // We will update the curves to do this
+    // Q3 fix: compute histogram directly from the rendered canvas instead of
+    // relying on the async `histograms` React state. Previously, the first
+    // click read stale/empty histograms (processImage hadn't completed yet),
+    // producing wrong min/max → bizarre curve stretch. Undo+redo worked
+    // because by then processImage had populated the histograms. Computing
+    // synchronously from the canvas eliminates the race condition.
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    
+    // Use a 256×256 scratch canvas for performance (same approach as the
+    // histogram in processImage — avoids 12MB getImageData on full canvas)
+    if (!histogramScratchRef.current) histogramScratchRef.current = document.createElement('canvas');
+    const scratch = histogramScratchRef.current;
+    const SCRATCH_SIZE = 256;
+    scratch.width = SCRATCH_SIZE;
+    scratch.height = SCRATCH_SIZE;
+    const scratchCtx = scratch.getContext('2d', { willReadFrequently: true });
+    scratchCtx.drawImage(canvas, 0, 0, SCRATCH_SIZE, SCRATCH_SIZE);
+    const scratchData = scratchCtx.getImageData(0, 0, SCRATCH_SIZE, SCRATCH_SIZE).data;
+    
+    const histR = new Array(256).fill(0);
+    const histG = new Array(256).fill(0);
+    const histB = new Array(256).fill(0);
+    for (let i = 0; i < scratchData.length; i += 4) {
+      histR[scratchData[i]]++;
+      histG[scratchData[i + 1]]++;
+      histB[scratchData[i + 2]]++;
+    }
     
     const findLevels = (hist) => {
       let min = 0;
       let max = 255;
       
-      // Find min (0.1% threshold)
-      // Histograms are normalized (0-1), so sum is ~1 (or maxCount normalized)
-      // Actually my histogram logic normalizes by maxCount, not sum.
-      // So values are 0-1 relative to the peak.
-      // We need to be careful. Let's just look for the first non-zero bucket with some noise tolerance.
+      // Find total count for threshold calculation
+      let total = 0;
+      for (let i = 0; i < 256; i++) total += hist[i];
+      if (total === 0) return { min: 0, max: 255 };
       
-      // Simple approach: First value > 0.005 (0.5% of peak)
-      const threshold = 0.005;
+      // 0.1% threshold — ignore the lowest and highest 0.1% of pixels
+      const threshold = total * 0.001;
+      let count = 0;
       
       for (let i = 0; i < 256; i++) {
-        if (hist[i] > threshold) {
+        count += hist[i];
+        if (count >= threshold) {
           min = i;
           break;
         }
       }
       
+      count = 0;
       for (let i = 255; i >= 0; i--) {
-        if (hist[i] > threshold) {
+        count += hist[i];
+        if (count >= threshold) {
           max = i;
           break;
         }
       }
       
+      if (max <= min) max = min + 1;
       return { min, max };
     };
 
-    const rLevels = findLevels(histograms.red);
-    const gLevels = findLevels(histograms.green);
-    const bLevels = findLevels(histograms.blue);
+    const rLevels = findLevels(histR);
+    const gLevels = findLevels(histG);
+    const bLevels = findLevels(histB);
 
     setCurves(prev => ({
       ...prev,
@@ -1960,9 +1989,11 @@ export default function FilmLab({
         const res = await window.__electron.filmlabGpuProcess({ params, photoId, imageUrl });
         if (res?.ok) {
           if (onPhotoUpdate) onPhotoUpdate();
-          if (res.filePath) {
+          // Unified: both GPU and CPU export results have { ok, source, stored, filePath }
+          if (res.filePath && window.__electron?.showInFolder) {
             try { window.__electron.showInFolder && window.__electron.showInFolder(res.filePath); } catch(_){}
-            if (typeof window !== 'undefined') alert('GPU Export Saved To:\n' + res.filePath);
+            const sourceLabel = res.source === 'local-gpu' ? 'GPU' : 'CPU';
+            if (typeof window !== 'undefined') alert(`${sourceLabel} Export Saved To:\n` + res.filePath);
           }
           return; // GPU 成功，直接返回
         }
@@ -1994,7 +2025,10 @@ export default function FilmLab({
       if (result?.ok) {
         if (onPhotoUpdate) onPhotoUpdate();
         if (typeof window !== 'undefined') {
-          const source = result.source || 'local';
+          // Unified: both paths return { ok, source, stored }
+          const source = result.source === 'local-gpu' ? 'GPU' :
+                         result.source === 'local-cpu-uploaded' ? 'CPU' :
+                         result.source === 'server' ? 'Server' : 'Local';
           alert(`Export completed (${source} mode)`);
         }
       } else {
