@@ -665,8 +665,6 @@ const _e_validateSplitToneParams = _sharedExports.validateSplitToneParams;
 export { _e_validateSplitToneParams as validateSplitToneParams };
 const _e_calculateLuminance = _sharedExports.calculateLuminance;
 export { _e_calculateLuminance as calculateLuminance };
-const _e_RenderCore = _sharedExports.RenderCore;
-export { _e_RenderCore as RenderCore };
 const _e_DEFAULT_FILM_CURVE = _sharedExports.DEFAULT_FILM_CURVE;
 export { _e_DEFAULT_FILM_CURVE as DEFAULT_FILM_CURVE };
 const _e_getEffectiveInverted = _sharedExports.getEffectiveInverted;
