@@ -1,5 +1,12 @@
 'use strict';
-const { ipcRenderer } = require('electron');
+// NOTE: This file is the source for gpu-renderer.bundle.js (built by build.js).
+// It runs in a SANDBOXED renderer (nodeIntegration:false, contextIsolation:true,
+// sandbox:true) — Node APIs are NOT available. IPC goes through window.__gpu,
+// which is exposed by gpu-preload.js via contextBridge. The 'electron' module
+// and Node's Buffer are stubbed/externalized by esbuild at build time.
+//
+// When loaded directly (e.g. in tests), a shim may be required. In production,
+// gpu.html loads gpu-renderer.bundle.js (which has shared modules baked in).
 
 let gl, canvas, isWebGL2 = false;
 let _hasFloatTexture = false;   // Phase 2.4: float texture support
@@ -448,22 +455,24 @@ function runJob(job) {
       // Encode canvas to JPEG and return
       canvas.toBlob((blobOut) => {
         if (!blobOut) {
-          ipcRenderer.send('filmlab-gpu:result', { jobId, ok:false, error:'toBlob_failed' });
+          window.__gpu.sendResult({ jobId, ok:false, error:'toBlob_failed' });
           return;
         }
         const reader = new FileReader();
         reader.onload = () => {
           const arrBuf = reader.result; // ArrayBuffer
-          const buf = Buffer.from(arrBuf);
-          ipcRenderer.send('filmlab-gpu:result', { jobId, ok:true, width: canvas.width, height: canvas.height, jpegBytes: buf });
+          // Uint8Array is structured-clone-safe across contextBridge (zero-copy),
+          // unlike Node's Buffer subclass.
+          const bytes = new Uint8Array(arrBuf);
+          window.__gpu.sendResult({ jobId, ok:true, width: canvas.width, height: canvas.height, jpegBytes: bytes });
         };
         reader.onerror = () => {
-          ipcRenderer.send('filmlab-gpu:result', { jobId, ok:false, error:'blob_read_failed' });
+          window.__gpu.sendResult({ jobId, ok:false, error:'blob_read_failed' });
         };
         reader.readAsArrayBuffer(blobOut);
       }, 'image/jpeg', params?.jpegQuality ?? 0.95);
     } catch (err) {
-      ipcRenderer.send('filmlab-gpu:result', { jobId, ok:false, error: (err && err.message) || String(err) });
+      window.__gpu.sendResult({ jobId, ok:false, error: (err && err.message) || String(err) });
     } finally {
       if (!isRaw && source && source.close) source.close();
     }
@@ -480,16 +489,16 @@ function runJob(job) {
     createImageBitmap(blob).then((bmp) => {
       runPipeline(bmp, bmp.width, bmp.height, false);
     }).catch((e) => {
-      ipcRenderer.send('filmlab-gpu:result', { jobId, ok:false, error:'decode_failed: ' + (e && e.message) });
+      window.__gpu.sendResult({ jobId, ok:false, error:'decode_failed: ' + (e && e.message) });
     });
   }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
   initGL();
-  ipcRenderer.on('filmlab-gpu:run', (_e, job) => {
+  window.__gpu.onRun((job) => {
     try { runJob(job); } catch (err) {
-      ipcRenderer.send('filmlab-gpu:result', { jobId: job && job.jobId, ok: false, error: (err && err.message) || String(err) });
+      window.__gpu.sendResult({ jobId: job && job.jobId, ok: false, error: (err && err.message) || String(err) });
     }
   });
 });

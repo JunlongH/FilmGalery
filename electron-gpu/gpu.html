@@ -7,6 +7,12 @@
   </head>
   <body>
     <canvas id="glc" width="32" height="32"></canvas>
-    <script src="gpu-renderer.js"></script>
+    <!--
+      Load the bundled renderer. The bundle inlines shared GLSL + WB gain
+      modules so the renderer can run with nodeIntegration:false (sandboxed).
+      IPC is routed through window.__gpu (exposed by gpu-preload.js).
+      The source file gpu-renderer.js is rebuilt into this bundle by build.js.
+    -->
+    <script src="gpu-renderer.bundle.js"></script>
   </body>
 </html>

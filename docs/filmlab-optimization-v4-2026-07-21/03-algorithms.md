@@ -1,6 +1,8 @@
-# 03 · 算法问题（16 项）
+# 03 · 算法问题（16 项 + 渲染热路径性能 7 项）
 
 v3 后首次深入 CPU/GPU 渲染一致性审计，覆盖着色器、数值精度、算法正确性。
+渲染热路径性能问题（per-pixel 效率、GC 压力、Math.pow 浪费）详见
+[07-preview-performance.md](07-preview-performance.md)，此处收录索引。
 
 ---
 
@@ -110,3 +112,21 @@ v3 后首次深入 CPU/GPU 渲染一致性审计，覆盖着色器、数值精�
 ### P3-4 hysteresisThreshold DFS vs BFS
 
 - **cannyEdge.js:137-159** — `stack.pop()` = LIFO（深度优先），标准 Canny 多用 BFS。对结果无影响，纯风格差。
+
+---
+
+## 渲染热路径性能（7 项，详见 [07-preview-performance.md](07-preview-performance.md)）
+
+以下问题聚焦 `processPixelFloat` 的 per-pixel 效率，是 CPU fallback 路径慢的主因。
+
+| 编号 | 严重度 | 位置 | 问题 | 预期省时 |
+|---|---|---|---|---|
+| P0-9 | **P0** | RenderCore.js:449-489 | `Math.pow` + `Number()` 每像素重算帧级常量 | 10-15ms/帧 |
+| P0-10 | **P0** | RenderCore.js:550 + renderChunked.js:25 | `return [r,g,b]` 每像素分配数组 → 6-7 次 GC | 5-15ms/帧 |
+| P1-23 | **P1** | RenderCore.js:456 | contrast 无钳制（与 P0-9 配套修复） | 正确性 |
+| P2-10 | **P2** | RenderCore.js:918 | `_sampleCurveLUTFloatHQ` 冗余 clamp | 2-5ms/帧 |
+| P2-11 | **P2** | RenderCore.js:872 | `_sampleLUT3DFloat` per-call 闭包（LUT 激活时） | 2-5ms/帧 |
+| P2-12 | **P2** | filmLabSaturation.js:41 | `applySaturationFloat` 也分配数组 | GC |
+| P2-13 | **P2** | tone-curves.js:57 | `highlightRollOff` per-pixel `Math.exp`（亮区图） | 5-15ms/帧 |
+
+**P0-9 + P0-10 + P2-10 合计 <2h 实现，省 17-35ms/帧——CPU 路径提速 20-40%。**

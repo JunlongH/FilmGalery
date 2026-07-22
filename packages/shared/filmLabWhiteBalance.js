@@ -216,16 +216,19 @@ function computeWBGains(params = {}, options = {}) {
     // 标准做法 (LR/PS): 
     // 1. 计算平均增益: avgGain = (rGain + gGain + bGain) / 3
     // 2. 使用 Rec.709 亮度系数对增益进行加权平均 (更精确):
-    //    avgGain = 0.299*rGain + 0.587*gGain + 0.114*bGain
+    //    avgGain = 0.2126*rGain + 0.7152*gGain + 0.0722*bGain
     // 3. 补偿因子: comp = 1.0 / avgGain
     // 4. 最终增益: [rGain, gGain, bGain] *= comp
     //
     // 效果: 白平衡调整时亮度变化控制在 < 1% (与 Adobe 标准一致)
     // ============================================================================
     
-    // 使用 Rec.709 亮度系数 (更符合人眼感知)
-    // 这些系数基于 ITU-R BT.709 标准，与 sRGB gamma 配合使用
-    const avgGain = 0.299 * rGain + 0.587 * gGain + 0.114 * bGain;
+    // X.2 (P0-4): 使用 Rec.709 亮度系数 (BT.709: 0.2126/0.7152/0.0722)。
+    // 之前代码注释声称 Rec.709 但实际使用了 BT.601 (0.299/0.587/0.114)，
+    // 与代码库其他模块（filmLabSaturation/filmLabSplitTone/GLSL colorMath/saturation）
+    // 不一致。BT.601 压低绿色权重 ~18%，暖色 WB 调整时亮度补偿过度（3.6% vs 2.7%），
+    // 用户感知为"加温后偏暗"。
+    const avgGain = 0.2126 * rGain + 0.7152 * gGain + 0.0722 * bGain;
     
     if (avgGain > 0.001) {
       const luminanceCompensation = 1.0 / avgGain;
@@ -244,7 +247,8 @@ function computeWBGains(params = {}, options = {}) {
     bGain = B * (1 - t * 0.5 + n * 0.3);
     
     // Apply same luminance compensation for legacy model
-    const avgGain = 0.299 * rGain + 0.587 * gGain + 0.114 * bGain;
+    // X.2 (P0-4): BT.709 luminance coefficients — matches Kelvin model above.
+    const avgGain = 0.2126 * rGain + 0.7152 * gGain + 0.0722 * bGain;
     if (avgGain > 0.001) {
       const luminanceCompensation = 1.0 / avgGain;
       rGain *= luminanceCompensation;

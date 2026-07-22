@@ -36,6 +36,13 @@ v3 后的前端审查，聚焦 v1-v3 未覆盖的领域：错误边界、上下�
 
 ## P1 — 高（6 项）
 
+### P1-fe WebGL 失败静默——用户可能在走 CPU 路径（详见 [07-preview-performance.md](07-preview-performance.md) P1-21）
+
+- **FilmLab.jsx:1311-1315**
+- WebGL 异常被 `console.error` 静默吞掉，无 UI 指示器。`isWebGLAvailable()` 缓存在 GPU 崩溃后永不清除。
+- **影响**：如果 WebGL 因 transient failure（context loss, driver reset）被 catch，用户一直走在 86ms+ 的 CPU 路径上而不知原因。
+- **修复**：catch 块记录失败原因到 state；UI 显示"WebGL 不可用，使用 CPU 模式"；context loss 后 retry ≤3 + 清缓存。
+
 ### P1-1 useEffect 依赖重复触发
 
 - **FilmLab.jsx:832-847**

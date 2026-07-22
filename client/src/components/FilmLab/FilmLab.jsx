@@ -5,7 +5,7 @@ import { getCurveLUT, parseCubeLUT, getMaxSafeRect, getPresetRatio, getExifOrien
 import FilmLabControls from './FilmLabControls';
 import FilmLabCanvas from './FilmLabCanvas';
 import PhotoSwitcher from './PhotoSwitcher';
-import { isWebGLAvailable, processImageWebGL, disposeWebGL } from './FilmLabWebGL';
+import { isWebGLAvailable, processImageWebGL, disposeWebGL, _resetWebGLAvailableCache } from './FilmLabWebGL';
 import { useAIPanel } from '../AIPanel/AIPanelContext';
 
 // 使用统一渲染核心 (via CRACO alias)
@@ -158,6 +158,13 @@ export default function FilmLab({
   const [lut2, setLut2] = useState(null);
   const [lutExportSize, setLutExportSize] = useState(33); // 33 or 65
   const [useGPU, setUseGPU] = useState(isWebGLAvailable());
+  // X2.0: Surface WebGL failures to the UI instead of silently swallowing.
+  // `webglFailReason` is null when WebGL is healthy (or never tried).
+  // `webglRetryCountRef` caps auto-retry at 3 transient failures before
+  // permanently flipping `useGPU=false` to stop hammering a broken driver.
+  const [webglFailReason, setWebglFailReason] = useState(null);
+  const webglRetryCountRef = useRef(0);
+  const WEBGL_MAX_RETRIES = 3;
   // Note: Server preview (remoteImg) has been removed in favor of client-side WebGL/CPU rendering
   // This eliminates LUT color mismatch issues and reduces network overhead
 
@@ -356,6 +363,12 @@ export default function FilmLab({
   // P1-18: buildRenderCoreParams SSOT — 4 处 new RenderCore({...}) 参数组装统一调用
   // 旧实现 4 处参数列表 95% 相同，handleSave/downloadClientJPEG 还漏 lut1Intensity 等
   // 新增参数需同步改 4 处的维护陷阱消除
+  // X.3 (P0-8): spread resolveFilmCurveParams() so the CPU save/export path
+  // receives the resolved gamma/dMin/dMax/toe/shoulder from the active profile
+  // (including user-defined custom profiles not in FILM_CURVE_PROFILES).
+  // Without this, RenderCore's _prepareFilmCurveContext silently returned
+  // {enabled:false} for custom profiles → save/export dropped the film curve
+  // while the WebGL preview correctly applied it.
   const buildRenderCoreParams = React.useCallback(() => {
     const effectiveInvertedValue = getEffectiveInverted(sourceType, inverted);
     return {
@@ -366,6 +379,7 @@ export default function FilmLab({
       inverted: effectiveInvertedValue,
       inversionMode,
       filmCurveEnabled, filmCurveProfile,
+      ...resolveFilmCurveParams(),
       // 片基校正 (Pre-Inversion) - 支持线性和对数两种模式
       baseRed, baseGreen, baseBlue,
       baseMode, baseDensityR, baseDensityG, baseDensityB,
@@ -379,7 +393,7 @@ export default function FilmLab({
     sourceType, inverted, inversionMode,
     exposure, contrast, highlights, shadows, whites, blacks,
     curves, red, green, blue, temp, tint, lut1, lut2,
-    filmCurveEnabled, filmCurveProfile,
+    filmCurveEnabled, filmCurveProfile, filmCurveProfiles,
     baseRed, baseGreen, baseBlue,
     baseMode, baseDensityR, baseDensityG, baseDensityB,
     densityLevelsEnabled, densityLevels,
@@ -1307,11 +1321,26 @@ export default function FilmLab({
               sourceForDraw = webglCanvas;
               useDirectDraw = true;
               webglSuccess = true;  // 重要：必须设置，否则后续的调试代码不会执行
+              // X2.0: healthy render — clear any prior transient failure state.
+              if (webglFailReason !== null) setWebglFailReason(null);
+              webglRetryCountRef.current = 0;
           }
        } catch(e) {
           webglSuccess = false;
           useDirectDraw = false;
-          console.error("WebGL failed", e);
+          // X2.0: Surface the failure to the user instead of silently falling
+          // back to the 86ms+ CPU path. Cap auto-retry at WEBGL_MAX_RETRIES:
+          // once exceeded, flip useGPU=false so subsequent frames skip the
+          // throw-and-catch cycle (which itself costs a getContext + texImage2D).
+          webglRetryCountRef.current += 1;
+          const reason = (e && e.message) ? e.message : String(e);
+          console.error('WebGL failed', reason);
+          if (webglRetryCountRef.current > WEBGL_MAX_RETRIES) {
+            // Persistent failure — stop trying WebGL this session.
+            setUseGPU(false);
+            webglRetryCountRef.current = 0;
+          }
+          setWebglFailReason(reason);
        }
     }
 
@@ -2639,6 +2668,41 @@ export default function FilmLab({
             onClick={() => { setRenderError(null); processImage(); }}
             style={{ background: '#fff', color: '#b11e1e', border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
           >重试</button>
+        </div>
+      )}
+
+      {/* X2.0: WebGL failure banner — surface the silent CPU fallback. */}
+      {/* Dismissable: a transient context loss shouldn't nag the user forever. */}
+      {webglFailReason && (
+        <div style={{
+          position: 'absolute', top: renderError ? 50 : 10, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(180,110,20,0.95)', color: '#fff', padding: '6px 14px',
+          borderRadius: 6, fontSize: 12, zIndex: 1000, display: 'flex', alignItems: 'center', gap: 10,
+          maxWidth: '80vw',
+        }}>
+          <span>WebGL 不可用（{webglFailReason}），已切换到 CPU 模式（较慢）</span>
+          <button
+            onClick={() => {
+              // Manual retry: clear failure state, reset retry counter,
+              // re-probe the driver, and immediately re-render so the user
+              // sees the result without having to nudge a slider.
+              // v4-review: previously this reset state but didn't trigger
+              // a render — the canvas stayed on the CPU image while the
+              // banner disappeared, misleading the user.
+              _resetWebGLAvailableCache();
+              webglRetryCountRef.current = 0;
+              setWebglFailReason(null);
+              if (!useGPU) setUseGPU(true);
+              // Defer processImage to next tick so useGPU state update
+              // has flushed before the render reads it.
+              setTimeout(() => processImage(), 0);
+            }}
+            style={{ background: '#fff', color: '#8a5a10', border: 'none', padding: '3px 9px', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}
+          >重试 WebGL</button>
+          <button
+            onClick={() => setWebglFailReason(null)}
+            style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', padding: '3px 9px', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}
+          >忽略</button>
         </div>
       )}
 

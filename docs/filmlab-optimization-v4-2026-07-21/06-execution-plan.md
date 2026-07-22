@@ -1,4 +1,4 @@
-# 06 · 执行计划（Phase W–Z）
+# 06 · 执行计划（Phase W–Z + X2）
 
 ## 阶段总览
 
@@ -6,6 +6,7 @@
 |---|---|---|---|
 | W | 安全修复（auth + GPU 窗口） | P0-1/2（安全） | 4-8h |
 | X | 算法正确性（CPU/GPU 一致性） | P0-3/4/8 + P1-1/2/4（算法） | 1-2d |
+| **X2** | **渲染性能（CPU 热路径 + WebGL 诊断）** | **P0-9/10 + P1-21/22/23 + P2-10~14（性能）** | **1d** |
 | Y | 后端强化（分页 + 索引 + 安全） | P0-6 + P1-1/3/4（后端） | 1-2d |
 | Z | 架构补全（CI/CD + 测试 + i18n） | Critical 2 + High 4（架构） | 3-5d |
 
@@ -50,6 +51,90 @@
 
 ### X.6 GLSL dMax==dMin 除零保护（P2-4）
 - `shaders/filmCurve.js:57` → `dRange = max(dMax - dMin, 1e-6)`
+
+---
+
+## Phase X2 — 渲染性能（详见 [07-preview-performance.md](07-preview-performance.md)）
+
+### X2.0 WebGL 失败诊断（P1-21）— **先做：确认瓶颈是否在 CPU**
+
+> 如果 WebGL 实际可用，所有 CPU 优化都不需要。先诊断再做 CPU 热路径优化。
+
+- `FilmLab.jsx:1311-1315` catch 块 → 记录失败原因到 state
+- UI 显示"WebGL 不可用，使用 CPU 模式"提示（可关闭）
+- `webglcontextrestored` 事件 → 调 `_resetWebGLAvailableCache()` + 重新检测
+- context loss retry 计数（≤3，v3 S.2c 已设计）
+- 测试：模拟 WebGL context loss → UI 显示降级提示 → restore 后自动恢复
+
+### X2.1 帧级常量预计算（P0-9）— **最高 ROI：15min，省 10-15ms/帧**
+
+- `RenderCore.js prepareLUTs()` 新增：
+  ```js
+  const exposure = Number(p.exposure) || 0;
+  const contrast = Number(p.contrast) || 0;
+  this.luts._tone = {
+    expFactor: Math.pow(2, exposure / 50),
+    ctr: Math.max(-258, Math.min(258, contrast * 2.55)),  // P1-23: 配套钳制
+    contrastFactor: (259 * (ctr + 255)) / (255 * (259 - ctr)),  // 预计算
+    blackPoint: -(Number(p.blacks) || 0) * 0.002,
+    whitePoint: 1.0 - (Number(p.whites) || 0) * 0.002,
+    sFactor: (Number(p.shadows) || 0) * 0.005,
+    hFactor: (Number(p.highlights) || 0) * 0.005,
+  };
+  ```
+- `processPixelFloat` 内改为 `const t = luts._tone; r *= t.expFactor; ...`
+- 测试：相同 params → 预计算前后 `processPixelFloat` 输出完全一致（逐像素 diff = 0）
+
+### X2.2 消除 per-pixel 数组分配（P0-10）— **1h，省 5-15ms/帧 GC**
+
+- `processPixelFloat(r, g, b, out)` 可选 `out` 参数：
+  ```js
+  processPixelFloat(r, g, b, out) {
+    // ... pipeline ...
+    if (out) { out[0] = clamp(r); out[1] = clamp(g); out[2] = clamp(b); return out; }
+    return [clamp(r), clamp(g), clamp(b)];  // 向后兼容
+  }
+  ```
+- `renderChunked.js processBlock` 用预分配 buffer：
+  ```js
+  const outBuf = [0, 0, 0];
+  for (...) {
+    core.processPixelFloat(r, g, b, outBuf);
+    data[i] = Math.min(255, Math.max(0, Math.round(outBuf[0] * 255)));
+    // ...
+  }
+  ```
+- 测试：现有 15+ 测试文件不传 `out` → 保持原行为；`processBlock` 输出不变
+
+### X2.3 移除冗余 clamp（P2-10）— **5min，省 2-5ms/帧**
+
+- `RenderCore.js:918` `_sampleCurveLUTFloatHQ` → 移除内部 `Math.max(0, Math.min(1, val))`
+- 加注释 `// val pre-clamped by caller at line 514`
+
+### X2.4 highlightRollOff LUT（P2-13）— **30min，省 5-15ms/帧（亮区图）**
+
+- `prepareLUTs()` 预构建 1024-entry Float32Array，按 `tc` 参数计算 `Math.exp(2.0 * tc)` 查找表
+
+### X2.5 _sampleLUT3DFloat 闭包内联（P2-11）+ applySaturationFloat out 参数（P2-12）
+
+- 仅在 LUT 激活 / saturation 非默认时有效，可与 X2.1/X2.2 一并做
+
+### X2.6 交互时降分辨率（P1-22）— **仅当 X2.0 确认 CPU 是主路径时才做**
+
+- 新增 `isInteracting` state（slider mousedown → true，mouseup + 150ms debounce → false）
+- `geometry` memo + `webglParams` memo 中 `maxWidth = isInteracting ? PREVIEW_MAX_WIDTH_CLIENT / 2 : PREVIEW_MAX_WIDTH_CLIENT`
+- 仅 CPU 路径（WebGL 已 <5ms）
+- mouseup 后延迟 150ms 渲染全分辨率（progressive refinement）
+
+### X2 测试
+
+- X2.0: WebGL context loss → UI 降级提示 → restore 后恢复
+- X2.1: `prepareLUTs()._tone` 存在且值正确；预计算前后逐像素 diff = 0
+- X2.2: `processPixelFloat(r,g,b,outBuf)` 写入 outBuf；不传 out 仍返回数组
+- X2.3: `_sampleCurveLUTFloatHQ` 内无 `Math.max(0, Math.min(1, ...))`
+- X2.4: highlightRollOff LUT 存在；亮区像素输出 diff < 0.002
+
+**预期**：+15 测试
 
 ---
 
@@ -108,28 +193,41 @@
 ```
 Phase W（安全，最高优先级，已有 gpu-preload.js 只需接线）
   ↓
-Phase X（算法正确性，可与 Y 并行——不同模块域）
+Phase X2.0（WebGL 诊断——确认瓶颈是否在 CPU）          ← 决策门
+  ├─ WebGL 可用 → 跳过 X2.1-X2.6，直接进 X/Y
+  └─ CPU 是主路径 ↓
+     Phase X2.1-X2.5（CPU 热路径优化，<2h，省 17-35ms/帧）
+       ↓
+     Phase X2.6（交互降分辨率，4h，额外 4× 加速）
   ↓
-Phase Y（后端，可与 X 并行）
+Phase X（算法正确性，可与 X2 并行——不同函数域）
   ↓
-Phase Z（架构，独立于 W/X/Y，最后做）
+Phase Y（后端，可与 X/X2 并行）
+  ↓
+Phase Z（架构，独立于 W/X/X2/Y，最后做）
   ↓
 最终全量测试 + CI gate 启用
 ```
+
+**关键决策点**：X2.0 的 WebGL 诊断结果决定 X2.1-X2.6 是否值得投入。如果 WebGL 实际可用，
+CPU 热路径优化省下的 17-35ms 只影响 fallback 场景——ROI 低于算法正确性和后端强化。
 
 ## 测试基线
 
 - 当前（v3 后）：62 suites / 939 tests / 0 failing
 - Phase W 后：不变（无渲染变更）
-- Phase X 后：~960（+21 算法一致性测试）
-- Phase Y 后：~980（+20 后端测试）
-- Phase Z 后：~1020（+40 E2E / 组件测试）
-- 最终目标：~1020 tests + E2E smoke + CI gate 强制通过
+- Phase X2 后：~954（+15 渲染性能测试）
+- Phase X 后：~975（+21 算法一致性测试）
+- Phase Y 后：~995（+20 后端测试）
+- Phase Z 后：~1035（+40 E2E / 组件测试）
+- 最终目标：~1035 tests + E2E smoke + CI gate 强制通过
 
-## Top 5 风险项（先改）
+## Top 7 优先修复项
 
-1. **Auth soft-mode ON** (P0) — 影响所有用户
-2. **GPU 窗口安全** (P0) — CVE-worthy，已有修复只需接线
-3. **CPU/GPU shoulder 不一致** (P0) — 用户可见输出差异
-4. **自定义 profile CPU 丢失** (P0) — 数据完整性 bug
-5. **CI/CD 空白** — 无自动化防止回归
+1. **Auth soft-mode ON** (P0-1) — 影响所有用户的安全漏洞
+2. **GPU 窗口安全** (P0-2) — CVE-worthy，已有修复只需接线
+3. **WebGL 失败诊断** (P1-21) — 确认用户是否在走 CPU 路径（可能是一切慢的根因）
+4. **帧级常量预计算** (P0-9) — 15min，省 10-15ms/帧，最高 ROI 性能优化
+5. **CPU/GPU shoulder 不一致** (P0-3) — 用户可见输出差异
+6. **自定义 profile CPU 丢失** (P0-8) — 数据完整性 bug
+7. **CI/CD 空白** — 无自动化防止回归

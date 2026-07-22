@@ -271,6 +271,16 @@ db.serialize(() => {
   )`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_device_fp ON sessions(device_fp, device_kind)`);
+
+  // Y.2 (P1-17): Photo/roll query indexes are created by schema-migration.js
+  // (run via runAllMigrations in server.js:515). That migration creates:
+  //   idx_photos_roll(roll_id), idx_photos_date_taken(date_taken),
+  //   idx_photos_rating(rating), idx_photos_location(location_id),
+  //   idx_rolls_start(start_date), idx_rolls_film(filmId)
+  // Plus composite indexes for common ORDER BY + LIMIT patterns:
+  //   idx_photos_date_id, idx_photos_roll_date_id, idx_photos_rating_id
+  // We intentionally do NOT duplicate them here — schema-migration.js runs
+  // on every startup with CREATE INDEX IF NOT EXISTS, making them idempotent.
 });
 
 // [ONEDRIVE-SYNC] Periodic WAL checkpoint for OneDrive sync (only in WAL mode)
@@ -282,12 +292,21 @@ function startWalCheckpoint() {
   if (writeThrough) return; // not needed in write-through mode
   if (checkpointInterval) return; // Already started
   
+  // Y.4 (P1-5): alternate PASSIVE and TRUNCATE checkpoints. PASSIVE is
+  // non-blocking but under sustained read load the WAL can grow unbounded
+  // (new pages keep arriving faster than PASSIVE can fold them back).
+  // Every 6th cycle (~30 min at 5-min intervals, ~6 min for OneDrive), run
+  // TRUNCATE which blocks until readers drain, then truncates the WAL file.
+  // The brief writer stall (~ms) is acceptable for a single-user desktop app.
+  let cycleCount = 0;
   checkpointInterval = setInterval(() => {
-    db.run('PRAGMA wal_checkpoint(PASSIVE)', (err) => {
+    cycleCount += 1;
+    const mode = (cycleCount % 6 === 0) ? 'TRUNCATE' : 'PASSIVE';
+    db.run(`PRAGMA wal_checkpoint(${mode})`, (err) => {
       if (err) {
-        console.error('[DB] WAL checkpoint error:', err.message);
+        console.error(`[DB] WAL checkpoint (${mode}) error:`, err.message);
       } else {
-        console.log('[DB] WAL checkpoint completed');
+        console.log(`[DB] WAL checkpoint (${mode}) completed (cycle ${cycleCount})`);
       }
     });
   }, WAL_CHECKPOINT_INTERVAL);
@@ -295,7 +314,7 @@ function startWalCheckpoint() {
   // (otherwise test workers and one-shot CLI scripts hang on shutdown).
   checkpointInterval.unref();
   
-  console.log('[DB] WAL checkpoint scheduler started (every 5 minutes)');
+  console.log(`[DB] WAL checkpoint scheduler started (every ${WAL_CHECKPOINT_INTERVAL / 1000}s, TRUNCATE every 6th cycle)`);
 }
 
 function stopWalCheckpoint() {

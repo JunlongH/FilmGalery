@@ -23,7 +23,7 @@ v4 扩展到：
 
 ## 优先级概览
 
-### P0 — 关键安全/正确性（8 项）
+### P0 — 关键安全/正确性/性能（10 项）
 
 | # | 领域 | 问题 |
 |---|---|---|
@@ -35,8 +35,10 @@ v4 扩展到：
 | 6 | 后端 | **GET /api/photos 无分页** — 千张照片时 OOM + 慢响应 |
 | 7 | 后端 | **日志打印完整 req.body + EXIF GPS** — 信息泄漏 |
 | 8 | 算法 | **自定义 film profile 在 CPU 路径丢失** — RenderCore 只看内置 profile，WebGL 路径正常 |
+| 9 | 性能 | **processPixelFloat 每像素重算帧级常量** — `Math.pow` × 960K = 48ms/帧浪费（→ `prepareLUTs` 预计算） |
+| 10 | 性能 | **processPixelFloat 每像素分配 `[r,g,b]` 数组** — 960K 次/帧 → 6-7 次 minor GC（→ `out` 参数模式） |
 
-### P1 — 高性能/正确性影响（12 项）
+### P1 — 高性能/正确性影响（15 项）
 
 | # | 领域 | 问题 |
 |---|---|---|
@@ -52,12 +54,16 @@ v4 扩展到：
 | 18 | 后端 | **CORS origin:true + Private Network 过于宽松** — LAN 恶意网页可发起请求 |
 | 19 | 后端 | **WAL 模式 PASSIVE checkpoint 持续负载下永不完成** — WAL 文件无限增长 |
 | 20 | 后端 | **compute 端点无限速** — 全分辨率导出请求可耗尽 CPU |
+| 21 | 性能 | **WebGL 失败静默** — 用户可能在走 86ms+ CPU 路径而不自知（可能是一切慢的根因） |
+| 22 | 性能 | **CPU 路径无交互降分辨率** — 拖动滑块时全分辨率渲染，Lightroom 式自适应分辨率缺失 |
+| 23 | 算法/性能 | **processPixelFloat contrast 钳制** — 与 P0-9 预计算配套，防 NaN |
 
-### P2 — 中等影响（24 项，精选）
+### P2 — 中等影响（29 项，精选）
 
 - 前端：slider global listener 未清理、preset 名验证弱、LUT 上传无大小限制、renderOriginal 硬编码 maxWidth
 - 后端：错误响应格式不一致（ok/error/success 混用）、health 端点暴露路径、POST locations 无事务、AI API key 明文存储、空 search 返回全部、Docker 无资源限制、LUT 文件上传无重名保护
 - 算法：GLSL dMax==dMin 除零、rectangleFinder centerPenalty=0、findBestRectangle 副作用排序、gaussianBlur 边界归一化、log inversion float vs 8-bit 1 LSB 偏差
+- 性能：`_sampleCurveLUTFloatHQ` 冗余 clamp（-2-5ms）、`_sampleLUT3DFloat` per-call 闭包（-2-5ms LUT 激活时）、`applySaturationFloat` 数组分配（GC）、`highlightRollOff` per-pixel `Math.exp`（-5-15ms 亮区图）、`isWebGLAvailable` 缓存 stale
 - 架构：CRA→Vite 完成（正面）、三消费者架构清晰（正面）、CI/CD 空白、E2E/组件测试空白、Docker Node 版本分裂、React 版本冲突
 
 ### P3 — 清理/增强（21 项）
@@ -75,10 +81,12 @@ v4 扩展到：
 ## 执行建议
 
 1. **P0-1/P0-2（安全）最先** — auth 默认值 + GPU 窗口隔离（已写 gpu-preload.js 但未接线）
-2. **P0-3/P0-4/P0-8（算法正确性）** — CPU/GPU 渲染一致性问题（用户可见输出差异）
-3. **P0-6/P1-17（后端分页+索引）** — 数据库性能
-4. **P1-11（前端 ErrorBoundary）** — 防止单张照片崩溃全应用
-5. **架构 CI/CD** — 自动化测试门禁，防止回归
+2. **P0-9/P0-10（渲染性能）** — 帧级常量预计算 + 消除数组分配（<2h，省 17-35ms/帧）
+3. **P1-21（WebGL 诊断）** — 确认用户是否在走 CPU 路径（可能是一切慢的根因）
+4. **P0-3/P0-4/P0-8（算法正确性）** — CPU/GPU 渲染一致性问题（用户可见输出差异）
+5. **P0-6/P1-17（后端分页+索引）** — 数据库性能
+6. **P1-11（前端 ErrorBoundary）** — 防止单张照片崩溃全应用
+7. **架构 CI/CD** — 自动化测试门禁，防止回归
 
 ## 分卷索引
 
@@ -89,4 +97,5 @@ v4 扩展到：
 | [03-algorithms.md](03-algorithms.md) | 算法 16 项（CPU/GPU 一致性、精度、边界条件） |
 | [04-architecture.md](04-architecture.md) | 架构 36 项（CI/CD、Electron、测试、构建） |
 | [05-security.md](05-security.md) | 安全 5 项（auth、GPU 窗口、上传验证、路径遍历） |
-| [06-execution-plan.md](06-execution-plan.md) | 分阶段执行计划（Phase W–Z） |
+| [06-execution-plan.md](06-execution-plan.md) | 分阶段执行计划（Phase W–Z + X2） |
+| [07-preview-performance.md](07-preview-performance.md) | 预览渲染性能 11 项（CPU 热路径、WebGL 诊断、双缓冲） |

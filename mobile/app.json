@@ -2,7 +2,7 @@
   "expo": {
     "name": "FilmGallery",
     "slug": "film-gallery-mobile",
-    "version": "3.4.0",
+    "version": "3.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -20,7 +20,7 @@
     },
     "android": {
       "package": "com.filmgallery.app",
-      "versionCode": 10,
+      "versionCode": 11,
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

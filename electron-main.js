@@ -181,7 +181,7 @@ async function startServer(forceRestart = false) {
     const cmd = process.execPath;
     const args = [serverEntry];
     LOG('attempt spawn', cmd, args.join(' '));
-    const env = { ...process.env, USER_DATA: app.getPath('userData'), ELECTRON_RUN_AS_NODE: '1' };
+    const env = { ...process.env, USER_DATA: app.getPath('userData'), ELECTRON_RUN_AS_NODE: '1', AUTH_SOFT_MODE: '0' };
     if (appConfig && typeof appConfig.dataRoot === 'string' && appConfig.dataRoot.trim()) {
       env.DATA_ROOT = appConfig.dataRoot.trim();
       LOG('startServer: DATA_ROOT set to', env.DATA_ROOT);
@@ -689,14 +689,23 @@ function createWindow() {
 // --- GPU Worker (Offscreen hidden window) ---
 async function ensureGpuWindow() {
   if (gpuWindow && !gpuWindow.isDestroyed()) return gpuWindow;
+  // Security: sandboxed renderer. nodeIntegration:false + contextIsolation:true
+  // + sandbox:true prevent a compromised renderer (WebGL driver bug, dependency
+  // supply-chain attack) from reaching Node.js / filesystem / shell. All IPC
+  // goes through the minimal gpu-preload.js surface (window.__gpu.onRun /
+  // sendResult). The renderer bundle (gpu-renderer.bundle.js) has shared GLSL
+  // + WB gain modules baked in by build.js, so require() is unnecessary.
+  const gpuPreloadPath = path.join(__dirname, 'electron-gpu', 'gpu-preload.js');
   gpuWindow = new BrowserWindow({
     width: 320,
     height: 240,
     show: false,
     frame: false,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      preload: gpuPreloadPath,
       backgroundThrottling: false,
     },
   });

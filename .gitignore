@@ -35,6 +35,7 @@ server/film.db-wal
 server/film.db-shm
 *.db-wal
 *.db-shm
+*.db.backup-*
 
 # Native build output
 packages/@filmgallery/libraw-native/build/

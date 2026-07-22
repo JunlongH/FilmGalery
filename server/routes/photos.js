@@ -15,7 +15,8 @@ const path = require('path');
 const sharp = require('sharp');
 sharp.cache(false);
 const { buildPipeline } = require('../services/filmlab-service');
-const { runAsync, allAsync, getAsync, validatePhotoUpdate } = require('../utils/db-helpers');
+const { runAsync, allAsync, getAsync, validatePhotoUpdate, paginateQuery } = require('../utils/db-helpers');
+const { isPathConfined, safeUnlink } = require('../utils/path-security');
 const { savePhotoTags, attachTagsToPhotos } = require('../services/tag-service');
 const { uploadsDir } = require('../config/paths');
 const { uploadDefault } = require('../config/multer');
@@ -291,7 +292,11 @@ router.get('/', async (req, res, next) => {
 
   sql += ` ORDER BY p.date_taken DESC, p.id DESC`;
 
-  const rows = await allAsync(sql, params);
+  // Y.1 (P0-3): opt-in pagination. When `?page=N` is provided, return
+  // { data, total, page, pageSize, hasMore } and apply LIMIT/OFFSET.
+  // Without `?page`, return the array directly (backward compat).
+  const pageResult = await paginateQuery(sql, params, req.query);
+  const rows = pageResult.rows || (pageResult.payload && pageResult.payload.data) || [];
   // Normalize paths: prefer positive_rel_path when present
   const normalized = (rows || []).map(r => {
     const fullPath = r.positive_rel_path || r.full_rel_path || null;
@@ -302,7 +307,13 @@ router.get('/', async (req, res, next) => {
     });
   });
   const withTags = await attachTagsToPhotos(normalized);
-  res.json(withTags);
+  if (pageResult.paginated) {
+    res.json({ ...pageResult.payload, data: withTags });
+  } else {
+    // X-Total-Count header lets clients opt-in without changing response shape
+    res.setHeader('X-Total-Count', String(withTags.length));
+    res.json(withTags);
+  }
   } catch (err) {
     next(err);
   }
@@ -378,10 +389,16 @@ router.get('/favorites', async (req, res, next) => {
     ORDER BY p.id DESC
   `;
   try {
-    const rows = await allAsync(sql, []);
+    const pageResult = await paginateQuery(sql, [], req.query);
+    const rows = pageResult.rows || (pageResult.payload && pageResult.payload.data) || [];
     console.log(`[GET] Favorites found: ${rows.length}`);
     const withTags = await attachTagsToPhotos(rows);
-    res.json(withTags);
+    if (pageResult.paginated) {
+      res.json({ ...pageResult.payload, data: withTags });
+    } else {
+      res.setHeader('X-Total-Count', String(withTags.length));
+      res.json(withTags);
+    }
   } catch (err) {
     next(err);
   }
@@ -399,9 +416,15 @@ router.get('/negatives', async (req, res, next) => {
     ORDER BY p.id DESC
   `;
   try {
-    const rows = await allAsync(sql, []);
+    const pageResult = await paginateQuery(sql, [], req.query);
+    const rows = pageResult.rows || (pageResult.payload && pageResult.payload.data) || [];
     const withTags = await attachTagsToPhotos(rows);
-    res.json(withTags);
+    if (pageResult.paginated) {
+      res.json({ ...pageResult.payload, data: withTags });
+    } else {
+      res.setHeader('X-Total-Count', String(withTags.length));
+      res.json(withTags);
+    }
   } catch (err) {
     next(err);
   }
@@ -411,7 +434,11 @@ router.get('/negatives', async (req, res, next) => {
 router.put('/:id', async (req, res, next) => {
   const id = req.params.id;
   const { frame_number, caption, taken_at, rating, tags, date_taken, time_taken, location_id, detail_location, latitude, longitude, altitude, location_name, country, city, camera, lens, photographer, aperture, shutter_speed, iso, focal_length, camera_equip_id, lens_equip_id, flash_equip_id, scanner_equip_id, scan_resolution, scan_software, scan_lab, scan_date, scan_cost, scan_notes } = req.body;
-  console.log(`[PUT] Update photo ${id}`, req.body);
+  // Y.3 (P0-5): redact PII from logs. Full req.body may contain GPS coords
+  // (latitude/longitude/altitude), location names, and photographer identity.
+  // Log only the id + which fields are being updated (key presence, not values).
+  const updatedKeys = Object.keys(req.body || {}).filter(k => k !== 'tags');
+  console.log(`[PUT] Update photo ${id} fields=[${updatedKeys.join(',')}]`);
 
   const updates = [];
   const params = [];
@@ -536,20 +563,11 @@ router.put('/:id/update-positive', uploadDefault.single('image'), async (req, re
     }
 
     // Try to delete the old positive file if it existed and is different
+    // v4-review: use safeUnlink to enforce path confinement on DB-derived paths
     if (row.positive_rel_path && row.positive_rel_path !== newFullRelPath) {
-        try {
-            const oldFullPath = path.join(uploadsDir, row.positive_rel_path);
-            if ((await pathExists(oldFullPath))) (await fsPromises.unlink(oldFullPath));
-        } catch (e) {
-            console.warn('[UPDATE-POSITIVE] Could not delete old positive file:', e.message);
-        }
+        await safeUnlink(uploadsDir, row.positive_rel_path, { label: 'UPDATE-POSITIVE', silent: true });
     } else if (row.full_rel_path && row.full_rel_path !== newFullRelPath) {
-        try {
-            const oldFullPath = path.join(uploadsDir, row.full_rel_path);
-            if ((await pathExists(oldFullPath))) (await fsPromises.unlink(oldFullPath));
-        } catch (e) {
-            console.warn('[UPDATE-POSITIVE] Could not delete old full file:', e.message);
-        }
+        await safeUnlink(uploadsDir, row.full_rel_path, { label: 'UPDATE-POSITIVE', silent: true });
     }
 
     // Generate positive thumbnail via shared thumb-service
@@ -640,24 +658,18 @@ router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, r
     console.log('[INGEST-POSITIVE] Moving file from', req.file.path, 'to', newFullPath);
     
     // Clean up old positive file first if it exists and is different
+    // v4-review: safeUnlink enforces confinement on DB-derived path
     if (row.positive_rel_path && row.positive_rel_path !== newFullRelPath) {
-      try {
-        const oldPosAbs = path.join(uploadsDir, row.positive_rel_path);
-        if ((await pathExists(oldPosAbs))) {
-          console.log('[INGEST-POSITIVE] Removing old positive:', oldPosAbs);
-          (await fsPromises.unlink(oldPosAbs));
-        }
-      } catch (e) { 
-        console.warn('[INGEST-POSITIVE] Cleanup old positive failed', e.message); 
-      }
+      const r = await safeUnlink(uploadsDir, row.positive_rel_path, { label: 'INGEST-POSITIVE', silent: true });
+      if (r.deleted) console.log('[INGEST-POSITIVE] Old positive removed');
     }
     
     try {
       // Ensure target does not exist to avoid Windows file locking issues
-      if ((await pathExists(newFullPath))) {
-        console.log('[INGEST-POSITIVE] Target exists, removing:', newFullPath);
-        try { (await fsPromises.unlink(newFullPath)); } catch(e) { console.warn('[INGEST-POSITIVE] Unlink target failed', e.message); }
-      }
+      // (this is a freshly-computed path, not DB-derived — but use safeUnlink
+      // anyway for consistency with the new pattern)
+      const newRel = path.relative(uploadsDir, newFullPath);
+      await safeUnlink(uploadsDir, newRel, { label: 'INGEST-POSITIVE', silent: true });
       
       // Direct overwrite
       moveFileSync(req.file.path, newFullPath);
@@ -684,10 +696,10 @@ router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, r
     console.log('[INGEST-POSITIVE] Generating thumbnail:', thumbPath);
     
     try {
-      if ((await pathExists(thumbPath))) { 
-        console.log('[INGEST-POSITIVE] Removing old thumbnail');
-        try { (await fsPromises.unlink(thumbPath)); } catch(_){} 
-      }
+      // Remove existing thumbnail if present (path is freshly-computed but
+      // use safeUnlink for consistency)
+      const thumbRel = path.relative(uploadsDir, thumbPath);
+      await safeUnlink(uploadsDir, thumbRel, { label: 'INGEST-POSITIVE', silent: true });
       // Read to buffer to avoid file lock
       const fileBuf = (await fsPromises.readFile(newFullPath));
       await sharp(fileBuf).resize({ width: 240, height: 240, fit: 'inside' }).jpeg({ quality: 40 }).toFile(thumbPath);
@@ -703,15 +715,9 @@ router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, r
     await runAsync('UPDATE photos SET positive_rel_path=?, positive_thumb_rel_path=?, full_rel_path=COALESCE(full_rel_path, ?), updated_at=CURRENT_TIMESTAMP WHERE id=?', [newFullRelPath, relThumb, newFullRelPath, id]);
     console.log('[INGEST-POSITIVE] DB updated');
 
-    // Cleanup old positive thumbnail if it was different
+    // Cleanup old positive thumbnail if it was different (DB-derived path)
     if (row.positive_thumb_rel_path && row.positive_thumb_rel_path !== relThumb) {
-      try {
-        const oldThumbAbs = path.join(uploadsDir, row.positive_thumb_rel_path);
-        if ((await pathExists(oldThumbAbs))) {
-          console.log('[INGEST-POSITIVE] Removing old positive thumbnail:', oldThumbAbs);
-          (await fsPromises.unlink(oldThumbAbs));
-        }
-      } catch (e) { console.warn('[INGEST-POSITIVE] Cleanup old thumb failed', e.message); }
+      await safeUnlink(uploadsDir, row.positive_thumb_rel_path, { label: 'INGEST-POSITIVE', silent: true });
     }
 
     const updatedPhoto = await PreparedStmt.getAsync('photos.getById', [id]);
@@ -923,22 +929,13 @@ router.post('/:id/export-positive', async (req, res, next) => {
     const relThumb = path.join('rolls', String(row.roll_id), 'thumb', thumbName).replace(/\\/g, '/').replace(/\\/g, '/');
 
     // Remove previous positive if existed and is different (optional cleanup)
+    // v4-review: safeUnlink for DB-derived paths
     if (row.positive_rel_path && row.positive_rel_path !== relDest) {
-      try {
-        const oldPosAbs = path.join(uploadsDir, row.positive_rel_path);
-        if ((await pathExists(oldPosAbs))) (await fsPromises.unlink(oldPosAbs));
-      } catch (delErr) {
-        console.warn('[EXPORT-POSITIVE] Could not delete previous positive file:', delErr.message);
-      }
+      await safeUnlink(uploadsDir, row.positive_rel_path, { label: 'EXPORT-POSITIVE', silent: true });
     }
     // Remove previous thumbnail if existed and is different
     if (row.positive_thumb_rel_path && row.positive_thumb_rel_path !== relThumb) {
-      try {
-        const oldThumbAbs = path.join(uploadsDir, row.positive_thumb_rel_path);
-        if ((await pathExists(oldThumbAbs))) (await fsPromises.unlink(oldThumbAbs));
-      } catch (delErr) {
-        console.warn('[EXPORT-POSITIVE] Could not delete previous thumbnail file:', delErr.message);
-      }
+      await safeUnlink(uploadsDir, row.positive_thumb_rel_path, { label: 'EXPORT-POSITIVE', silent: true });
     }
 
     // Update DB; also set full_rel_path if legacy null to keep compatibility
@@ -1110,24 +1107,16 @@ router.delete('/:id', async (req, res, next) => {
       // Filter out nulls and duplicates
       const uniquePaths = [...new Set(pathsToDelete.filter(p => p))];
 
-      // Delete files from disk
+      // Delete files from disk — v4-review: use safeUnlink for all DB-derived paths
       for (const relPath of uniquePaths) {
-        const filePath = path.join(uploadsDir, relPath);
-        try {
-          await fs.promises.unlink(filePath);
-        } catch (e) {
-          if (e.code !== 'ENOENT') console.warn(`Failed to delete ${filePath}`, e.message);
-        }
+        await safeUnlink(uploadsDir, relPath, { label: 'DELETE-PHOTO', silent: true });
       }
       
       // Fallback for legacy filename if no paths found
       if (uniquePaths.length === 0 && row.filename && !row.full_rel_path) {
-        const filePath = path.join(__dirname, '../', row.filename.replace(/^\//, ''));
-        try {
-          await fs.promises.unlink(filePath);
-        } catch (e) {
-          if (e.code !== 'ENOENT') console.warn(`Failed to delete legacy file ${filePath}`, e.message);
-        }
+        // v4-review: use safeUnlink (centralizes the isPathConfined guard)
+        const legacyRel = row.filename.replace(/^\//, '');
+        await safeUnlink(uploadsDir, legacyRel, { label: 'DELETE-PHOTO-LEGACY' });
       }
     }
 
@@ -1420,7 +1409,9 @@ router.post('/:id/download-with-exif', async (req, res, next) => {
       exifData['XMP-FilmGallery:ScanDate'] = photo.scan_date;
     }
     
-    console.log('[DOWNLOAD-WITH-EXIF] EXIF data to write:', JSON.stringify(exifData, null, 2));
+    // Y.3 (P0-5): redact GPS from EXIF logs — exifData contains lat/lon/alt
+    // which is PII. Log only the keys being written, not their values.
+    console.log(`[DOWNLOAD-WITH-EXIF] EXIF keys to write: [${Object.keys(exifData).join(',')}]`);
     
     // Write EXIF to temp file
     try {

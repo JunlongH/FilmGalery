@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { allAsync } = require('../utils/db-helpers');
+const { allAsync, paginateQuery } = require('../utils/db-helpers');
 const { attachTagsToPhotos } = require('../services/tag-service');
 const { asyncHandler } = require('../utils/async-handler');
 
@@ -19,9 +19,10 @@ router.get('/', asyncHandler(async (req, res) => {
 }));
 
 // photos filtered by tag
+// Y.1 (P0-4): opt-in pagination via ?page=N&pageSize=M
 router.get('/:tagId/photos', asyncHandler(async (req, res) => {
   const tagId = req.params.tagId;
-  const rows = await allAsync(`
+  const sql = `
     SELECT p.*, COALESCE(f.name, r.film_type) AS film_name, r.title AS roll_title
     FROM photo_tags pt
     JOIN photos p ON p.id = pt.photo_id
@@ -29,9 +30,16 @@ router.get('/:tagId/photos', asyncHandler(async (req, res) => {
     LEFT JOIN films f ON f.id = r.filmId
     WHERE pt.tag_id = ?
     ORDER BY p.id DESC
-  `, [tagId]);
+  `;
+  const pageResult = await paginateQuery(sql, [tagId], req.query);
+  const rows = pageResult.rows || (pageResult.payload && pageResult.payload.data) || [];
   const withTags = await attachTagsToPhotos(rows);
-  res.json(withTags);
+  if (pageResult.paginated) {
+    res.json({ ...pageResult.payload, data: withTags });
+  } else {
+    res.setHeader('X-Total-Count', String(withTags.length));
+    res.json(withTags);
+  }
 }));
 
 module.exports = router;

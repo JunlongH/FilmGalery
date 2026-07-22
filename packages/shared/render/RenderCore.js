@@ -226,6 +226,30 @@ class RenderCore {
     // 3M 像素 × 3 通道 = 9M 次 log10+pow → 9M 次数组索引（~1000x 加速）
     const filmCurveCtx = this._prepareFilmCurveContext();
 
+    // X2.1: Precompute frame-level tone constants. processPixelFloat previously
+    // recomputed these per pixel (Math.pow + 6× Number() × 960K = ~54ms/frame
+    // wasted). `this.params` is immutable for the instance lifetime (v3 S.6),
+    // so all derived constants are stable for the LUT's lifetime.
+    // P1-23: clamp ctr to [-258, 258] (matches filmLabToneLUT.js:47 8-bit path)
+    // — contrast > 101.57 → ctr > 259 → denominator 255*(259-ctr) ≤ 0 →
+    // division by zero or tone inversion. UI bounds [-100, 100] keeps ctr in
+    // [-255, 255], but programmatic callers (presets, AI) can exceed.
+    const _exposure = Number(p.exposure) || 0;
+    const _contrast = Number(p.contrast) || 0;
+    const ctr = Math.max(-258, Math.min(258, _contrast * 2.55));
+    const blackPoint = -(Number(p.blacks) || 0) * 0.002;
+    const whitePoint = 1.0 - (Number(p.whites) || 0) * 0.002;
+    const _tone = {
+      expFactor: Math.pow(2, _exposure / 50),
+      ctr,
+      contrastFactor: (259 * (ctr + 255)) / (255 * (259 - ctr)),
+      blackPoint,
+      whitePoint,
+      range: whitePoint - blackPoint,
+      sFactor: (Number(p.shadows) || 0) * 0.005,
+      hFactor: (Number(p.highlights) || 0) * 0.005,
+    };
+
     this.luts = {
       toneLUT,
       lutRGB,
@@ -247,6 +271,8 @@ class RenderCore {
       splitToneCtx: prepareSplitTone(p.splitToning),
       // P1-13: 预构建胶片曲线 LUT（enabled=false 时为空壳，查找时短路）
       filmCurveCtx,
+      // X2.1: 帧级色调常量
+      _tone,
     };
 
     return this.luts;
@@ -271,9 +297,23 @@ class RenderCore {
       return { enabled: false };
     }
 
-    const profile = FILM_CURVE_PROFILES[p.filmCurveProfile];
+    // X.3 (P0-8): custom profile support. Previously this returned
+    // { enabled: false } when `filmCurveProfile` was a user-defined key
+    // absent from the static FILM_CURVE_PROFILES table — silently falling
+    // back to "no film curve" on the CPU save/export path while the WebGL
+    // preview correctly applied the custom curve. Fall back to
+    // DEFAULT_FILM_CURVE so individual params (filmCurveGamma etc.) still
+    // drive the curve; the caller (FilmLab.jsx buildRenderCoreParams) is
+    // expected to spread resolveFilmCurveParams() into the RenderCore params.
+    // v4-review: warn when falling back — a typo in profile name (e.g.
+    // "standrd" vs "standard") would otherwise silently use the default
+    // curve instead of the user's custom profile, producing visible
+    // divergence between preview (which finds it in filmCurveProfiles
+    // state array) and export (which hits this fallback).
+    let profile = FILM_CURVE_PROFILES[p.filmCurveProfile];
     if (!profile) {
-      return { enabled: false };
+      console.warn(`[RenderCore] filmCurveProfile "${p.filmCurveProfile}" not in built-in profiles; falling back to DEFAULT_FILM_CURVE. If this is a custom profile, ensure resolveFilmCurveParams() is called and the params are spread into RenderCore.`);
+      profile = DEFAULT_FILM_CURVE;
     }
 
     const gammaMain = p.filmCurveGamma ?? profile.gamma;
@@ -345,9 +385,10 @@ class RenderCore {
    * @param {number} b - Blue  (Linear 0.0 – 1.0+)
    * @returns {Array<number>} [r, g, b] sRGB 0.0 – 1.0
    */
-  processPixelFloat(r, g, b) {
+  processPixelFloat(r, g, b, out) {
     const p = this.params;
     const luts = this.luts || this.prepareLUTs();
+    const t = luts._tone;
 
     // ① Film Curve (H&D density model) — Q13: per-channel gamma + toe/shoulder
     // P1-13: 使用预构建 LUT（eliminates per-pixel FILM_CURVE_PROFILES lookup + log10/pow）
@@ -441,44 +482,37 @@ class RenderCore {
     if (!Number.isFinite(g)) g = 0;
     if (!Number.isFinite(b)) b = 0;
 
-    // ⑤ Tone Mapping — inline float math (replaces 8-bit toneLUT lookup)
-    // This matches the exact same formulas in buildToneLUT() / GPU shader,
-    // but without 8-bit quantization.
-
+    // ⑤ Tone Mapping — X2.1: 帧级常量从 luts._tone 读取（不再每像素重算）
     // 5a. Exposure (f-stop formula: 2^(exposure/50))
-    const expFactor = Math.pow(2, (Number(p.exposure) || 0) / 50);
-    r *= expFactor;
-    g *= expFactor;
-    b *= expFactor;
+    r *= t.expFactor;
+    g *= t.expFactor;
+    b *= t.expFactor;
 
     // 5b. Contrast (around perceptual mid-grey — Q11: 18% reflectance ≈ sRGB 0.46)
     // UI 值 (-100..100) ×2.55 缩放到标准公式域 (-255..255)，与 GPU shader / buildToneLUT 一致 (BUG-11)
-    const ctr = (Number(p.contrast) || 0) * 2.55;
-    if (ctr !== 0) {
-      const contrastFactor = (259 * (ctr + 255)) / (255 * (259 - ctr));
-      r = (r - CONTRAST_MID_GRAY) * contrastFactor + CONTRAST_MID_GRAY;
-      g = (g - CONTRAST_MID_GRAY) * contrastFactor + CONTRAST_MID_GRAY;
-      b = (b - CONTRAST_MID_GRAY) * contrastFactor + CONTRAST_MID_GRAY;
+    // P1-23: ctr 已在 prepareLUTs 中钳制到 [-258, 258]，避免 contrast > 101.57 时除零
+    if (t.ctr !== 0) {
+      const cf = t.contrastFactor;
+      r = (r - CONTRAST_MID_GRAY) * cf + CONTRAST_MID_GRAY;
+      g = (g - CONTRAST_MID_GRAY) * cf + CONTRAST_MID_GRAY;
+      b = (b - CONTRAST_MID_GRAY) * cf + CONTRAST_MID_GRAY;
     }
 
     // 5c. Blacks & Whites (window remap)
-    const blackPoint = -(Number(p.blacks) || 0) * 0.002;
-    const whitePoint = 1.0 - (Number(p.whites) || 0) * 0.002;
-    if (blackPoint !== 0 || whitePoint !== 1) {
-      const range = whitePoint - blackPoint;
-      if (range > 0.001) {
-        r = (r - blackPoint) / range;
-        g = (g - blackPoint) / range;
-        b = (b - blackPoint) / range;
+    if (t.blackPoint !== 0 || t.whitePoint !== 1) {
+      if (t.range > 0.001) {
+        r = (r - t.blackPoint) / t.range;
+        g = (g - t.blackPoint) / t.range;
+        b = (b - t.blackPoint) / t.range;
       }
     }
 
     // 5d. Shadows (Bernstein basis, peak ~0.33)
-    const sFactor = (Number(p.shadows) || 0) * 0.005;
-    if (sFactor !== 0) {
+    if (t.sFactor !== 0) {
+      const sf = t.sFactor;
       const applyS = (v) => {
         const c = Math.max(0, Math.min(1, v));
-        return v + sFactor * (1 - c) * (1 - c) * c * 4;
+        return v + sf * (1 - c) * (1 - c) * c * 4;
       };
       r = applyS(r);
       g = applyS(g);
@@ -486,11 +520,11 @@ class RenderCore {
     }
 
     // 5e. Highlights (Bernstein basis, peak ~0.67)
-    const hFactor = (Number(p.highlights) || 0) * 0.005;
-    if (hFactor !== 0) {
+    if (t.hFactor !== 0) {
+      const hf = t.hFactor;
       const applyH = (v) => {
         const c = Math.max(0, Math.min(1, v));
-        return v + hFactor * c * c * (1 - c) * 4;
+        return v + hf * c * c * (1 - c) * 4;
       };
       r = applyH(r);
       g = applyH(g);
@@ -516,6 +550,8 @@ class RenderCore {
 
     // ⑥ Curves — sample Float32 1024-entry LUTs with linear interpolation
     // This gives true float-precision output from the natural cubic spline data
+    // X2.3: caller already clamped r/g/b to [0,1] above, so _sampleCurveLUTFloatHQ
+    // no longer repeats the clamp internally.
     if (luts.lutRGBf) {
       r = this._sampleCurveLUTFloatHQ(r, luts.lutRGBf);
       g = this._sampleCurveLUTFloatHQ(g, luts.lutRGBf);
@@ -534,8 +570,16 @@ class RenderCore {
     }
 
     // ⑦b Saturation (Luma-Preserving, Rec.709)
+    // X2.2: pass `out` to applySaturationFloat to avoid array allocation when
+    // the caller provided one. When `out` is null we fall back to the legacy
+    // array-returning path (backward compat for tests).
     if (!isDefaultSaturation(p.saturation)) {
-      [r, g, b] = applySaturationFloat(r, g, b, p.saturation);
+      if (out) {
+        applySaturationFloat(r, g, b, p.saturation, out);
+        r = out[0]; g = out[1]; b = out[2];
+      } else {
+        [r, g, b] = applySaturationFloat(r, g, b, p.saturation);
+      }
     }
 
     // ⑧ Split Toning (perceptual domain — Q18: use precomputed tint colors)
@@ -547,6 +591,17 @@ class RenderCore {
     }
 
     // Final clamp to [0, 1]
+    // X2.2: out parameter pattern — when provided, write into the reusable
+    // buffer instead of allocating a fresh [r,g,b] array. processBlock passes
+    // a pre-allocated `outBuf` to avoid 960K array allocations per frame
+    // (each ~24 bytes → 6-7 minor GCs/frame). Tests that destructure the
+    // return value keep working via the fallback branch.
+    if (out) {
+      out[0] = Math.max(0, Math.min(1, r));
+      out[1] = Math.max(0, Math.min(1, g));
+      out[2] = Math.max(0, Math.min(1, b));
+      return out;
+    }
     return [
       Math.max(0, Math.min(1, r)),
       Math.max(0, Math.min(1, g)),
@@ -911,13 +966,19 @@ class RenderCore {
    * Sample a Float32 curve LUT with linear interpolation.
    * Higher precision than the 8-bit variant — output is already normalized 0-1.
    *
-   * @param {number} val - Input value (0.0–1.0)
+   * X2.3: caller (processPixelFloat line ~514) clamps r/g/b to [0,1] before
+   * invoking this, so the internal `Math.max(0, Math.min(1, val))` was
+   * 6 redundant comparisons per pixel × 960K pixels = ~5.7M wasted ops/frame.
+   * Removed; if a future caller passes unclamped input, add a clamp at the
+   * call site (defensive clamping belongs at API boundaries, not in hot paths).
+   *
+   * @param {number} val - Input value (caller MUST pre-clamp to 0.0–1.0)
    * @param {Float32Array} lut - Float32 curve LUT (values in 0.0–1.0)
    * @returns {number} Interpolated output (0.0–1.0)
    */
   _sampleCurveLUTFloatHQ(val, lut) {
     const maxIdx = lut.length - 1;
-    const pos = Math.max(0, Math.min(1, val)) * maxIdx;
+    const pos = val * maxIdx;
     const lo = Math.floor(pos);
     const hi = Math.min(maxIdx, lo + 1);
     const frac = pos - lo;

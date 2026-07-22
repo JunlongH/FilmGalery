@@ -32,6 +32,21 @@ const storage = multer.diskStorage({
     const safeName = file.originalname
       .replace(/[^a-zA-Z0-9._-]/g, '_')
       .replace(/__+/g, '_');
+    // Y.4 (P3): prevent filename collision — uploading "vintage.cube" when
+    // a file with that name already exists would silently overwrite it.
+    // Append a short timestamp suffix to make the filename unique. We use
+    // a 4-digit base36 stamp (sufficient for same-second dedup in practice;
+    // multer processes uploads sequentially per request).
+    const fullPath = path.join(LUT_DIR, safeName);
+    try {
+      if (fsSync.existsSync(fullPath)) {
+        const ext = path.extname(safeName);
+        const base = path.basename(safeName, ext);
+        const stamp = Date.now().toString(36).slice(-4);
+        const uniqueName = `${base}_${stamp}${ext}`;
+        return cb(null, uniqueName);
+      }
+    } catch (_) { /* stat failure — proceed with original name */ }
     cb(null, safeName);
   }
 });

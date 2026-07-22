@@ -70,14 +70,33 @@ app.use(bodyParser.json({ limit: '10mb' }));
 // gzip/deflate for API JSON responses (not applied to static uploads)
 app.use(compression({ threshold: 1024 }));
 // CORS: reflect origin (including 'null' from file://) and allow private network
+// Y.3 (P1-3): restrict Access-Control-Allow-Private-Network to known local
+// origins. Previously this header was set for ALL origins, meaning any public
+// website (https://evil.com) could make requests to the user's FilmGallery
+// server on their LAN. With auth soft-mode now OFF (W.1), unauthenticated
+// requests get 401 — but the Private Network header still let public sites
+// *reach* the server. Now only file:// (Electron), capacitor:// (mobile),
+// and localhost origins get the header.
+function isLocalOrigin(origin) {
+  if (!origin || origin === 'null') return true; // file:// reports "null"
+  // capacitor://<app-id>, http://localhost, http://127.0.0.1, http://[::1]
+  // v4-review: added IPv6 loopback [::1] (localhost may resolve to IPv6
+  // on dual-stack systems, and the URL form is http://[::1]:4000)
+  return /^capacitor:\/\//.test(origin)
+    || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/.test(origin);
+}
 app.use(cors({ origin: true, credentials: false, preflightContinue: true }));
 app.use((req, res, next) => {
-	res.setHeader('Access-Control-Allow-Private-Network', 'true');
-	next();
+  if (isLocalOrigin(req.headers.origin)) {
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  }
+  next();
 });
 app.options('*', (req, res) => {
-	res.setHeader('Access-Control-Allow-Private-Network', 'true');
-	res.sendStatus(204);
+  if (isLocalOrigin(req.headers.origin)) {
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  }
+  res.sendStatus(204);
 });
 
 // --- storage directories ---
@@ -203,11 +222,12 @@ const mountRoutes = () => {
   // returns the same connection the rest of the server uses.
   const db = require('./db');
   const sessionsStore = createSessionsStore(db);
-  // Soft mode default ON: remote connections without a token are allowed
-  // (with X-Auth-Soft-Mode: warn header) until the pairing UI is implemented.
-  // Set AUTH_SOFT_MODE=0 to enforce hard 401 rejection of unauthenticated
-  // remote requests.
-  const authSoftMode = process.env.AUTH_SOFT_MODE !== '0';
+  // Soft mode default OFF: remote requests without a valid Bearer token are
+  // hard-rejected with 401. The original "one release" upgrade window for
+  // already-paired mobile clients has long passed. Set AUTH_SOFT_MODE=1 to
+  // temporarily re-enable the soft path (200 + X-Auth-Soft-Mode: warn) for
+  // transitional deployments. Loopback peers always pass through regardless.
+  const authSoftMode = process.env.AUTH_SOFT_MODE === '1';
   const authMiddleware = createAuthMiddleware({ sessionsStore, softMode: authSoftMode });
   app.use(authMiddleware);
 

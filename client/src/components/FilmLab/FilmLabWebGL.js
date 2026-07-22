@@ -137,6 +137,11 @@ export function processImageWebGL(canvas, image, params = {}) {
       if (processImageWebGL._cache) {
         processImageWebGL._cache.delete(canvas);
       }
+      // X2.0: stale `_webglAvailableCache` would have us believe WebGL is
+      // still usable after a driver reset — but `getContext('webgl2')` may
+      // return null on the next call. Drop the cache so isWebGLAvailable()
+      // re-probes the driver state.
+      _webglAvailableCache = null;
     });
     canvas.addEventListener('webglcontextrestored', () => {
       console.log('[FilmLabWebGL] WebGL context restored');
@@ -144,6 +149,8 @@ export function processImageWebGL(canvas, image, params = {}) {
       if (processImageWebGL._cache) {
         processImageWebGL._cache.delete(canvas);
       }
+      // Cache is reset on loss; on restore, isWebGLAvailable() will lazily
+      // re-probe and re-populate the cache.
     });
     canvas._contextLostHandlerRegistered = true;
   }

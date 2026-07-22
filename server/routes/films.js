@@ -5,6 +5,7 @@ const path = require('path');
 const { uploadFilm } = require('../config/multer');
 const { uploadsDir } = require('../config/paths');
 const { runAsync, allAsync, getAsync } = require('../utils/db-helpers');
+const { isPathConfined, safeUnlink } = require('../utils/path-security');
 const { FILM_CATEGORIES, FILM_FORMATS, KNOWN_BRANDS, PROCESS_TYPES } = require('../constants/film');
 
 // Get film constants (for dropdowns)
@@ -62,8 +63,8 @@ router.delete('/:id', async (req, res, next) => {
       const row = await getAsync('SELECT thumbPath FROM films WHERE id = ?', [id]);
       if (row && row.thumbPath) {
         const rel = row.thumbPath.replace(/^\/uploads\//, '');
-        const filePath = path.join(uploadsDir, rel);
-        fs.unlink(filePath, () => { /* ignore error */ });
+        // v4-review: safeUnlink centralizes the isPathConfined guard
+        await safeUnlink(uploadsDir, rel, { label: 'FILMS-HARD-DELETE' });
       }
       const result = await runAsync('DELETE FROM films WHERE id = ?', [id]);
       res.json({ deleted: result.changes, hard: true });
@@ -130,8 +131,8 @@ router.put('/:id', uploadFilm.single('thumb'), async (req, res, next) => {
     // delete old thumb if replaced
     if (req.file && filmRow.thumbPath && filmRow.thumbPath !== updates.thumbPath) {
       const rel = filmRow.thumbPath.replace(/^\/uploads\//, '');
-      const oldPath = path.join(uploadsDir, rel);
-      fs.unlink(oldPath, () => { /* ignore error */ });
+      // v4-review: safeUnlink centralizes confinement check
+      await safeUnlink(uploadsDir, rel, { label: 'FILMS-PUT-THUMB-REPLACE', silent: true });
     }
     
     const updated = await getAsync('SELECT * FROM films WHERE id = ?', [id]);
@@ -165,8 +166,8 @@ router.post('/:id/thumb', uploadFilm.single('thumb'), async (req, res, next) => 
     // Delete old thumb if exists
     if (filmRow.thumbPath) {
       const rel = filmRow.thumbPath.replace(/^\/uploads\//, '');
-      const oldPath = path.join(uploadsDir, rel);
-      fs.unlink(oldPath, () => { /* ignore error */ });
+      // v4-review: safeUnlink centralizes confinement check
+      await safeUnlink(uploadsDir, rel, { label: 'FILMS-THUMB-UPLOAD', silent: true });
     }
 
     const updated = await getAsync('SELECT * FROM films WHERE id = ?', [id]);

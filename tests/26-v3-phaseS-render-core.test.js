@@ -188,7 +188,8 @@ describe('S.5 — RenderCore filmCurve LUT 预构建 (P1-13)', () => {
   test('processPixelFloat 使用预构建 LUT（不再每像素查 FILM_CURVE_PROFILES）', () => {
     const src = readSharedSrc('shared/render/RenderCore.js');
     // 查找 processPixelFloat 方法体内的 Film Curve 段
-    const methodStart = src.indexOf('processPixelFloat(r, g, b)');
+    // X2.2: signature now accepts optional `out` parameter
+    const methodStart = src.indexOf('processPixelFloat(r, g, b, out)');
     const methodEnd = src.indexOf('// CPU 像素处理');
     const floatSection = src.substring(methodStart, methodEnd);
     // 不应有每像素 FILM_CURVE_PROFILES 查找（已移到 prepareLUTs）

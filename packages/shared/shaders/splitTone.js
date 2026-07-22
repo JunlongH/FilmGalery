@@ -19,10 +19,10 @@ const SPLIT_TONE_GLSL = `
 // Split Toning — matches CPU filmLabSplitTone.js
 // ============================================================================
 
-// Rec. 709 luminance (matching CPU filmLabSplitTone.js)
-float calcLuminance(vec3 c) {
-  return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-}
+// calcLuminance is defined in colorMath.js (Rec.709: 0.2126/0.7152/0.0722).
+// Do NOT re-declare here — GLSL rejects duplicate function definitions, causing
+// "function already has a body" shader compile error at runtime.
+// (Pre-existing bug found by v4 E2E browser test with swiftshader WebGL.)
 
 // Hermite smoothstep for zone weight transitions (NOT GLSL built-in)
 float splitToneSmoothstep(float t) {

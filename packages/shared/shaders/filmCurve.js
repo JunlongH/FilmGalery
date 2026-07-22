@@ -27,7 +27,13 @@ float filmHermite(float t) {
 // Three-segment gamma mapping (matches CPU _applyThreeSegmentGamma)
 float threeSegGamma(float d, float gamma, float toe, float shoulder) {
   float toeBound = 0.25 * toe;
-  float shBound  = 1.0 - 0.25 * shoulder;
+  // X.1 (P0-3): sync with CPU filmLabCurve.js:172 — P2-shoulder fix changed
+  // shBound from (1 - 0.25*shoulder) to (1 - 0.5*shoulder) to widen the
+  // shoulder compression range. The GPU shader was never updated, causing
+  // WebGL preview to compress only the top 12.5% (8-bit rarely triggers)
+  // while CPU export compresses the top 25% — visible divergence between
+  // preview and saved images.
+  float shBound  = 1.0 - 0.5 * shoulder;
   float gammaToe = gamma * 1.5;
   float gammaSh  = gamma * 0.6;
   float tw = 0.08;
@@ -54,7 +60,12 @@ float applyFilmCurve(float value, float gamma, float dMin, float dMax,
                       float toe, float shoulder) {
   float normalized = clamp(value, 0.001, 1.0);
   float density = -log(normalized) / log(10.0);
-  float densityNorm = clamp((density - dMin) / (dMax - dMin), 0.0, 1.0);
+  // X.6 (P1-4): guard against dMax==dMin (custom profile edge case) to match
+  // CPU filmLabCurve.js:88 Math.max(dMax - dMin, 1e-6). Without this, the
+  // division produces Infinity → clamp to 1.0 on GPU while CPU clamps to 0.0
+  // (density - dMin == 0 → 0/1e-6 = 0) → completely different output.
+  float dRange = max(dMax - dMin, 1e-6);
+  float densityNorm = clamp((density - dMin) / dRange, 0.0, 1.0);
 
   float gammaApplied;
   if (toe <= 0.0 && shoulder <= 0.0) {

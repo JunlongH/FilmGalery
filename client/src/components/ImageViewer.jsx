@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { buildUploadUrl, updatePositiveFromNegative, getSingleDownloadUrl } from '../api';
 import { addCacheKey } from '../utils/imageOptimization';
 import FilmLab from './FilmLab/FilmLab';
+import ErrorBoundary from './ErrorBoundary';
 import ModalDialog from './ModalDialog';
 import PhotoDetailsSidebar from './PhotoDetailsSidebar.jsx';
 import { useAIPanel } from './AIPanel/AIPanelContext';
@@ -296,6 +297,7 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
           onConfirm={dialog.onConfirm}
           onCancel={dialog.onCancel}
         />
+        <ErrorBoundary name="FilmLab">
         <FilmLab 
           imageUrl={targetUrl}
           rollId={img.roll_id}
@@ -340,22 +342,23 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
               });
               */
              
-             // Since we fixed the z-index, the confirmation should appear. 
-             // However, let's double check if `updatePositiveFromNegative` is correct.
-             
-              showConfirm('Save Positive', 'Overwrite existing positive with this edit?', async () => {
-                  try {
-                      const res = await updatePositiveFromNegative(img.id, blob);
-                      if (res.error) throw new Error(res.error);
-                      if (onPhotoUpdate) onPhotoUpdate();
-                      setShowInverter(false);
-                  } catch (e) {
-                      console.error(e);
-                      showAlert('Error', 'Failed to save positive: ' + (e.message || e));
-                  }
-              });
+              // Since we fixed the z-index, the confirmation should appear. 
+              // However, let's double check if `updatePositiveFromNegative` is correct.
+              
+               showConfirm('Save Positive', 'Overwrite existing positive with this edit?', async () => {
+                   try {
+                       const res = await updatePositiveFromNegative(img.id, blob);
+                       if (res.error) throw new Error(res.error);
+                       if (onPhotoUpdate) onPhotoUpdate();
+                       setShowInverter(false);
+                   } catch (e) {
+                       console.error(e);
+                       showAlert('Error', 'Failed to save positive: ' + (e.message || e));
+                   }
+               });
           }} 
         />
+        </ErrorBoundary>
       </>
     );
   }

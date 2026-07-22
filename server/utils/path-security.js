@@ -104,6 +104,51 @@ const isPathConfined = (root, targetPath) => {
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 };
 
+/**
+ * Safe unlink — the only sanctioned way to delete a file by DB-derived path.
+ *
+ * v4 review found 8+ sites in photos.js and 3 in films.js that called
+ * fsPromises.unlink(path.join(uploadsDir, dbValue)) without confinement
+ * checks. A corrupted DB row (e.g. positive_rel_path='../../etc/critical')
+ * would let path.join escape the uploads directory. Rather than guarding
+ * each site individually (whack-a-mole), this helper centralizes the
+ * pattern: it always verifies confinement before unlinking, and silently
+ * skips paths that fail the check (with a console.warn for visibility).
+ *
+ * @param {string} rootDir - confinement root (typically uploadsDir)
+ * @param {string} relPath - DB-derived relative path
+ * @param {object} [opts]
+ * @param {boolean} [opts.silent=false] - suppress warn log on rejection
+ * @param {string} [opts.label=''] - prefix for log messages (e.g. 'EXPORT-POSITIVE')
+ * @returns {Promise<{deleted: boolean, reason?: string}>}
+ *   - deleted=true: file was unlinked (or didn't exist — ENOENT is success)
+ *   - deleted=false, reason='unconfined': path escaped rootDir, refused
+ *   - deleted=false, reason=<error.message>: other unlink failure
+ */
+async function safeUnlink(rootDir, relPath, opts = {}) {
+  const { silent = false, label = '' } = opts;
+  if (!relPath || typeof relPath !== 'string') {
+    return { deleted: false, reason: 'empty_path' };
+  }
+  if (!isPathConfined(rootDir, relPath)) {
+    if (!silent) {
+      console.warn(`[${label || 'safeUnlink'}] refused to delete unconfined path: ${relPath}`);
+    }
+    return { deleted: false, reason: 'unconfined' };
+  }
+  const fullPath = path.join(rootDir, relPath);
+  try {
+    await fs.promises.unlink(fullPath);
+    return { deleted: true };
+  } catch (e) {
+    if (e.code === 'ENOENT') return { deleted: true }; // already gone — success
+    if (!silent) {
+      console.warn(`[${label || 'safeUnlink'}] unlink failed for ${relPath}:`, e.message);
+    }
+    return { deleted: false, reason: e.message };
+  }
+}
+
 // realpathSync that never throws (falls back to resolve)
 function safeRealpath(p) {
   try {
@@ -118,6 +163,7 @@ module.exports = {
   isPathBlocked,
   isPathAllowed,
   isPathConfined,
+  safeUnlink,
   getAllowedPaths,
   isOpenMode,
   isAllMountedMode,

@@ -29,20 +29,30 @@ const LUM_B = 0.0722;
 /**
  * Apply luma-preserving saturation to a float-domain pixel (0–1 range).
  *
+ * X2.2: optional `out` parameter — when provided, writes the result into
+ * `out[0..2]` and returns `out` instead of allocating a fresh array. The
+ * hot-path caller (RenderCore.processPixelFloat) passes a pre-allocated
+ * buffer to eliminate 960K array allocations per frame. Tests and other
+ * callers that destructure the return value keep working via the fallback.
+ *
  * @param {number} r - Red   channel (0–1)
  * @param {number} g - Green channel (0–1)
  * @param {number} b - Blue  channel (0–1)
  * @param {number} strength - Saturation strength (−100 to +100, 0 = identity)
+ * @param {[number, number, number]} [out] - Optional reusable output buffer
  * @returns {[number, number, number]} Adjusted [r, g, b] in 0–1 range
  */
-function applySaturationFloat(r, g, b, strength) {
+function applySaturationFloat(r, g, b, strength, out) {
   const s = Math.max(0, 1 + strength / 100); // 防 strength < -100 产生负饱和度（色度反转）
   const lum = LUM_R * r + LUM_G * g + LUM_B * b;
-  return [
-    Math.max(0, Math.min(1, lum + (r - lum) * s)),
-    Math.max(0, Math.min(1, lum + (g - lum) * s)),
-    Math.max(0, Math.min(1, lum + (b - lum) * s)),
-  ];
+  const ro = Math.max(0, Math.min(1, lum + (r - lum) * s));
+  const go = Math.max(0, Math.min(1, lum + (g - lum) * s));
+  const bo = Math.max(0, Math.min(1, lum + (b - lum) * s));
+  if (out) {
+    out[0] = ro; out[1] = go; out[2] = bo;
+    return out;
+  }
+  return [ro, go, bo];
 }
 
 /**

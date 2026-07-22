@@ -39,21 +39,6 @@
         tint: 0
         // -100 to 100 (Green <-> Magenta)
       };
-      var DEFAULT_BASE_GAINS = {
-        baseRed: 1,
-        baseGreen: 1,
-        baseBlue: 1
-      };
-      var DEFAULT_BASE_CORRECTION = {
-        baseMode: "linear",
-        // 'linear' | 'log' - 片基校正模式
-        baseDensityR: 0,
-        // 红色通道片基密度 (对数域)
-        baseDensityG: 0,
-        // 绿色通道片基密度 (对数域)
-        baseDensityB: 0
-        // 蓝色通道片基密度 (对数域)
-      };
       var INVERSION_MODE_LABELS = {
         linear: "Linear",
         // 标准线性反转
@@ -137,8 +122,6 @@
         DEFAULT_TONE_PARAMS,
         CONTRAST_MID_GRAY,
         DEFAULT_WB_PARAMS,
-        DEFAULT_BASE_GAINS,
-        DEFAULT_BASE_CORRECTION,
         INVERSION_MODE_LABELS,
         DEFAULT_INVERSION_PARAMS,
         DEFAULT_CURVES,
@@ -204,19 +187,8 @@
         let R = 3.2404542 * X - 1.5371385 * Y - 0.4985314 * Z;
         let G = -0.969266 * X + 1.8760108 * Y + 0.041556 * Z;
         let B = 0.0556434 * X - 0.2040259 * Y + 1.0572252 * Z;
-        const Y_original = Y;
-        const sumRGB = R + G + B;
-        if (sumRGB > 1e-3) {
-          const r_chroma = R / sumRGB;
-          const g_chroma = G / sumRGB;
-          const b_chroma = B / sumRGB;
-          const luminance_scale = Y_original;
-          R = r_chroma * luminance_scale * 3;
-          G = g_chroma * luminance_scale * 3;
-          B = b_chroma * luminance_scale * 3;
-        }
-        const maxC = Math.max(R, Math.max(G, B));
-        if (maxC > 1) {
+        const maxC = Math.max(R, G, B);
+        if (maxC > 0) {
           R /= maxC;
           G /= maxC;
           B /= maxC;
@@ -248,13 +220,14 @@
           const gTempGain = gRef / Math.max(1e-3, gTemp);
           const bTempGain = bRef / Math.max(1e-3, bTemp);
           const n = N / 100;
-          const tintR = 1 + n * 0.15;
-          const tintG = 1 - n * 0.3;
-          const tintB = 1 + n * 0.15;
+          const tempScale = Math.max(0.5, Math.min(2, (rTemp + gTemp + bTemp) / 1.5));
+          const tintR = 1 + n * 0.15 * tempScale;
+          const tintG = 1 - n * 0.3 * tempScale;
+          const tintB = 1 + n * 0.15 * tempScale;
           rGain = R * rTempGain * tintR;
           gGain = G * gTempGain * tintG;
           bGain = B * bTempGain * tintB;
-          const avgGain = 0.299 * rGain + 0.587 * gGain + 0.114 * bGain;
+          const avgGain = 0.2126 * rGain + 0.7152 * gGain + 0.0722 * bGain;
           if (avgGain > 1e-3) {
             const luminanceCompensation = 1 / avgGain;
             rGain *= luminanceCompensation;
@@ -267,7 +240,7 @@
           rGain = R * (1 + t * 0.5 + n * 0.3);
           gGain = G * (1 - n * 0.5);
           bGain = B * (1 - t * 0.5 + n * 0.3);
-          const avgGain = 0.299 * rGain + 0.587 * gGain + 0.114 * bGain;
+          const avgGain = 0.2126 * rGain + 0.7152 * gGain + 0.0722 * bGain;
           if (avgGain > 1e-3) {
             const luminanceCompensation = 1 / avgGain;
             rGain *= luminanceCompensation;
@@ -451,6 +424,33 @@ float calcLuminance(vec3 c) {
 float calcLuminance601(vec3 c) {
   return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
 }
+
+// ============================================================================
+// sRGB <-> Linear transfer functions (IEC 61966-2-1)
+// \u4E0E packages/shared/render/math/color-space.js \u6570\u503C\u4E00\u81F4\uFF1B\u7528\u4E8E Phase I \u7EBF\u6027\u57DF\u53CD\u8F6C
+// ============================================================================
+
+// \u5355\u901A\u9053 sRGB \u2192 linear\uFF08\u8D1F\u503C clamp \u5230 0\uFF09
+float srgbToLinear1(float srgb) {
+  srgb = max(srgb, 0.0);
+  if (srgb <= 0.04045) return srgb / 12.92;
+  return pow((srgb + 0.055) / 1.055, 2.4);
+}
+
+// \u5355\u901A\u9053 linear \u2192 sRGB\uFF08\u8D1F\u503C clamp \u5230 0\uFF09
+float linearToSrgb1(float linear) {
+  linear = max(linear, 0.0);
+  if (linear <= 0.0031308) return linear * 12.92;
+  return 1.055 * pow(linear, 1.0 / 2.4) - 0.055;
+}
+
+vec3 srgbToLinear(vec3 c) {
+  return vec3(srgbToLinear1(c.r), srgbToLinear1(c.g), srgbToLinear1(c.b));
+}
+
+vec3 linearToSrgb(vec3 c) {
+  return vec3(linearToSrgb1(c.r), linearToSrgb1(c.g), linearToSrgb1(c.b));
+}
 `;
       module.exports = {
         COLOR_MATH_GLSL
@@ -492,32 +492,40 @@ vec3 applyHSLAdjustment(vec3 color) {
   float w;
 
   // 8 channels: hue centers & ranges from HSL_CHANNELS (filmLabHSL.js)
+  // P2-1: ranges adjusted for partition of unity (no weak zones at midpoints)
   w = hslChannelWeight(h, 0.0, 30.0);
   if (w > 0.0) { hueAdjust += u_hslRed.x * w; satAdjust += (u_hslRed.y / 100.0) * w; lumAdjust += (u_hslRed.z / 100.0) * w; totalWeight += w; }
   w = hslChannelWeight(h, 30.0, 30.0);
   if (w > 0.0) { hueAdjust += u_hslOrange.x * w; satAdjust += (u_hslOrange.y / 100.0) * w; lumAdjust += (u_hslOrange.z / 100.0) * w; totalWeight += w; }
-  w = hslChannelWeight(h, 60.0, 30.0);
+  w = hslChannelWeight(h, 60.0, 60.0);
   if (w > 0.0) { hueAdjust += u_hslYellow.x * w; satAdjust += (u_hslYellow.y / 100.0) * w; lumAdjust += (u_hslYellow.z / 100.0) * w; totalWeight += w; }
-  w = hslChannelWeight(h, 120.0, 45.0);
+  w = hslChannelWeight(h, 120.0, 60.0);
   if (w > 0.0) { hueAdjust += u_hslGreen.x * w; satAdjust += (u_hslGreen.y / 100.0) * w; lumAdjust += (u_hslGreen.z / 100.0) * w; totalWeight += w; }
-  w = hslChannelWeight(h, 180.0, 30.0);
+  w = hslChannelWeight(h, 180.0, 60.0);
   if (w > 0.0) { hueAdjust += u_hslCyan.x * w; satAdjust += (u_hslCyan.y / 100.0) * w; lumAdjust += (u_hslCyan.z / 100.0) * w; totalWeight += w; }
-  w = hslChannelWeight(h, 240.0, 45.0);
+  w = hslChannelWeight(h, 240.0, 60.0);
   if (w > 0.0) { hueAdjust += u_hslBlue.x * w; satAdjust += (u_hslBlue.y / 100.0) * w; lumAdjust += (u_hslBlue.z / 100.0) * w; totalWeight += w; }
-  w = hslChannelWeight(h, 280.0, 30.0);
+  w = hslChannelWeight(h, 280.0, 50.0);
   if (w > 0.0) { hueAdjust += u_hslPurple.x * w; satAdjust += (u_hslPurple.y / 100.0) * w; lumAdjust += (u_hslPurple.z / 100.0) * w; totalWeight += w; }
   // Magenta: center 330\xB0 (NOT 320\xB0) \u2014 matches CPU HSL_CHANNELS definition
-  w = hslChannelWeight(h, 330.0, 30.0);
+  w = hslChannelWeight(h, 330.0, 50.0);
   if (w > 0.0) { hueAdjust += u_hslMagenta.x * w; satAdjust += (u_hslMagenta.y / 100.0) * w; lumAdjust += (u_hslMagenta.z / 100.0) * w; totalWeight += w; }
 
-  // Normalize if overlapping channels sum > 1 (BUG-07 fix)
-  if (totalWeight > 1.0) {
-    hueAdjust /= totalWeight;
-    satAdjust /= totalWeight;
-    lumAdjust /= totalWeight;
-  }
+  // P2-1: Normalize by max(1, totalWeight) \u2014 eliminates weak response zones
+  // (old code only divided when > 1, leaving midpoints at 25% strength)
+  float norm = max(1.0, totalWeight);
+  hueAdjust /= norm;
+  satAdjust /= norm;
+  lumAdjust /= norm;
 
   if (totalWeight > 0.0) {
+    // Continuous saturation ramp: fade hue/sat adjustments for near-gray pixels
+    // (replaces the old s<0.05 hard switch in CPU \u2014 keeps both paths identical)
+    float rampT = clamp(s / 0.1, 0.0, 1.0);
+    float satRamp = rampT * rampT * (3.0 - 2.0 * rampT);
+    hueAdjust *= satRamp;
+    satAdjust *= satRamp;
+
     hsl.x = mod(hsl.x + hueAdjust, 360.0);
 
     // Asymmetric saturation (BUG-04 fix \u2014 matches CPU filmLabHSL.js)
@@ -529,13 +537,11 @@ vec3 applyHSLAdjustment(vec3 color) {
     }
     hsl.y = clamp(hsl.y, 0.0, 1.0);
 
-    // Asymmetric luminance with 0.5 damping (BUG-05 fix \u2014 matches CPU filmLabHSL.js)
-    if (lumAdjust > 0.0) {
-      hsl.z = l + (1.0 - l) * lumAdjust * 0.5;
-    } else if (lumAdjust < 0.0) {
-      hsl.z = l * (1.0 + lumAdjust * 0.5);
-    }
-    hsl.z = clamp(hsl.z, 0.0, 1.0);
+    // Luminance: linear delta for near-gray (legacy gray behavior), asymmetric
+    // delta for saturated pixels, continuously blended by satRamp (matches CPU)
+    float linearDelta = lumAdjust * 0.5;
+    float asymDelta = lumAdjust > 0.0 ? (1.0 - l) * lumAdjust * 0.5 : l * lumAdjust * 0.5;
+    hsl.z = clamp(l + mix(linearDelta, asymDelta, satRamp), 0.0, 1.0);
   }
 
   return hsl2rgb(hsl);
@@ -555,10 +561,10 @@ vec3 applyHSLAdjustment(vec3 color) {
 // Split Toning \u2014 matches CPU filmLabSplitTone.js
 // ============================================================================
 
-// Rec. 709 luminance (matching CPU filmLabSplitTone.js)
-float calcLuminance(vec3 c) {
-  return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-}
+// calcLuminance is defined in colorMath.js (Rec.709: 0.2126/0.7152/0.0722).
+// Do NOT re-declare here \u2014 GLSL rejects duplicate function definitions, causing
+// "function already has a body" shader compile error at runtime.
+// (Pre-existing bug found by v4 E2E browser test with swiftshader WebGL.)
 
 // Hermite smoothstep for zone weight transitions (NOT GLSL built-in)
 float splitToneSmoothstep(float t) {
@@ -569,49 +575,36 @@ float splitToneSmoothstep(float t) {
 vec3 applySplitTone(vec3 color) {
   float lum = calcLuminance(color);
 
-  // Zone weights (matching CPU calculateZoneWeights)
+  // Zone weights (matching CPU calculateZoneWeights \u2014 partition of unity,
+  // shadow + midtone + highlight \u2261 1, continuous smoothstep transitions)
   // balance is in [-1, 1] range (pre-divided by 100 on JS side)
   float balanceOffset = u_splitBalance / 2.0;
-  float midpoint = 0.5 + balanceOffset;
   float shadowEnd = 0.25;
   float highlightStart = 0.75;
+  float midpoint = clamp(0.5 + balanceOffset, shadowEnd + 0.05, highlightStart - 0.05);
 
   float shadowWeight = 0.0;
-  float midtoneWeight = 0.0;
   float highlightWeight = 0.0;
 
-  // Shadow zone
-  if (lum < shadowEnd) {
+  // Shadow zone: 1 below shadowEnd, smooth ramp to 0 at midpoint
+  if (lum <= shadowEnd) {
     shadowWeight = 1.0;
   } else if (lum < midpoint) {
-    float d = max(midpoint - shadowEnd, 0.001);
-    float st = splitToneSmoothstep(clamp((lum - shadowEnd) / d, 0.0, 1.0));
+    float d = midpoint - shadowEnd;
+    float st = splitToneSmoothstep((lum - shadowEnd) / d);
     shadowWeight = 1.0 - st;
-    midtoneWeight = st;
   }
 
-  // Highlight zone
-  if (lum > highlightStart) {
+  // Highlight zone: 1 above highlightStart, smooth ramp from 0 at midpoint
+  if (lum >= highlightStart) {
     highlightWeight = 1.0;
   } else if (lum > midpoint) {
-    float d = max(highlightStart - midpoint, 0.001);
-    float st = splitToneSmoothstep(clamp((lum - midpoint) / d, 0.0, 1.0));
-    highlightWeight = st;
-    midtoneWeight = max(midtoneWeight, 1.0 - st);
+    float d = highlightStart - midpoint;
+    highlightWeight = splitToneSmoothstep((lum - midpoint) / d);
   }
 
-  // Midtone zone (peak at midpoint)
-  if (lum >= shadowEnd && lum <= highlightStart) {
-    if (abs(lum - midpoint) < 0.1) {
-      midtoneWeight = 1.0;
-    } else if (lum < midpoint) {
-      float d = max(midpoint - shadowEnd, 0.001);
-      midtoneWeight = max(midtoneWeight, splitToneSmoothstep(clamp((lum - shadowEnd) / d, 0.0, 1.0)));
-    } else {
-      float d = max(highlightStart - midpoint, 0.001);
-      midtoneWeight = max(midtoneWeight, 1.0 - splitToneSmoothstep(clamp((lum - midpoint) / d, 0.0, 1.0)));
-    }
-  }
+  // Midtone takes the remainder \u2014 weights always sum to 1
+  float midtoneWeight = 1.0 - shadowWeight - highlightWeight;
 
   // Generate tint colors (hue is 0-1 range, pre-divided by 360 on JS side)
   vec3 highlightTint = hsl2rgb(vec3(u_splitHighlightHue * 360.0, 1.0, 0.5));
@@ -659,7 +652,13 @@ float filmHermite(float t) {
 // Three-segment gamma mapping (matches CPU _applyThreeSegmentGamma)
 float threeSegGamma(float d, float gamma, float toe, float shoulder) {
   float toeBound = 0.25 * toe;
-  float shBound  = 1.0 - 0.25 * shoulder;
+  // X.1 (P0-3): sync with CPU filmLabCurve.js:172 \u2014 P2-shoulder fix changed
+  // shBound from (1 - 0.25*shoulder) to (1 - 0.5*shoulder) to widen the
+  // shoulder compression range. The GPU shader was never updated, causing
+  // WebGL preview to compress only the top 12.5% (8-bit rarely triggers)
+  // while CPU export compresses the top 25% \u2014 visible divergence between
+  // preview and saved images.
+  float shBound  = 1.0 - 0.5 * shoulder;
   float gammaToe = gamma * 1.5;
   float gammaSh  = gamma * 0.6;
   float tw = 0.08;
@@ -686,7 +685,12 @@ float applyFilmCurve(float value, float gamma, float dMin, float dMax,
                       float toe, float shoulder) {
   float normalized = clamp(value, 0.001, 1.0);
   float density = -log(normalized) / log(10.0);
-  float densityNorm = clamp((density - dMin) / (dMax - dMin), 0.0, 1.0);
+  // X.6 (P1-4): guard against dMax==dMin (custom profile edge case) to match
+  // CPU filmLabCurve.js:88 Math.max(dMax - dMin, 1e-6). Without this, the
+  // division produces Infinity \u2192 clamp to 1.0 on GPU while CPU clamps to 0.0
+  // (density - dMin == 0 \u2192 0/1e-6 = 0) \u2192 completely different output.
+  float dRange = max(dMax - dMin, 1e-6);
+  float densityNorm = clamp((density - dMin) / dRange, 0.0, 1.0);
 
   float gammaApplied;
   if (toe <= 0.0 && shoulder <= 0.0) {
@@ -734,15 +738,19 @@ vec3 applyContrast(vec3 c, float contrast) {
 vec3 applyHighlightsShadows(vec3 c) {
   float sFactor = u_shadows * 0.005;
   float hFactor = u_highlights * 0.005;
-  
+
+  // Bernstein \u57FA\u51FD\u6570\u5728 clamp \u540E\u7684\u503C\u4E0A\u8BA1\u7B97\uFF08\u5339\u914D CPU processPixelFloat\uFF09\uFF0C
+  // \u907F\u514D c \u8D85\u51FA [0,1] \u65F6\u6743\u91CD\u7B26\u53F7\u53CD\u8F6C\uFF1B\u589E\u91CF\u4ECD\u52A0\u5230\u672A clamp \u7684 c \u4E0A
+  vec3 cc = clamp(c, 0.0, 1.0);
+
   if (sFactor != 0.0) {
-    c += sFactor * pow(1.0 - c, vec3(2.0)) * c * 4.0;
+    c += sFactor * pow(1.0 - cc, vec3(2.0)) * cc * 4.0;
   }
-  
+
   if (hFactor != 0.0) {
-    c += hFactor * pow(c, vec3(2.0)) * (1.0 - c) * 4.0;
+    c += hFactor * pow(cc, vec3(2.0)) * (1.0 - cc) * 4.0;
   }
-  
+
   return c;
 }
 
@@ -1062,7 +1070,12 @@ vec3 applyDensityLevels(vec3 col) {
         return `
 // \u2500\u2500 Saturation (Luma-Preserving, Rec.709) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 vec3 applySaturation(vec3 color) {
-  float s = 1.0 + u_saturation / 100.0;
+  // X.4 (P1-1): clamp s to >= 0 to match CPU filmLabSaturation.js:39
+  // Math.max(0, 1 + strength/100). Without this, saturation < -100
+  // produces a negative s, which inverts chroma (R/G/B flip around luma)
+  // \u2014 visible as a color-polarity flip. UI bounds saturation to [-100,100]
+  // but API/programmatic callers (presets, AI) can exceed the range.
+  float s = max(0.0, 1.0 + u_saturation / 100.0);
   float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
   return clamp(vec3(lum) + (color - vec3(lum)) * s, 0.0, 1.0);
 }
@@ -1093,6 +1106,9 @@ uniform sampler2D u_image;
 // Inversion (float for WebGL1/2 compat \u2014 test with > 0.5)
 uniform float u_inverted;      // 0.0 = no inversion, 1.0 = invert
 uniform float u_inversionMode; // 0.0 = linear, 1.0 = log
+
+// Phase I: \u7EBF\u6027\u57DF\u53CD\u8F6C\uFF080.0 = gamma \u57DF\uFF0C1.0 = \u7EBF\u6027\u5149\u4E0B\u505A\u7247\u57FA\u6821\u6B63+\u53CD\u8F6C\uFF09
+uniform float u_linearDomainInversion;
 
 // White Balance
 uniform vec3 u_gains;          // r,g,b gains
@@ -1189,22 +1205,23 @@ uniform float u_splitBalance;
           useCompositeCurve = false,
           precision = "mediump"
         } = options;
+        const useNativeLUT3D = options.useNativeLUT3D !== void 0 ? options.useNativeLUT3D : isGL2;
         if (isGL2) {
           return `#version 300 es
 precision highp float;
-precision highp sampler3D;
-
+${useNativeLUT3D ? "precision highp sampler3D;\n" : ""}
 // WebGL2 compat: modules may use texture2D()
 #define texture2D texture
 
 in vec2 v_uv;
 out vec4 fragColor;
 
+${useNativeLUT3D ? `
 // WebGL2: 3D LUT as native sampler3D
 uniform sampler3D u_lut3dTex;
 uniform float u_hasLut3d;
 uniform float u_lut3dSize;
-
+` : ""}
 ${useCompositeCurve ? `
 // Composite curve texture (gpu-renderer path: R,G,B channels = per-channel curves)
 uniform sampler2D u_toneCurveTex;
@@ -1216,10 +1233,11 @@ ${filmCurve.FILM_CURVE_GLSL}
 ${baseDensity.BASE_DENSITY_GLSL}
 ${inversion.INVERSION_GLSL}
 ${tonemap.TONEMAP_GLSL}
+${useNativeLUT3D ? "" : lut3d.LUT3D_GLSL}
 ${hslAdjust.HSL_ADJUST_GLSL}
 ${saturation.getSaturationGLSL()}
 ${splitTone.SPLIT_TONE_GLSL}
-${buildMainFunction({ isGL2: true, useCompositeCurve })}
+${buildMainFunction({ isGL2: true, useCompositeCurve, useNativeLUT3D })}
 `;
         } else {
           return `
@@ -1242,6 +1260,7 @@ ${buildMainFunction({ isGL2: false })}
       }
       function buildMainFunction(options = {}) {
         const { isGL2 = false, useCompositeCurve = false } = options;
+        const useNativeLUT3D = options.useNativeLUT3D !== void 0 ? options.useNativeLUT3D : isGL2;
         const TEX = isGL2 ? "texture" : "texture2D";
         const FRAG_OUT = isGL2 ? "fragColor" : "gl_FragColor";
         const curveSampling = useCompositeCurve ? `
@@ -1264,6 +1283,11 @@ void main() {
     c.r = applyFilmCurve(c.r, u_filmCurveGammaR, u_filmCurveDMin, u_filmCurveDMax, toe, sh);
     c.g = applyFilmCurve(c.g, u_filmCurveGammaG, u_filmCurveDMin, u_filmCurveDMax, toe, sh);
     c.b = applyFilmCurve(c.b, u_filmCurveGammaB, u_filmCurveDMin, u_filmCurveDMax, toe, sh);
+  }
+
+  // Phase I\uFF1A\u7EBF\u6027\u57DF\u53CD\u8F6C\uFF08\u4E0E CPU processPixelFloat \u540C\u8BED\u4E49\uFF09\u2014 \u7247\u57FA\u6821\u6B63/\u5BC6\u5EA6\u8272\u9636/\u53CD\u8F6C\u5728\u7EBF\u6027\u5149\u4E0B\u8FDB\u884C
+  if (u_linearDomainInversion > 0.5) {
+    c = srgbToLinear(c);
   }
 
   // \u2461 Base Correction \u2014 neutralize film base color
@@ -1314,7 +1338,12 @@ void main() {
     }
   }
 
-${isGL2 ? `
+  // Phase I\uFF1A\u8F6C\u56DE sRGB \u7F16\u7801\u57DF\uFF08LUT/WB/Tone \u4ECD\u5728 sRGB \u57DF\uFF09
+  if (u_linearDomainInversion > 0.5) {
+    c = linearToSrgb(c);
+  }
+
+${useNativeLUT3D ? `
   // \u2462b 3D LUT (WebGL2 native sampler3D \u2014 applied AFTER inversion)
   if (u_hasLut3d > 0.5) {
     float size = u_lut3dSize;
@@ -1323,7 +1352,7 @@ ${isGL2 ? `
     c = mix(c, lutColor, u_lutIntensity);
   }
 ` : `
-  // \u2462b 3D LUT (WebGL1 packed 2D texture \u2014 applied AFTER inversion)
+  // \u2462b 3D LUT (packed 2D texture \u2014 works in both WebGL1 and WebGL2)
   if (u_useLut3d > 0.5) {
     vec3 lutColor = sampleLUT3D(c);
     c = mix(c, lutColor, u_lutIntensity);
@@ -1449,13 +1478,13 @@ void main() {
   });
 
   // electron-gpu/gpu-renderer.js
-  var { computeWBGains } = require_filmLabWhiteBalance();
-  var { buildFragmentShader } = require_glsl_shared();
   var gl;
   var canvas;
   var isWebGL2 = false;
   var _hasFloatTexture = false;
   var _hasFloatLinear = false;
+  var { computeWBGains } = require_filmLabWhiteBalance();
+  var { buildFragmentShader } = require_glsl_shared();
   var _cachedProgGL2 = null;
   var _cachedProgGL1 = null;
   function getOrCreateProgram(gl2, isGL2) {
@@ -1789,7 +1818,8 @@ void main() {
           }
           const reader = new FileReader();
           reader.onload = () => {
-            const bytes = new Uint8Array(reader.result);
+            const arrBuf = reader.result;
+            const bytes = new Uint8Array(arrBuf);
             window.__gpu.sendResult({ jobId, ok: true, width: canvas.width, height: canvas.height, jpegBytes: bytes });
           };
           reader.onerror = () => {
