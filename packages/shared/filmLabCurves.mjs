@@ -412,4 +412,14 @@ function buildCompositeFloatCurveLUT(curves = {}, options = {}) {
 // 模块导出 (CommonJS)
 // ============================================================================
 
-export { createSpline, buildCurveLUT, buildCurveLUTFloat, buildAllCurveLUTs, buildAllCurveLUTsFloat, buildCompositeFloatCurveLUT, applyCurve };
+const _sharedExports = {
+  createSpline,
+  buildCurveLUT,
+  buildCurveLUTFloat,
+  buildAllCurveLUTs,
+  buildAllCurveLUTsFloat,
+  buildCompositeFloatCurveLUT,
+  applyCurve,
+};
+export const { createSpline, buildCurveLUT, buildCurveLUTFloat, buildAllCurveLUTs, buildAllCurveLUTsFloat, buildCompositeFloatCurveLUT, applyCurve } = _sharedExports;
+export default _sharedExports;

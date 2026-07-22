@@ -420,4 +420,27 @@ function validateHSLParams(hslParams) {
 // 模块导出
 // ============================================================================
 
-export { HSL_CHANNELS, HSL_CHANNEL_ORDER, DEFAULT_HSL_PARAMS, rgbToHsl, hslToRgb, applyHSL, applyHSLToArray, isDefaultHSL, createSingleChannelHSL, mergeHSLParams, validateHSLParams, calculateChannelWeight, hueDistance };
+const _sharedExports = {
+  // 常量
+  HSL_CHANNELS,
+  HSL_CHANNEL_ORDER,
+  DEFAULT_HSL_PARAMS,
+  
+  // 颜色转换
+  rgbToHsl,
+  hslToRgb,
+  
+  // HSL 调整
+  applyHSL,
+  applyHSLToArray,
+  isDefaultHSL,
+  
+  // 工具函数
+  createSingleChannelHSL,
+  mergeHSLParams,
+  validateHSLParams,
+  calculateChannelWeight,
+  hueDistance,
+};
+export const { HSL_CHANNELS, HSL_CHANNEL_ORDER, DEFAULT_HSL_PARAMS, rgbToHsl, hslToRgb, applyHSL, applyHSLToArray, isDefaultHSL, createSingleChannelHSL, mergeHSLParams, validateHSLParams, calculateChannelWeight, hueDistance } = _sharedExports;
+export default _sharedExports;

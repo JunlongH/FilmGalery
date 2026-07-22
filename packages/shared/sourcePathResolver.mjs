@@ -304,4 +304,17 @@ function getAvailableSourceTypes(photo) {
 // 模块导出
 // ============================================================================
 
-export { SOURCE_TYPE, SOURCE_PATH_FIELDS, getStrictSourcePath, getEffectiveInverted, validateSourceMatch, canUseSourceType, getAvailableSourceTypes };
+const _sharedExports = {
+  // 常量
+  SOURCE_TYPE,
+  SOURCE_PATH_FIELDS,
+  
+  // 核心函数
+  getStrictSourcePath,
+  getEffectiveInverted,
+  validateSourceMatch,
+  canUseSourceType,
+  getAvailableSourceTypes
+};
+export const { SOURCE_TYPE, SOURCE_PATH_FIELDS, getStrictSourcePath, getEffectiveInverted, validateSourceMatch, canUseSourceType, getAvailableSourceTypes } = _sharedExports;
+export default _sharedExports;

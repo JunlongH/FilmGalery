@@ -110,4 +110,8 @@ vec3 applyDensityLevels(vec3 col) {
 }
 `;
 
-export { BASE_DENSITY_GLSL };
+const _sharedExports = {
+  BASE_DENSITY_GLSL,
+};
+export const { BASE_DENSITY_GLSL } = _sharedExports;
+export default _sharedExports;

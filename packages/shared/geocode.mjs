@@ -83,4 +83,10 @@ async function reverseGeocodeBigDataCloud(latitude, longitude, opts = {}) {
   }
 }
 
-export { reverseGeocodeBigDataCloud, normalizeBigDataCloud, BDC_BASE };
+const _sharedExports = {
+  reverseGeocodeBigDataCloud,
+  normalizeBigDataCloud,
+  BDC_BASE,
+};
+export const { reverseGeocodeBigDataCloud, normalizeBigDataCloud, BDC_BASE } = _sharedExports;
+export default _sharedExports;

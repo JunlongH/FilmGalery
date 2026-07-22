@@ -100,4 +100,6 @@ function applyToneMapping(value, params = {}) {
 // 模块导出 (CommonJS)
 // ============================================================================
 
-export { buildToneLUT, applyToneMapping };
+const _sharedExports = { buildToneLUT, applyToneMapping };
+export const { buildToneLUT, applyToneMapping } = _sharedExports;
+export default _sharedExports;

@@ -77,4 +77,6 @@ function parseCubeLUT(text) {
   return { size, data: new Float32Array(data), domainMin, domainMax };
 }
 
-export { parseCubeLUT };
+const _sharedExports = { parseCubeLUT };
+export const { parseCubeLUT } = _sharedExports;
+export default _sharedExports;

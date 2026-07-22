@@ -85,4 +85,8 @@ float applyFilmCurveLegacy(float value) {
 }
 `;
 
-export { FILM_CURVE_GLSL };
+const _sharedExports = {
+  FILM_CURVE_GLSL,
+};
+export const { FILM_CURVE_GLSL } = _sharedExports;
+export default _sharedExports;

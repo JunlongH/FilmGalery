@@ -101,4 +101,8 @@ vec3 applyHSLAdjustment(vec3 color) {
 }
 `;
 
-export { HSL_ADJUST_GLSL };
+const _sharedExports = {
+  HSL_ADJUST_GLSL,
+};
+export const { HSL_ADJUST_GLSL } = _sharedExports;
+export default _sharedExports;

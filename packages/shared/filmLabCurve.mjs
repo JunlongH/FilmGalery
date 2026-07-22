@@ -328,4 +328,15 @@ function groupFilmProfilesByCategory(profiles) {
 // 模块导出 (CommonJS)
 // ============================================================================
 
-export { applyFilmCurve, applyFilmCurveFloat, applyFilmCurveRGB, buildFilmCurveLUT, getBuiltinFilmProfile, mergeFilmProfiles, groupFilmProfilesByCategory, FILM_PROFILES as FILM_CURVE_PROFILES };
+const _sharedExports = {
+  applyFilmCurve,
+  applyFilmCurveFloat,
+  applyFilmCurveRGB,
+  buildFilmCurveLUT,
+  getBuiltinFilmProfile,
+  mergeFilmProfiles,
+  groupFilmProfilesByCategory,
+  FILM_CURVE_PROFILES: FILM_PROFILES,
+};
+export const { applyFilmCurve, applyFilmCurveFloat, applyFilmCurveRGB, buildFilmCurveLUT, getBuiltinFilmProfile, mergeFilmProfiles, groupFilmProfilesByCategory, FILM_CURVE_PROFILES } = _sharedExports;
+export default _sharedExports;

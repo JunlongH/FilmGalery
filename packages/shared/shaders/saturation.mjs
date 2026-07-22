@@ -51,4 +51,9 @@ function getSaturationMainCall() {
 `;
 }
 
-export { getSaturationGLSL, getSaturationMainCall };
+const _sharedExports = {
+  getSaturationGLSL,
+  getSaturationMainCall,
+};
+export const { getSaturationGLSL, getSaturationMainCall } = _sharedExports;
+export default _sharedExports;

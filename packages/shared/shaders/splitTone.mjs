@@ -88,4 +88,8 @@ vec3 applySplitTone(vec3 color) {
 }
 `;
 
-export { SPLIT_TONE_GLSL };
+const _sharedExports = {
+  SPLIT_TONE_GLSL,
+};
+export const { SPLIT_TONE_GLSL } = _sharedExports;
+export default _sharedExports;

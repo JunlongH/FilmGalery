@@ -94,4 +94,8 @@ vec3 sampleLUT3D(vec3 c) {
 }
 `;
 
-export { LUT3D_GLSL };
+const _sharedExports = {
+  LUT3D_GLSL,
+};
+export const { LUT3D_GLSL } = _sharedExports;
+export default _sharedExports;

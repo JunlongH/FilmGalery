@@ -108,11 +108,14 @@ export default defineConfig({
     'process.env.REACT_APP_API_BASE': JSON.stringify('http://127.0.0.1:4001'),
   },
   resolve: {
-    alias: {
-      '@filmgallery/shared': path.resolve(__dirname, '../packages/shared/index.mjs'),
-      '@ui': path.resolve(__dirname, 'src/components/ui'),
-      '@providers': path.resolve(__dirname, 'src/providers'),
-    },
+    alias: [
+      { find: '@filmgallery/shared/coordTransform', replacement: path.resolve(__dirname, '../packages/shared/coordTransform.mjs') },
+      { find: '@filmgallery/shared/geocoding', replacement: path.resolve(__dirname, '../packages/shared/geocoding.mjs') },
+      { find: '@filmgallery/shared/mapUtils', replacement: path.resolve(__dirname, '../packages/shared/mapUtils.mjs') },
+      { find: '@filmgallery/shared', replacement: path.resolve(__dirname, '../packages/shared/index.mjs') },
+      { find: '@ui', replacement: path.resolve(__dirname, 'src/components/ui') },
+      { find: '@providers', replacement: path.resolve(__dirname, 'src/providers') },
+    ],
     extensions: ['.mjs', '.js', '.jsx', '.ts', '.tsx', '.json'],
   },
   server: {

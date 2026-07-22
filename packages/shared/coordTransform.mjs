@@ -77,4 +77,12 @@ function gcj02ToWgs84(gcjLat, gcjLng) {
   return { lat: wgsLat, lng: wgsLng };
 }
 
-export { wgs84ToGcj02, gcj02ToWgs84, isInChina, transformLat, transformLng };
+const _sharedExports = {
+  wgs84ToGcj02,
+  gcj02ToWgs84,
+  isInChina,
+  transformLat,
+  transformLng,
+};
+export const { wgs84ToGcj02, gcj02ToWgs84, isInChina, transformLat, transformLng } = _sharedExports;
+export default _sharedExports;

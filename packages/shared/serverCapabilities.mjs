@@ -107,4 +107,16 @@ function getCapabilities() {
   };
 }
 
-export { SERVER_MODES, API_CATEGORIES, COMPUTE_ROUTES, COMPUTE_ROUTE_PATTERNS, DATA_ROUTES, getServerMode, isComputeEnabled, isComputeRoute, getCapabilities };
+const _sharedExports = {
+  SERVER_MODES,
+  API_CATEGORIES,
+  COMPUTE_ROUTES,
+  COMPUTE_ROUTE_PATTERNS,
+  DATA_ROUTES,
+  getServerMode,
+  isComputeEnabled,
+  isComputeRoute,
+  getCapabilities
+};
+export const { SERVER_MODES, API_CATEGORIES, COMPUTE_ROUTES, COMPUTE_ROUTE_PATTERNS, DATA_ROUTES, getServerMode, isComputeEnabled, isComputeRoute, getCapabilities } = _sharedExports;
+export default _sharedExports;

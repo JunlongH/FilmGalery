@@ -102,4 +102,8 @@ vec3 applyCurvesLUT(vec3 c) {
 }
 `;
 
-export { TONEMAP_GLSL };
+const _sharedExports = {
+  TONEMAP_GLSL,
+};
+export const { TONEMAP_GLSL } = _sharedExports;
+export default _sharedExports;

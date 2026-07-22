@@ -84,4 +84,14 @@ function isDefaultSaturation(value) {
   return value == null || value === 0;
 }
 
-export { applySaturationFloat, applySaturation, isDefaultSaturation, LUM_R, LUM_G, LUM_B };
+const _sharedExports = {
+  applySaturationFloat,
+  applySaturation,
+  isDefaultSaturation,
+  // Export constants for testing
+  LUM_R,
+  LUM_G,
+  LUM_B,
+};
+export const { applySaturationFloat, applySaturation, isDefaultSaturation, LUM_R, LUM_G, LUM_B } = _sharedExports;
+export default _sharedExports;

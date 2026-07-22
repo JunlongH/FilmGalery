@@ -88,4 +88,6 @@ function renderBuffer(buffer, { width, height, channels, is16bit, wantTiff16, pa
   return { jpeg8, tiff16 };
 }
 
-export { renderBuffer };
+const _sharedExports = { renderBuffer };
+export const { renderBuffer } = _sharedExports;
+export default _sharedExports;

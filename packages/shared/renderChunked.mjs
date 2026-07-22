@@ -73,4 +73,6 @@ function processCanvasChunkedSync(fakeCanvas, params, opts = {}) {
   return fakeCanvas;
 }
 
-export { processBlock, processCanvasChunkedSync };
+const _sharedExports = { processBlock, processCanvasChunkedSync };
+export const { processBlock, processCanvasChunkedSync } = _sharedExports;
+export default _sharedExports;

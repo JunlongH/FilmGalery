@@ -8,4 +8,10 @@
 
 import { RenderCore, DEFAULT_FILM_CURVE, DEFAULT_CROP_RECT } from './RenderCore.mjs';
 
-export { RenderCore, DEFAULT_FILM_CURVE, DEFAULT_CROP_RECT };
+const _sharedExports = {
+  RenderCore,
+  DEFAULT_FILM_CURVE,
+  DEFAULT_CROP_RECT,
+};
+export const { RenderCore, DEFAULT_FILM_CURVE, DEFAULT_CROP_RECT } = _sharedExports;
+export default _sharedExports;

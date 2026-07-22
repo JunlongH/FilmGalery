@@ -48,4 +48,9 @@ function renderParamsEqual(a, b) {
   return stableSerializeParams(a) === stableSerializeParams(b);
 }
 
-export { stableSerializeParams, renderParamsEqual };
+const _sharedExports = {
+  stableSerializeParams,
+  renderParamsEqual,
+};
+export const { stableSerializeParams, renderParamsEqual } = _sharedExports;
+export default _sharedExports;

@@ -425,4 +425,12 @@ function solveTempTintFromSample(sampleRgb, baseGains = {}) {
 // 模块导出 (CommonJS)
 // ============================================================================
 
-export { computeWBGains, computeWBGainsLegacy, solveTempTintFromSample, kelvinToRGB, sliderToKelvin };
+const _sharedExports = {
+  computeWBGains,
+  computeWBGainsLegacy,
+  solveTempTintFromSample,
+  kelvinToRGB,
+  sliderToKelvin,
+};
+export const { computeWBGains, computeWBGainsLegacy, solveTempTintFromSample, kelvinToRGB, sliderToKelvin } = _sharedExports;
+export default _sharedExports;
