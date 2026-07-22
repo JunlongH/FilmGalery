@@ -200,5 +200,32 @@ const _sharedExports = {
   METER_TYPES,
   SHUTTER_TYPES
 };
-export const { CAMERA_TYPES, FILM_FORMATS, LENS_MOUNTS, SCANNER_TYPES, FLASH_TYPES, FILM_BACK_SUB_FORMATS, FILM_BACK_MOUNTS, FILM_CATEGORIES, FILM_PROCESSES, FOCUS_TYPES, CONDITIONS, STATUSES, METER_TYPES, SHUTTER_TYPES } = _sharedExports;
+const _e_CAMERA_TYPES = _sharedExports.CAMERA_TYPES;
+export { _e_CAMERA_TYPES as CAMERA_TYPES };
+const _e_FILM_FORMATS = _sharedExports.FILM_FORMATS;
+export { _e_FILM_FORMATS as FILM_FORMATS };
+const _e_LENS_MOUNTS = _sharedExports.LENS_MOUNTS;
+export { _e_LENS_MOUNTS as LENS_MOUNTS };
+const _e_SCANNER_TYPES = _sharedExports.SCANNER_TYPES;
+export { _e_SCANNER_TYPES as SCANNER_TYPES };
+const _e_FLASH_TYPES = _sharedExports.FLASH_TYPES;
+export { _e_FLASH_TYPES as FLASH_TYPES };
+const _e_FILM_BACK_SUB_FORMATS = _sharedExports.FILM_BACK_SUB_FORMATS;
+export { _e_FILM_BACK_SUB_FORMATS as FILM_BACK_SUB_FORMATS };
+const _e_FILM_BACK_MOUNTS = _sharedExports.FILM_BACK_MOUNTS;
+export { _e_FILM_BACK_MOUNTS as FILM_BACK_MOUNTS };
+const _e_FILM_CATEGORIES = _sharedExports.FILM_CATEGORIES;
+export { _e_FILM_CATEGORIES as FILM_CATEGORIES };
+const _e_FILM_PROCESSES = _sharedExports.FILM_PROCESSES;
+export { _e_FILM_PROCESSES as FILM_PROCESSES };
+const _e_FOCUS_TYPES = _sharedExports.FOCUS_TYPES;
+export { _e_FOCUS_TYPES as FOCUS_TYPES };
+const _e_CONDITIONS = _sharedExports.CONDITIONS;
+export { _e_CONDITIONS as CONDITIONS };
+const _e_STATUSES = _sharedExports.STATUSES;
+export { _e_STATUSES as STATUSES };
+const _e_METER_TYPES = _sharedExports.METER_TYPES;
+export { _e_METER_TYPES as METER_TYPES };
+const _e_SHUTTER_TYPES = _sharedExports.SHUTTER_TYPES;
+export { _e_SHUTTER_TYPES as SHUTTER_TYPES };
 export default _sharedExports;

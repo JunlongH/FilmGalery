@@ -128,5 +128,10 @@ const _sharedExports = {
   nearestOrthogonal,
   norm2pi,
 };
-export const { remapDetectedCropRect, nearestOrthogonal, norm2pi } = _sharedExports;
+const _e_remapDetectedCropRect = _sharedExports.remapDetectedCropRect;
+export { _e_remapDetectedCropRect as remapDetectedCropRect };
+const _e_nearestOrthogonal = _sharedExports.nearestOrthogonal;
+export { _e_nearestOrthogonal as nearestOrthogonal };
+const _e_norm2pi = _sharedExports.norm2pi;
+export { _e_norm2pi as norm2pi };
 export default _sharedExports;

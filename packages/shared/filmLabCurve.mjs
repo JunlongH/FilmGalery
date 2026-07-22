@@ -338,5 +338,20 @@ const _sharedExports = {
   groupFilmProfilesByCategory,
   FILM_CURVE_PROFILES: FILM_PROFILES,
 };
-export const { applyFilmCurve, applyFilmCurveFloat, applyFilmCurveRGB, buildFilmCurveLUT, getBuiltinFilmProfile, mergeFilmProfiles, groupFilmProfilesByCategory, FILM_CURVE_PROFILES } = _sharedExports;
+const _e_applyFilmCurve = _sharedExports.applyFilmCurve;
+export { _e_applyFilmCurve as applyFilmCurve };
+const _e_applyFilmCurveFloat = _sharedExports.applyFilmCurveFloat;
+export { _e_applyFilmCurveFloat as applyFilmCurveFloat };
+const _e_applyFilmCurveRGB = _sharedExports.applyFilmCurveRGB;
+export { _e_applyFilmCurveRGB as applyFilmCurveRGB };
+const _e_buildFilmCurveLUT = _sharedExports.buildFilmCurveLUT;
+export { _e_buildFilmCurveLUT as buildFilmCurveLUT };
+const _e_getBuiltinFilmProfile = _sharedExports.getBuiltinFilmProfile;
+export { _e_getBuiltinFilmProfile as getBuiltinFilmProfile };
+const _e_mergeFilmProfiles = _sharedExports.mergeFilmProfiles;
+export { _e_mergeFilmProfiles as mergeFilmProfiles };
+const _e_groupFilmProfilesByCategory = _sharedExports.groupFilmProfilesByCategory;
+export { _e_groupFilmProfilesByCategory as groupFilmProfilesByCategory };
+const _e_FILM_CURVE_PROFILES = _sharedExports.FILM_CURVE_PROFILES;
+export { _e_FILM_CURVE_PROFILES as FILM_CURVE_PROFILES };
 export default _sharedExports;

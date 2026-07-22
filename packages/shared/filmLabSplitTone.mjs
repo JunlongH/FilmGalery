@@ -518,5 +518,30 @@ const _sharedExports = {
   mergeSplitToneParams,
   validateSplitToneParams,
 };
-export const { DEFAULT_SPLIT_TONE_PARAMS, LUMINANCE_CONFIG, SPLIT_TONE_PRESETS, applySplitTone, applySplitToneToArray, isDefaultSplitTone, prepareSplitTone, applySplitToneFast, calculateLuminance, calculateZoneWeights, smoothstep, mergeSplitToneParams, validateSplitToneParams } = _sharedExports;
+const _e_DEFAULT_SPLIT_TONE_PARAMS = _sharedExports.DEFAULT_SPLIT_TONE_PARAMS;
+export { _e_DEFAULT_SPLIT_TONE_PARAMS as DEFAULT_SPLIT_TONE_PARAMS };
+const _e_LUMINANCE_CONFIG = _sharedExports.LUMINANCE_CONFIG;
+export { _e_LUMINANCE_CONFIG as LUMINANCE_CONFIG };
+const _e_SPLIT_TONE_PRESETS = _sharedExports.SPLIT_TONE_PRESETS;
+export { _e_SPLIT_TONE_PRESETS as SPLIT_TONE_PRESETS };
+const _e_applySplitTone = _sharedExports.applySplitTone;
+export { _e_applySplitTone as applySplitTone };
+const _e_applySplitToneToArray = _sharedExports.applySplitToneToArray;
+export { _e_applySplitToneToArray as applySplitToneToArray };
+const _e_isDefaultSplitTone = _sharedExports.isDefaultSplitTone;
+export { _e_isDefaultSplitTone as isDefaultSplitTone };
+const _e_prepareSplitTone = _sharedExports.prepareSplitTone;
+export { _e_prepareSplitTone as prepareSplitTone };
+const _e_applySplitToneFast = _sharedExports.applySplitToneFast;
+export { _e_applySplitToneFast as applySplitToneFast };
+const _e_calculateLuminance = _sharedExports.calculateLuminance;
+export { _e_calculateLuminance as calculateLuminance };
+const _e_calculateZoneWeights = _sharedExports.calculateZoneWeights;
+export { _e_calculateZoneWeights as calculateZoneWeights };
+const _e_smoothstep = _sharedExports.smoothstep;
+export { _e_smoothstep as smoothstep };
+const _e_mergeSplitToneParams = _sharedExports.mergeSplitToneParams;
+export { _e_mergeSplitToneParams as mergeSplitToneParams };
+const _e_validateSplitToneParams = _sharedExports.validateSplitToneParams;
+export { _e_validateSplitToneParams as validateSplitToneParams };
 export default _sharedExports;

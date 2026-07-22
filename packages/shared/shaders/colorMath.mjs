@@ -107,5 +107,6 @@ vec3 linearToSrgb(vec3 c) {
 const _sharedExports = {
   COLOR_MATH_GLSL,
 };
-export const { COLOR_MATH_GLSL } = _sharedExports;
+const _e_COLOR_MATH_GLSL = _sharedExports.COLOR_MATH_GLSL;
+export { _e_COLOR_MATH_GLSL as COLOR_MATH_GLSL };
 export default _sharedExports;

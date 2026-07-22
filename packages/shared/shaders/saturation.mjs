@@ -55,5 +55,8 @@ const _sharedExports = {
   getSaturationGLSL,
   getSaturationMainCall,
 };
-export const { getSaturationGLSL, getSaturationMainCall } = _sharedExports;
+const _e_getSaturationGLSL = _sharedExports.getSaturationGLSL;
+export { _e_getSaturationGLSL as getSaturationGLSL };
+const _e_getSaturationMainCall = _sharedExports.getSaturationMainCall;
+export { _e_getSaturationMainCall as getSaturationMainCall };
 export default _sharedExports;

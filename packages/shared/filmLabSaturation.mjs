@@ -93,5 +93,16 @@ const _sharedExports = {
   LUM_G,
   LUM_B,
 };
-export const { applySaturationFloat, applySaturation, isDefaultSaturation, LUM_R, LUM_G, LUM_B } = _sharedExports;
+const _e_applySaturationFloat = _sharedExports.applySaturationFloat;
+export { _e_applySaturationFloat as applySaturationFloat };
+const _e_applySaturation = _sharedExports.applySaturation;
+export { _e_applySaturation as applySaturation };
+const _e_isDefaultSaturation = _sharedExports.isDefaultSaturation;
+export { _e_isDefaultSaturation as isDefaultSaturation };
+const _e_LUM_R = _sharedExports.LUM_R;
+export { _e_LUM_R as LUM_R };
+const _e_LUM_G = _sharedExports.LUM_G;
+export { _e_LUM_G as LUM_G };
+const _e_LUM_B = _sharedExports.LUM_B;
+export { _e_LUM_B as LUM_B };
 export default _sharedExports;

@@ -78,5 +78,6 @@ function parseCubeLUT(text) {
 }
 
 const _sharedExports = { parseCubeLUT };
-export const { parseCubeLUT } = _sharedExports;
+const _e_parseCubeLUT = _sharedExports.parseCubeLUT;
+export { _e_parseCubeLUT as parseCubeLUT };
 export default _sharedExports;

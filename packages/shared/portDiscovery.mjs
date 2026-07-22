@@ -141,5 +141,30 @@ const _sharedExports = {
   isPrivateIp,
   recommendDiscoveryMode
 };
-export const { APP_IDENTIFIER, DISCOVERY_ENDPOINT, DEFAULT_PORT, PORT_SCAN_RANGE, DISCOVERY_TIMEOUT, MDNS_CONFIG, DISCOVERY_MODE, buildDiscoverUrl, cleanIpAddress, extractPort, buildUrl, isPrivateIp, recommendDiscoveryMode } = _sharedExports;
+const _e_APP_IDENTIFIER = _sharedExports.APP_IDENTIFIER;
+export { _e_APP_IDENTIFIER as APP_IDENTIFIER };
+const _e_DISCOVERY_ENDPOINT = _sharedExports.DISCOVERY_ENDPOINT;
+export { _e_DISCOVERY_ENDPOINT as DISCOVERY_ENDPOINT };
+const _e_DEFAULT_PORT = _sharedExports.DEFAULT_PORT;
+export { _e_DEFAULT_PORT as DEFAULT_PORT };
+const _e_PORT_SCAN_RANGE = _sharedExports.PORT_SCAN_RANGE;
+export { _e_PORT_SCAN_RANGE as PORT_SCAN_RANGE };
+const _e_DISCOVERY_TIMEOUT = _sharedExports.DISCOVERY_TIMEOUT;
+export { _e_DISCOVERY_TIMEOUT as DISCOVERY_TIMEOUT };
+const _e_MDNS_CONFIG = _sharedExports.MDNS_CONFIG;
+export { _e_MDNS_CONFIG as MDNS_CONFIG };
+const _e_DISCOVERY_MODE = _sharedExports.DISCOVERY_MODE;
+export { _e_DISCOVERY_MODE as DISCOVERY_MODE };
+const _e_buildDiscoverUrl = _sharedExports.buildDiscoverUrl;
+export { _e_buildDiscoverUrl as buildDiscoverUrl };
+const _e_cleanIpAddress = _sharedExports.cleanIpAddress;
+export { _e_cleanIpAddress as cleanIpAddress };
+const _e_extractPort = _sharedExports.extractPort;
+export { _e_extractPort as extractPort };
+const _e_buildUrl = _sharedExports.buildUrl;
+export { _e_buildUrl as buildUrl };
+const _e_isPrivateIp = _sharedExports.isPrivateIp;
+export { _e_isPrivateIp as isPrivateIp };
+const _e_recommendDiscoveryMode = _sharedExports.recommendDiscoveryMode;
+export { _e_recommendDiscoveryMode as recommendDiscoveryMode };
 export default _sharedExports;

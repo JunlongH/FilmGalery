@@ -248,5 +248,24 @@ const _sharedExports = {
   applyLinearBaseCorrection,
   applyLinearBaseCorrectionRGB,
 };
-export const { invertLinear, invertLog, applyInversion, applyInversionRGB, buildInversionLUT, calculateBaseDensity, applyLogBaseCorrection, applyLogBaseCorrectionRGB, applyLinearBaseCorrection, applyLinearBaseCorrectionRGB } = _sharedExports;
+const _e_invertLinear = _sharedExports.invertLinear;
+export { _e_invertLinear as invertLinear };
+const _e_invertLog = _sharedExports.invertLog;
+export { _e_invertLog as invertLog };
+const _e_applyInversion = _sharedExports.applyInversion;
+export { _e_applyInversion as applyInversion };
+const _e_applyInversionRGB = _sharedExports.applyInversionRGB;
+export { _e_applyInversionRGB as applyInversionRGB };
+const _e_buildInversionLUT = _sharedExports.buildInversionLUT;
+export { _e_buildInversionLUT as buildInversionLUT };
+const _e_calculateBaseDensity = _sharedExports.calculateBaseDensity;
+export { _e_calculateBaseDensity as calculateBaseDensity };
+const _e_applyLogBaseCorrection = _sharedExports.applyLogBaseCorrection;
+export { _e_applyLogBaseCorrection as applyLogBaseCorrection };
+const _e_applyLogBaseCorrectionRGB = _sharedExports.applyLogBaseCorrectionRGB;
+export { _e_applyLogBaseCorrectionRGB as applyLogBaseCorrectionRGB };
+const _e_applyLinearBaseCorrection = _sharedExports.applyLinearBaseCorrection;
+export { _e_applyLinearBaseCorrection as applyLinearBaseCorrection };
+const _e_applyLinearBaseCorrectionRGB = _sharedExports.applyLinearBaseCorrectionRGB;
+export { _e_applyLinearBaseCorrectionRGB as applyLinearBaseCorrectionRGB };
 export default _sharedExports;

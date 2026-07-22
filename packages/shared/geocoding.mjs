@@ -454,5 +454,34 @@ const _sharedExports = {
   DEFAULT_TIMEOUT,
   NOMINATIM_RATE_LIMIT_MS,
 };
-export const { searchAddress, reverseGeocode, getCityCoordinates, searchWithAmap, searchWithPhoton, searchWithNominatim, reverseWithAmap, reverseWithPhoton, reverseWithNominatim, reverseWithBigDataCloud, PHOTON_BASE, NOMINATIM_BASE, AMAP_BASE, DEFAULT_TIMEOUT, NOMINATIM_RATE_LIMIT_MS } = _sharedExports;
+const _e_searchAddress = _sharedExports.searchAddress;
+export { _e_searchAddress as searchAddress };
+const _e_reverseGeocode = _sharedExports.reverseGeocode;
+export { _e_reverseGeocode as reverseGeocode };
+const _e_getCityCoordinates = _sharedExports.getCityCoordinates;
+export { _e_getCityCoordinates as getCityCoordinates };
+const _e_searchWithAmap = _sharedExports.searchWithAmap;
+export { _e_searchWithAmap as searchWithAmap };
+const _e_searchWithPhoton = _sharedExports.searchWithPhoton;
+export { _e_searchWithPhoton as searchWithPhoton };
+const _e_searchWithNominatim = _sharedExports.searchWithNominatim;
+export { _e_searchWithNominatim as searchWithNominatim };
+const _e_reverseWithAmap = _sharedExports.reverseWithAmap;
+export { _e_reverseWithAmap as reverseWithAmap };
+const _e_reverseWithPhoton = _sharedExports.reverseWithPhoton;
+export { _e_reverseWithPhoton as reverseWithPhoton };
+const _e_reverseWithNominatim = _sharedExports.reverseWithNominatim;
+export { _e_reverseWithNominatim as reverseWithNominatim };
+const _e_reverseWithBigDataCloud = _sharedExports.reverseWithBigDataCloud;
+export { _e_reverseWithBigDataCloud as reverseWithBigDataCloud };
+const _e_PHOTON_BASE = _sharedExports.PHOTON_BASE;
+export { _e_PHOTON_BASE as PHOTON_BASE };
+const _e_NOMINATIM_BASE = _sharedExports.NOMINATIM_BASE;
+export { _e_NOMINATIM_BASE as NOMINATIM_BASE };
+const _e_AMAP_BASE = _sharedExports.AMAP_BASE;
+export { _e_AMAP_BASE as AMAP_BASE };
+const _e_DEFAULT_TIMEOUT = _sharedExports.DEFAULT_TIMEOUT;
+export { _e_DEFAULT_TIMEOUT as DEFAULT_TIMEOUT };
+const _e_NOMINATIM_RATE_LIMIT_MS = _sharedExports.NOMINATIM_RATE_LIMIT_MS;
+export { _e_NOMINATIM_RATE_LIMIT_MS as NOMINATIM_RATE_LIMIT_MS };
 export default _sharedExports;

@@ -432,5 +432,14 @@ const _sharedExports = {
   kelvinToRGB,
   sliderToKelvin,
 };
-export const { computeWBGains, computeWBGainsLegacy, solveTempTintFromSample, kelvinToRGB, sliderToKelvin } = _sharedExports;
+const _e_computeWBGains = _sharedExports.computeWBGains;
+export { _e_computeWBGains as computeWBGains };
+const _e_computeWBGainsLegacy = _sharedExports.computeWBGainsLegacy;
+export { _e_computeWBGainsLegacy as computeWBGainsLegacy };
+const _e_solveTempTintFromSample = _sharedExports.solveTempTintFromSample;
+export { _e_solveTempTintFromSample as solveTempTintFromSample };
+const _e_kelvinToRGB = _sharedExports.kelvinToRGB;
+export { _e_kelvinToRGB as kelvinToRGB };
+const _e_sliderToKelvin = _sharedExports.sliderToKelvin;
+export { _e_sliderToKelvin as sliderToKelvin };
 export default _sharedExports;

@@ -118,5 +118,22 @@ const _sharedExports = {
   isComputeRoute,
   getCapabilities
 };
-export const { SERVER_MODES, API_CATEGORIES, COMPUTE_ROUTES, COMPUTE_ROUTE_PATTERNS, DATA_ROUTES, getServerMode, isComputeEnabled, isComputeRoute, getCapabilities } = _sharedExports;
+const _e_SERVER_MODES = _sharedExports.SERVER_MODES;
+export { _e_SERVER_MODES as SERVER_MODES };
+const _e_API_CATEGORIES = _sharedExports.API_CATEGORIES;
+export { _e_API_CATEGORIES as API_CATEGORIES };
+const _e_COMPUTE_ROUTES = _sharedExports.COMPUTE_ROUTES;
+export { _e_COMPUTE_ROUTES as COMPUTE_ROUTES };
+const _e_COMPUTE_ROUTE_PATTERNS = _sharedExports.COMPUTE_ROUTE_PATTERNS;
+export { _e_COMPUTE_ROUTE_PATTERNS as COMPUTE_ROUTE_PATTERNS };
+const _e_DATA_ROUTES = _sharedExports.DATA_ROUTES;
+export { _e_DATA_ROUTES as DATA_ROUTES };
+const _e_getServerMode = _sharedExports.getServerMode;
+export { _e_getServerMode as getServerMode };
+const _e_isComputeEnabled = _sharedExports.isComputeEnabled;
+export { _e_isComputeEnabled as isComputeEnabled };
+const _e_isComputeRoute = _sharedExports.isComputeRoute;
+export { _e_isComputeRoute as isComputeRoute };
+const _e_getCapabilities = _sharedExports.getCapabilities;
+export { _e_getCapabilities as getCapabilities };
 export default _sharedExports;

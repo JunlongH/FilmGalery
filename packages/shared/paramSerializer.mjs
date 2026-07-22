@@ -52,5 +52,8 @@ const _sharedExports = {
   stableSerializeParams,
   renderParamsEqual,
 };
-export const { stableSerializeParams, renderParamsEqual } = _sharedExports;
+const _e_stableSerializeParams = _sharedExports.stableSerializeParams;
+export { _e_stableSerializeParams as stableSerializeParams };
+const _e_renderParamsEqual = _sharedExports.renderParamsEqual;
+export { _e_renderParamsEqual as renderParamsEqual };
 export default _sharedExports;

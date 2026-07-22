@@ -101,5 +101,8 @@ function applyToneMapping(value, params = {}) {
 // ============================================================================
 
 const _sharedExports = { buildToneLUT, applyToneMapping };
-export const { buildToneLUT, applyToneMapping } = _sharedExports;
+const _e_buildToneLUT = _sharedExports.buildToneLUT;
+export { _e_buildToneLUT as buildToneLUT };
+const _e_applyToneMapping = _sharedExports.applyToneMapping;
+export { _e_applyToneMapping as applyToneMapping };
 export default _sharedExports;

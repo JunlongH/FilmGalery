@@ -88,5 +88,10 @@ const _sharedExports = {
   normalizeBigDataCloud,
   BDC_BASE,
 };
-export const { reverseGeocodeBigDataCloud, normalizeBigDataCloud, BDC_BASE } = _sharedExports;
+const _e_reverseGeocodeBigDataCloud = _sharedExports.reverseGeocodeBigDataCloud;
+export { _e_reverseGeocodeBigDataCloud as reverseGeocodeBigDataCloud };
+const _e_normalizeBigDataCloud = _sharedExports.normalizeBigDataCloud;
+export { _e_normalizeBigDataCloud as normalizeBigDataCloud };
+const _e_BDC_BASE = _sharedExports.BDC_BASE;
+export { _e_BDC_BASE as BDC_BASE };
 export default _sharedExports;

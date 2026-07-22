@@ -560,5 +560,30 @@ const _sharedExports = {
   serializeParams,
   deserializeParams,
 };
-export const { PARAMS_VERSION, DEFAULT_PROCESSING_PARAMS, DEFAULT_HSL_PARAMS, DEFAULT_SPLIT_TONING, createDefaultParams, buildExportParams, validateExportParams, getPhotoProcessingParams, migrateParams, mergeDeep, hasParamsDifference, serializeParams, deserializeParams } = _sharedExports;
+const _e_PARAMS_VERSION = _sharedExports.PARAMS_VERSION;
+export { _e_PARAMS_VERSION as PARAMS_VERSION };
+const _e_DEFAULT_PROCESSING_PARAMS = _sharedExports.DEFAULT_PROCESSING_PARAMS;
+export { _e_DEFAULT_PROCESSING_PARAMS as DEFAULT_PROCESSING_PARAMS };
+const _e_DEFAULT_HSL_PARAMS = _sharedExports.DEFAULT_HSL_PARAMS;
+export { _e_DEFAULT_HSL_PARAMS as DEFAULT_HSL_PARAMS };
+const _e_DEFAULT_SPLIT_TONING = _sharedExports.DEFAULT_SPLIT_TONING;
+export { _e_DEFAULT_SPLIT_TONING as DEFAULT_SPLIT_TONING };
+const _e_createDefaultParams = _sharedExports.createDefaultParams;
+export { _e_createDefaultParams as createDefaultParams };
+const _e_buildExportParams = _sharedExports.buildExportParams;
+export { _e_buildExportParams as buildExportParams };
+const _e_validateExportParams = _sharedExports.validateExportParams;
+export { _e_validateExportParams as validateExportParams };
+const _e_getPhotoProcessingParams = _sharedExports.getPhotoProcessingParams;
+export { _e_getPhotoProcessingParams as getPhotoProcessingParams };
+const _e_migrateParams = _sharedExports.migrateParams;
+export { _e_migrateParams as migrateParams };
+const _e_mergeDeep = _sharedExports.mergeDeep;
+export { _e_mergeDeep as mergeDeep };
+const _e_hasParamsDifference = _sharedExports.hasParamsDifference;
+export { _e_hasParamsDifference as hasParamsDifference };
+const _e_serializeParams = _sharedExports.serializeParams;
+export { _e_serializeParams as serializeParams };
+const _e_deserializeParams = _sharedExports.deserializeParams;
+export { _e_deserializeParams as deserializeParams };
 export default _sharedExports;

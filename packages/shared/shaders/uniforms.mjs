@@ -96,5 +96,6 @@ uniform float u_splitBalance;
 const _sharedExports = {
   UNIFORMS_GLSL,
 };
-export const { UNIFORMS_GLSL } = _sharedExports;
+const _e_UNIFORMS_GLSL = _sharedExports.UNIFORMS_GLSL;
+export { _e_UNIFORMS_GLSL as UNIFORMS_GLSL };
 export default _sharedExports;

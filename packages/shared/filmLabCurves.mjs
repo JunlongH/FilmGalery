@@ -421,5 +421,18 @@ const _sharedExports = {
   buildCompositeFloatCurveLUT,
   applyCurve,
 };
-export const { createSpline, buildCurveLUT, buildCurveLUTFloat, buildAllCurveLUTs, buildAllCurveLUTsFloat, buildCompositeFloatCurveLUT, applyCurve } = _sharedExports;
+const _e_createSpline = _sharedExports.createSpline;
+export { _e_createSpline as createSpline };
+const _e_buildCurveLUT = _sharedExports.buildCurveLUT;
+export { _e_buildCurveLUT as buildCurveLUT };
+const _e_buildCurveLUTFloat = _sharedExports.buildCurveLUTFloat;
+export { _e_buildCurveLUTFloat as buildCurveLUTFloat };
+const _e_buildAllCurveLUTs = _sharedExports.buildAllCurveLUTs;
+export { _e_buildAllCurveLUTs as buildAllCurveLUTs };
+const _e_buildAllCurveLUTsFloat = _sharedExports.buildAllCurveLUTsFloat;
+export { _e_buildAllCurveLUTsFloat as buildAllCurveLUTsFloat };
+const _e_buildCompositeFloatCurveLUT = _sharedExports.buildCompositeFloatCurveLUT;
+export { _e_buildCompositeFloatCurveLUT as buildCompositeFloatCurveLUT };
+const _e_applyCurve = _sharedExports.applyCurve;
+export { _e_applyCurve as applyCurve };
 export default _sharedExports;

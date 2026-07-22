@@ -336,5 +336,34 @@ const _sharedExports = {
   // 着色器版本标识（用于缓存失效）
   SHADER_VERSION: '2026-02-08-v3',
 };
-export const { buildFragmentShader, buildMainFunction, VERTEX_SHADER, VERTEX_SHADER_GL2, colorMath, hslAdjust, splitTone, saturation, filmCurve, tonemap, lut3d, inversion, baseDensity, uniforms, SHADER_VERSION } = _sharedExports;
+const _e_buildFragmentShader = _sharedExports.buildFragmentShader;
+export { _e_buildFragmentShader as buildFragmentShader };
+const _e_buildMainFunction = _sharedExports.buildMainFunction;
+export { _e_buildMainFunction as buildMainFunction };
+const _e_VERTEX_SHADER = _sharedExports.VERTEX_SHADER;
+export { _e_VERTEX_SHADER as VERTEX_SHADER };
+const _e_VERTEX_SHADER_GL2 = _sharedExports.VERTEX_SHADER_GL2;
+export { _e_VERTEX_SHADER_GL2 as VERTEX_SHADER_GL2 };
+const _e_colorMath = _sharedExports.colorMath;
+export { _e_colorMath as colorMath };
+const _e_hslAdjust = _sharedExports.hslAdjust;
+export { _e_hslAdjust as hslAdjust };
+const _e_splitTone = _sharedExports.splitTone;
+export { _e_splitTone as splitTone };
+const _e_saturation = _sharedExports.saturation;
+export { _e_saturation as saturation };
+const _e_filmCurve = _sharedExports.filmCurve;
+export { _e_filmCurve as filmCurve };
+const _e_tonemap = _sharedExports.tonemap;
+export { _e_tonemap as tonemap };
+const _e_lut3d = _sharedExports.lut3d;
+export { _e_lut3d as lut3d };
+const _e_inversion = _sharedExports.inversion;
+export { _e_inversion as inversion };
+const _e_baseDensity = _sharedExports.baseDensity;
+export { _e_baseDensity as baseDensity };
+const _e_uniforms = _sharedExports.uniforms;
+export { _e_uniforms as uniforms };
+const _e_SHADER_VERSION = _sharedExports.SHADER_VERSION;
+export { _e_SHADER_VERSION as SHADER_VERSION };
 export default _sharedExports;

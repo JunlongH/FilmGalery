@@ -84,5 +84,14 @@ const _sharedExports = {
   transformLat,
   transformLng,
 };
-export const { wgs84ToGcj02, gcj02ToWgs84, isInChina, transformLat, transformLng } = _sharedExports;
+const _e_wgs84ToGcj02 = _sharedExports.wgs84ToGcj02;
+export { _e_wgs84ToGcj02 as wgs84ToGcj02 };
+const _e_gcj02ToWgs84 = _sharedExports.gcj02ToWgs84;
+export { _e_gcj02ToWgs84 as gcj02ToWgs84 };
+const _e_isInChina = _sharedExports.isInChina;
+export { _e_isInChina as isInChina };
+const _e_transformLat = _sharedExports.transformLat;
+export { _e_transformLat as transformLat };
+const _e_transformLng = _sharedExports.transformLng;
+export { _e_transformLng as transformLng };
 export default _sharedExports;

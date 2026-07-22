@@ -436,5 +436,24 @@ const _sharedExports = {
   // GLSL 代码生成
   getLUT3DSamplingGLSL,
 };
-export const { getEffectiveInverted, isPositiveMode, shouldShowInversionControls, getLUT3DIndex, packLUT3DForWebGL, buildCombinedLUT, sampleLUT3D, normalizeSourceType, normalizeInversionMode, getLUT3DSamplingGLSL } = _sharedExports;
+const _e_getEffectiveInverted = _sharedExports.getEffectiveInverted;
+export { _e_getEffectiveInverted as getEffectiveInverted };
+const _e_isPositiveMode = _sharedExports.isPositiveMode;
+export { _e_isPositiveMode as isPositiveMode };
+const _e_shouldShowInversionControls = _sharedExports.shouldShowInversionControls;
+export { _e_shouldShowInversionControls as shouldShowInversionControls };
+const _e_getLUT3DIndex = _sharedExports.getLUT3DIndex;
+export { _e_getLUT3DIndex as getLUT3DIndex };
+const _e_packLUT3DForWebGL = _sharedExports.packLUT3DForWebGL;
+export { _e_packLUT3DForWebGL as packLUT3DForWebGL };
+const _e_buildCombinedLUT = _sharedExports.buildCombinedLUT;
+export { _e_buildCombinedLUT as buildCombinedLUT };
+const _e_sampleLUT3D = _sharedExports.sampleLUT3D;
+export { _e_sampleLUT3D as sampleLUT3D };
+const _e_normalizeSourceType = _sharedExports.normalizeSourceType;
+export { _e_normalizeSourceType as normalizeSourceType };
+const _e_normalizeInversionMode = _sharedExports.normalizeInversionMode;
+export { _e_normalizeInversionMode as normalizeInversionMode };
+const _e_getLUT3DSamplingGLSL = _sharedExports.getLUT3DSamplingGLSL;
+export { _e_getLUT3DSamplingGLSL as getLUT3DSamplingGLSL };
 export default _sharedExports;

@@ -442,5 +442,30 @@ const _sharedExports = {
   calculateChannelWeight,
   hueDistance,
 };
-export const { HSL_CHANNELS, HSL_CHANNEL_ORDER, DEFAULT_HSL_PARAMS, rgbToHsl, hslToRgb, applyHSL, applyHSLToArray, isDefaultHSL, createSingleChannelHSL, mergeHSLParams, validateHSLParams, calculateChannelWeight, hueDistance } = _sharedExports;
+const _e_HSL_CHANNELS = _sharedExports.HSL_CHANNELS;
+export { _e_HSL_CHANNELS as HSL_CHANNELS };
+const _e_HSL_CHANNEL_ORDER = _sharedExports.HSL_CHANNEL_ORDER;
+export { _e_HSL_CHANNEL_ORDER as HSL_CHANNEL_ORDER };
+const _e_DEFAULT_HSL_PARAMS = _sharedExports.DEFAULT_HSL_PARAMS;
+export { _e_DEFAULT_HSL_PARAMS as DEFAULT_HSL_PARAMS };
+const _e_rgbToHsl = _sharedExports.rgbToHsl;
+export { _e_rgbToHsl as rgbToHsl };
+const _e_hslToRgb = _sharedExports.hslToRgb;
+export { _e_hslToRgb as hslToRgb };
+const _e_applyHSL = _sharedExports.applyHSL;
+export { _e_applyHSL as applyHSL };
+const _e_applyHSLToArray = _sharedExports.applyHSLToArray;
+export { _e_applyHSLToArray as applyHSLToArray };
+const _e_isDefaultHSL = _sharedExports.isDefaultHSL;
+export { _e_isDefaultHSL as isDefaultHSL };
+const _e_createSingleChannelHSL = _sharedExports.createSingleChannelHSL;
+export { _e_createSingleChannelHSL as createSingleChannelHSL };
+const _e_mergeHSLParams = _sharedExports.mergeHSLParams;
+export { _e_mergeHSLParams as mergeHSLParams };
+const _e_validateHSLParams = _sharedExports.validateHSLParams;
+export { _e_validateHSLParams as validateHSLParams };
+const _e_calculateChannelWeight = _sharedExports.calculateChannelWeight;
+export { _e_calculateChannelWeight as calculateChannelWeight };
+const _e_hueDistance = _sharedExports.hueDistance;
+export { _e_hueDistance as hueDistance };
 export default _sharedExports;

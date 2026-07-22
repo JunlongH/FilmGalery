@@ -316,5 +316,18 @@ const _sharedExports = {
   canUseSourceType,
   getAvailableSourceTypes
 };
-export const { SOURCE_TYPE, SOURCE_PATH_FIELDS, getStrictSourcePath, getEffectiveInverted, validateSourceMatch, canUseSourceType, getAvailableSourceTypes } = _sharedExports;
+const _e_SOURCE_TYPE = _sharedExports.SOURCE_TYPE;
+export { _e_SOURCE_TYPE as SOURCE_TYPE };
+const _e_SOURCE_PATH_FIELDS = _sharedExports.SOURCE_PATH_FIELDS;
+export { _e_SOURCE_PATH_FIELDS as SOURCE_PATH_FIELDS };
+const _e_getStrictSourcePath = _sharedExports.getStrictSourcePath;
+export { _e_getStrictSourcePath as getStrictSourcePath };
+const _e_getEffectiveInverted = _sharedExports.getEffectiveInverted;
+export { _e_getEffectiveInverted as getEffectiveInverted };
+const _e_validateSourceMatch = _sharedExports.validateSourceMatch;
+export { _e_validateSourceMatch as validateSourceMatch };
+const _e_canUseSourceType = _sharedExports.canUseSourceType;
+export { _e_canUseSourceType as canUseSourceType };
+const _e_getAvailableSourceTypes = _sharedExports.getAvailableSourceTypes;
+export { _e_getAvailableSourceTypes as getAvailableSourceTypes };
 export default _sharedExports;

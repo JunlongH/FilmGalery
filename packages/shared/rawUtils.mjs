@@ -130,5 +130,16 @@ const _sharedExports = {
   isBrowserLoadable,
   requiresServerDecode
 };
-export const { RAW_EXTENSIONS, isRawFile, getRawFormatInfo, detectFileType, isBrowserLoadable, requiresServerDecode } = _sharedExports;
+const _e_RAW_EXTENSIONS = _sharedExports.RAW_EXTENSIONS;
+export { _e_RAW_EXTENSIONS as RAW_EXTENSIONS };
+const _e_isRawFile = _sharedExports.isRawFile;
+export { _e_isRawFile as isRawFile };
+const _e_getRawFormatInfo = _sharedExports.getRawFormatInfo;
+export { _e_getRawFormatInfo as getRawFormatInfo };
+const _e_detectFileType = _sharedExports.detectFileType;
+export { _e_detectFileType as detectFileType };
+const _e_isBrowserLoadable = _sharedExports.isBrowserLoadable;
+export { _e_isBrowserLoadable as isBrowserLoadable };
+const _e_requiresServerDecode = _sharedExports.requiresServerDecode;
+export { _e_requiresServerDecode as requiresServerDecode };
 export default _sharedExports;

@@ -38,5 +38,6 @@ vec3 applyInversion(vec3 col) {
 const _sharedExports = {
   INVERSION_GLSL,
 };
-export const { INVERSION_GLSL } = _sharedExports;
+const _e_INVERSION_GLSL = _sharedExports.INVERSION_GLSL;
+export { _e_INVERSION_GLSL as INVERSION_GLSL };
 export default _sharedExports;
