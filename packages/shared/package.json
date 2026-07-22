@@ -7,38 +7,68 @@
   "exports": {
     ".": {
       "require": "./index.js",
-      "default": "./index.js"
+      "default": "./index.js",
+      "import": "./index.mjs"
     },
-    "./filmlab-core": "./filmlab-core.js",
-    "./constants": "./filmLabConstants.js",
-    "./constants/equipment": "./constants/equipment.js",
+    "./filmlab-core": {
+      "require": "./filmlab-core.js",
+      "import": "./filmlab-core.mjs",
+      "default": "./filmlab-core.js"
+    },
+    "./constants": {
+      "require": "./filmLabConstants.js",
+      "import": "./filmLabConstants.mjs",
+      "default": "./filmLabConstants.js"
+    },
+    "./constants/equipment": {
+      "require": "./constants/equipment.js",
+      "import": "./constants/equipment.mjs",
+      "default": "./constants/equipment.js"
+    },
     "./coordTransform": {
       "types": "./coordTransform.d.ts",
       "require": "./coordTransform.js",
-      "default": "./coordTransform.js"
+      "default": "./coordTransform.js",
+      "import": "./coordTransform.mjs"
     },
     "./portDiscovery": {
       "types": "./portDiscovery.d.ts",
       "require": "./portDiscovery.js",
-      "default": "./portDiscovery.js"
+      "default": "./portDiscovery.js",
+      "import": "./portDiscovery.mjs"
     },
-    "./serverCapabilities": "./serverCapabilities.js",
-    "./sourcePathResolver": "./sourcePathResolver.js",
-    "./rawUtils": "./rawUtils.js",
+    "./serverCapabilities": {
+      "require": "./serverCapabilities.js",
+      "import": "./serverCapabilities.mjs",
+      "default": "./serverCapabilities.js"
+    },
+    "./sourcePathResolver": {
+      "require": "./sourcePathResolver.js",
+      "import": "./sourcePathResolver.mjs",
+      "default": "./sourcePathResolver.js"
+    },
+    "./rawUtils": {
+      "require": "./rawUtils.js",
+      "import": "./rawUtils.mjs",
+      "default": "./rawUtils.js"
+    },
     "./geocode": {
       "types": "./geocode.d.ts",
       "require": "./geocode.js",
-      "default": "./geocode.js"
+      "default": "./geocode.js",
+      "import": "./geocode.mjs"
     },
     "./geocoding": {
       "types": "./geocoding.d.ts",
       "require": "./geocoding.js",
-      "default": "./geocoding.js"
+      "default": "./geocoding.js",
+      "import": "./geocoding.mjs"
     },
     "./mapUtils": {
       "types": "./mapUtils.d.ts",
       "require": "./mapUtils.js",
-      "default": "./mapUtils.js"
+      "default": "./mapUtils.js",
+      "import": "./mapUtils.mjs"
     }
   },
   "private": true
