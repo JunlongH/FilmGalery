@@ -61,7 +61,8 @@ describe('Phase K.2 applySplitToneToArray 保留输入类型', () => {
 describe('Phase K.3 ComputeService.getPhotoImageUrl SSOT 委托', () => {
   test('ComputeService 模块文件中不存在独立的 getPhotoImageUrl 实现（已委托）', () => {
     const fs = require('fs');
-    const src = fs.readFileSync('/home/juno/FilmGallery/client/src/services/ComputeService.js', 'utf8');
+    const path = require('path');
+    const src = fs.readFileSync(path.join(__dirname, '..', 'client', 'src', 'services', 'ComputeService.js'), 'utf8');
     // 委托形式：引用 CpuRenderService.getPhotoImageUrl
     expect(src).toMatch(/CpuRenderService\.getPhotoImageUrl/);
     // 不应再有独立的 async function getPhotoImageUrl 实现
