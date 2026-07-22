@@ -1,6 +1,10 @@
 import { createContext } from 'react';
+import type { MapProvider } from '@filmgallery/types';
 
-export type MapProvider = 'osm' | 'amap';
+// Re-export so existing imports (e.g. `import type { MapProvider } from
+// './context/ApiContext'` in App.tsx) continue to work while the type now
+// lives once in @filmgallery/types.
+export type { MapProvider };
 
 export interface ApiContextValue {
   baseUrl: string;

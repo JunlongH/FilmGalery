@@ -123,3 +123,74 @@ select option {
 /* Roll header tweaks */
 .roll-meta-label { color: var(--fg-muted); font-size: 12px; }
 .roll-meta-value { color: var(--fg-text); font-weight: 500; }
+
+/* LocationPicker + coordinate controls */
+.fg-location-picker-map {
+  height: 400px;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e5e7eb;
+}
+:root.dark .fg-location-picker-map,
+.dark .fg-location-picker-map,
+[data-theme="dark"] .fg-location-picker-map {
+  background: #1a1a1a;
+}
+
+.fg-location-picker-pin {
+  background: transparent !important;
+  border: none !important;
+}
+
+.fg-input-error {
+  border-color: #ef4444 !important;
+  background: #fef2f2;
+}
+:root.dark .fg-input-error,
+.dark .fg-input-error,
+[data-theme="dark"] .fg-input-error {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.fg-input-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.fg-input-group input {
+  flex: 1;
+  min-width: 0;
+}
+.fg-input-group button {
+  flex-shrink: 0;
+  width: 32px;
+  height: 38px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  border: 1px solid var(--fg-border, #d1d5db);
+  border-radius: 8px;
+  background: var(--fg-card-bg, #fff);
+  color: var(--fg-text, #1f2937);
+  cursor: pointer;
+}
+.fg-input-group button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.fg-btn-sm {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.fg-btn-nudge {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 700;
+}

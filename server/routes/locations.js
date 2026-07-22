@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { allAsync, runAsync, getAsync } = require('../utils/db-helpers');
 const PreparedStmt = require('../utils/prepared-statements');
+const { isValidLatLng, isValidLatitude, isValidLongitude } = require('@filmgallery/shared/mapUtils');
 
 // GET /api/locations/countries
 router.get('/countries', async (req, res, next) => {
@@ -118,11 +119,15 @@ router.get('/', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   const { country_code, country_name, city_name, city_lat, city_lng } = req.body || {};
   if (!city_name) return res.status(400).json({ error: 'city_name required' });
+  // Validate coordinates if provided (null is allowed — city may not have coords yet)
+  if (!isValidLatLng(city_lat ?? null, city_lng ?? null)) {
+    return res.status(400).json({ error: 'invalid city_lat/city_lng (must be both null or both in range)' });
+  }
   try {
-    const exists = await getAsync('SELECT id FROM locations WHERE country_code=? AND city_name=?', [country_code || null, city_name]);
+    const exists = await getAsync('SELECT id FROM locations WHERE country_code=? AND city_name=?', [country_code ?? null, city_name]);
     if (exists) return res.json({ id: exists.id, ok: true, existed: true });
     const result = await new Promise((resolve, reject) => {
-      db.run('INSERT INTO locations (country_code, country_name, city_name, city_lat, city_lng) VALUES (?,?,?,?,?)', [country_code || null, country_name || null, city_name, city_lat || null, city_lng || null], function(err){
+      db.run('INSERT INTO locations (country_code, country_name, city_name, city_lat, city_lng) VALUES (?,?,?,?,?)', [country_code ?? null, country_name ?? null, city_name, city_lat ?? null, city_lng ?? null], function(err){
         if (err) reject(err); else resolve(this.lastID);
       });
     });
@@ -130,6 +135,48 @@ router.post('/', async (req, res, next) => {
   } catch (e) {
     next(e);
   }
+});
+
+// PUT /api/locations/:id — update city coordinates/name
+router.put('/:id', async (req, res, next) => {
+  const id = Number(req.params.id);
+  if (!id || isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const { country_code, country_name, city_name, city_lat, city_lng } = req.body || {};
+  if (!city_name) return res.status(400).json({ error: 'city_name required' });
+  if (!isValidLatLng(city_lat ?? null, city_lng ?? null)) {
+    return res.status(400).json({ error: 'invalid city_lat/city_lng (must be both null or both in range)' });
+  }
+  try {
+    const result = await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE locations SET country_code=?, country_name=?, city_name=?, city_lat=?, city_lng=? WHERE id=?`,
+        [country_code ?? null, country_name ?? null, city_name, city_lat ?? null, city_lng ?? null, id],
+        function(err){ if (err) reject(err); else resolve(this.changes); }
+      );
+    });
+    if (result === 0) return res.status(404).json({ error: 'not found' });
+    res.json({ id, ok: true });
+  } catch (e) { next(e); }
+});
+
+// DELETE /api/locations/:id — refuse if referenced by photos or roll_locations
+router.delete('/:id', async (req, res, next) => {
+  const id = Number(req.params.id);
+  if (!id || isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+  try {
+    const refCount = await getAsync(
+      `SELECT (SELECT COUNT(*) FROM photos WHERE location_id=?) + (SELECT COUNT(*) FROM roll_locations WHERE location_id=?) AS c`,
+      [id, id]
+    );
+    if (refCount && refCount.c > 0) {
+      return res.status(409).json({ error: 'location in use', refCount: refCount.c });
+    }
+    const result = await new Promise((resolve, reject) => {
+      db.run('DELETE FROM locations WHERE id=?', [id], function(err){ if (err) reject(err); else resolve(this.changes); });
+    });
+    if (result === 0) return res.status(404).json({ error: 'not found' });
+    res.json({ id, ok: true });
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

@@ -36,6 +36,8 @@ import EquipmentScreen from './src/screens/library/EquipmentScreen';
 import EquipmentRollsScreen from './src/screens/library/EquipmentRollsScreen';
 import LocationDiagnosticScreen from './src/screens/settings/LocationDiagnosticScreen';
 import AISettingsScreen from './src/screens/settings/AISettingsScreen';
+import LocationPickerScreen from './src/screens/location/LocationPickerScreen';
+import { LocationPickerProvider } from './src/context/LocationPickerContext';
 import { ApiContext } from './src/context/ApiContext';
 import { configureApi, loadAuthToken, setApiOnUnauthorized } from './src/api/client';
 import appTheme, { appDarkTheme } from './src/theme';
@@ -298,6 +300,7 @@ export default function App() {
       <PaperProvider theme={themeToUse as any}>
         <GestureHandlerRootView style={{ flex: 1 }}>
         <NavigationContainer ref={navigationRef} theme={themeToUse as any}>
+          <LocationPickerProvider>
           <RootStack.Navigator
             initialRouteName="Main"
             screenOptions={{
@@ -350,7 +353,13 @@ export default function App() {
               component={PairingScreen}
               options={{ title: '设备配对' }}
             />
+            <RootStack.Screen
+              name="LocationPicker"
+              component={LocationPickerScreen}
+              options={{ presentation: 'fullScreenModal', headerShown: false }}
+            />
           </RootStack.Navigator>
+          </LocationPickerProvider>
           <StatusBar style={darkMode ? 'light' : 'dark'} />
           <ApiErrorSnackbar />
         </NavigationContainer>

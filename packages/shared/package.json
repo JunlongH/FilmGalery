@@ -29,6 +29,16 @@
       "types": "./geocode.d.ts",
       "require": "./geocode.js",
       "default": "./geocode.js"
+    },
+    "./geocoding": {
+      "types": "./geocoding.d.ts",
+      "require": "./geocoding.js",
+      "default": "./geocoding.js"
+    },
+    "./mapUtils": {
+      "types": "./mapUtils.d.ts",
+      "require": "./mapUtils.js",
+      "default": "./mapUtils.js"
     }
   },
   "private": true

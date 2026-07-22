@@ -23,6 +23,7 @@ const { uploadDefault } = require('../config/multer');
 const { moveFileSync } = require('../utils/file-helpers');
 const PreparedStmt = require('../utils/prepared-statements');
 const { generatePositiveThumb, cleanupOldThumb } = require('../services/thumb-service');
+const { isValidLatLng } = require('@filmgallery/shared/mapUtils');
 const renderPool = require('../services/render-worker-pool');
 
 // Film Curve support
@@ -439,6 +440,14 @@ router.put('/:id', async (req, res, next) => {
   // Log only the id + which fields are being updated (key presence, not values).
   const updatedKeys = Object.keys(req.body || {}).filter(k => k !== 'tags');
   console.log(`[PUT] Update photo ${id} fields=[${updatedKeys.join(',')}]`);
+
+  // Validate latitude/longitude range if either is present in the body.
+  // Both null (unset) is allowed; mixed null/non-null or out-of-range is not.
+  if ('latitude' in (req.body || {}) || 'longitude' in (req.body || {})) {
+    if (!isValidLatLng(latitude ?? null, longitude ?? null)) {
+      return res.status(400).json({ error: 'invalid latitude/longitude (must be both null or both in range ±90/±180)' });
+    }
+  }
 
   const updates = [];
   const params = [];

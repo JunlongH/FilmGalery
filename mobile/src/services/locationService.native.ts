@@ -10,8 +10,8 @@
 import { Platform, PermissionsAndroid, Alert, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { wgs84ToGcj02 } from '@filmgallery/shared/coordTransform';
-import { reverseGeocodeBigDataCloud } from '@filmgallery/shared/geocode';
+import { reverseGeocode as sharedReverseGeocode } from '@filmgallery/shared/geocoding';
+import type { GeocodeResult } from '@filmgallery/types';
 
 // ============================================================================
 // Configuration
@@ -52,81 +52,59 @@ const log = (msg: any, level = 'info') => {
 // ============================================================================
 
 /**
- * Reverse geocode using BigDataCloud API (works in China, no API key needed)
+ * Reverse geocode coordinates to an address.
+ *
+ * Delegates to the shared @filmgallery/shared/geocoding module which runs the
+ * full provider chain (AMap → Photon → Nominatim → BigDataCloud). Falls back
+ * to Expo Location.reverseGeocodeAsync (on-device) when the shared chain
+ * returns empty — this covers the offline / no-network case where only the
+ * OS-level geocoder is available.
+ *
  * @param {number} latitude
  * @param {number} longitude
- * @returns {Promise<{country: string, city: string, detail: string}>}
+ * @returns {Promise<GeocodeResult>}
  */
-const reverseGeocode = async (latitude: any, longitude: any) => {
-  // Canonical GeocodeResult (@filmgallery/types). Empty strings on failure;
-  // coordinates are still echoed.
-  const empty = () => ({ displayName: '', country: '', city: '', state: '', latitude, longitude });
+const reverseGeocode = async (latitude: any, longitude: any): Promise<GeocodeResult> => {
+  const empty = (): GeocodeResult => ({
+    displayName: '', country: '', city: '', state: '',
+    latitude, longitude,
+  });
 
   try {
     log(`Reverse geocoding: (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
 
-    // Check if Amap is configured
     const mapProvider = await AsyncStorage.getItem('map_provider');
-    if (mapProvider === 'amap') {
-      const amapKey = await AsyncStorage.getItem('amap_key');
-      if (amapKey) {
-        try {
-          // Input is WGS-84 from GPS → convert to GCJ-02 for Amap API
-          const gcj = wgs84ToGcj02(latitude, longitude);
-          const amapUrl = `https://restapi.amap.com/v3/geocode/regeo?location=${gcj.lng},${gcj.lat}&key=${encodeURIComponent(amapKey)}&output=JSON`;
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
-          const response = await fetch(amapUrl, { signal: controller.signal });
-          clearTimeout(timeoutId);
+    const amapKey = await AsyncStorage.getItem('amap_key');
 
-          if (response.ok) {
-            const data = await response.json();
-            if (data.status === '1' && data.regeocode) {
-              const comp = data.regeocode.addressComponent || {};
-              const geocode = {
-                displayName: data.regeocode.formatted_address || '',
-                country: comp.country || '中国',
-                city: comp.city || comp.district || '',
-                state: comp.province || '',
-                latitude,
-                longitude,
-              };
-              log(`✓ Amap geocoded: ${geocode.city}, ${geocode.country}`);
-              return geocode;
-            }
-          }
-        } catch (amapErr) {
-          log(`Amap reverse geocode failed: ${(amapErr as Error).message}, falling back`, 'warn');
-        }
-      }
+    const result = await sharedReverseGeocode(latitude, longitude, {
+      provider: (mapProvider === 'amap') ? 'amap' : 'osm',
+      amapKey: amapKey || undefined,
+      timeout: 5000,
+    });
+
+    if (result.displayName || result.country || result.city) {
+      log(`✓ Geocoded: ${result.city}, ${result.country}`);
+      return result;
     }
 
-    // Fallback: BigDataCloud via the shared provider (no API key, works in China)
-    try {
-      const geocode = await reverseGeocodeBigDataCloud(latitude, longitude, {
-        timeout: 5000,
-        userAgent: 'FilmGallery/1.0',
-      });
-      log(`✓ Geocoded: ${geocode.city}, ${geocode.country}`);
-      return geocode;
-    } catch (e) {
-      log(`BigDataCloud geocode failed: ${(e as Error).message}, falling back to Expo`, 'warn');
-    }
-
-    // Final fallback: Expo Location (on-device)
+    // Shared chain returned empty — fall back to Expo on-device geocoder.
+    log('Shared reverse geocode returned empty, falling back to Expo', 'warn');
     try {
       const results = await Location.reverseGeocodeAsync({ latitude, longitude });
       const addr: any = results?.[0] || {};
-      return {
-        displayName: `${addr.street || ''} ${addr.name || ''}`.trim(),
-        country: addr.country || '',
-        city: addr.city || addr.subregion || addr.region || '',
-        state: addr.region || '',
-        latitude,
-        longitude,
-      };
+      if (addr.country || addr.city || addr.name) {
+        return {
+          displayName: `${addr.street || ''} ${addr.name || ''}`.trim(),
+          country: addr.country || '',
+          city: addr.city || addr.subregion || addr.region || '',
+          state: addr.region || '',
+          latitude,
+          longitude,
+        };
+      }
+      return empty();
     } catch (fallbackError) {
-      log(`Fallback geocode also failed: ${(fallbackError as Error).message}`, 'warn');
+      log(`Expo geocode also failed: ${(fallbackError as Error).message}`, 'warn');
       return empty();
     }
   } catch (e) {
@@ -489,6 +467,80 @@ export const preloadLocation = async () => {
 };
 
 /**
+ * Get coordinates only (no reverse geocoding).
+ *
+ * Lightweight version of getLocation() for use by LocationPicker's "use my
+ * position" button: returns just { latitude, longitude } without triggering
+ * the geocoding chain. Reuses the same GPS acquisition strategies (cache →
+ * lastKnown → native → watch).
+ *
+ * @returns {Promise<{ latitude: number, longitude: number } | null>}
+ */
+export const getCurrentPosition = async (): Promise<{ latitude: number; longitude: number } | null> => {
+  log('getCurrentPosition() — coords only');
+
+  // Check cache first (coords only, skip geocode)
+  if (cachedLocation && (Date.now() - cachedLocation.timestamp) < CONFIG.CACHE_MAX_AGE) {
+    log('Using cached coords');
+    return { latitude: cachedLocation.coords.latitude, longitude: cachedLocation.coords.longitude };
+  }
+
+  // Check permissions
+  const perms = await checkPermissions();
+  if (!perms.fine) {
+    const granted = await requestPermissions();
+    if (!granted) return null;
+  }
+
+  // Strategy 1: Expo lastKnown (fast)
+  try {
+    const lastKnown = await Location.getLastKnownPositionAsync({
+      maxAge: CONFIG.CACHE_MAX_AGE,
+      requiredAccuracy: 3000,
+    });
+    if (lastKnown?.coords) {
+      log(`✓ lastKnown: (${lastKnown.coords.latitude.toFixed(4)}, ${lastKnown.coords.longitude.toFixed(4)})`);
+      return { latitude: lastKnown.coords.latitude, longitude: lastKnown.coords.longitude };
+    }
+  } catch (e) {
+    log(`lastKnown failed: ${(e as Error).message}`, 'warn');
+  }
+
+  // Strategy 2: Native Android Geolocation
+  try {
+    const coords: any = await getLocationNative();
+    return { latitude: coords.latitude, longitude: coords.longitude };
+  } catch (nativeError) {
+    log(`Native failed: ${(nativeError as Error).message}`, 'error');
+  }
+
+  // Strategy 3: Expo watch (last resort)
+  try {
+    const coords: any = await new Promise<any>((resolve: any, reject: any) => {
+      let subscription: any = null;
+      let resolved = false;
+      const cleanup = () => { if (subscription) { subscription.remove(); subscription = null; } };
+      const tid = setTimeout(() => {
+        if (!resolved) { resolved = true; cleanup(); reject(new Error('WATCH_TIMEOUT')); }
+      }, CONFIG.TIMEOUT);
+      Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Lowest, timeInterval: 500, distanceInterval: 0 },
+        (pos) => {
+          if (!resolved && pos?.coords) {
+            resolved = true; clearTimeout(tid); cleanup(); resolve(pos.coords);
+          }
+        }
+      ).then(sub => { subscription = sub; if (resolved) cleanup(); })
+       .catch(err => { if (!resolved) { resolved = true; reject(err); } });
+    });
+    return { latitude: coords.latitude, longitude: coords.longitude };
+  } catch (watchError) {
+    log(`Watch also failed: ${(watchError as Error).message}`, 'error');
+    return null;
+  }
+};
+
+/**
  * Get cached location
  */
 export const getCachedLocation = () => cachedLocation;
@@ -547,6 +599,7 @@ export default {
   requestPermissions,
   getLocation,
   preloadLocation,
+  getCurrentPosition,
   getCachedLocation,
   clearCache,
   getLog,

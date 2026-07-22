@@ -3,8 +3,14 @@ import LocationInput from './LocationInput.jsx';
 import GeoSearchInput from './GeoSearchInput.jsx';
 import { getMetadataOptions, getApiBase, getTags } from '../api';
 import EquipmentSelector from './EquipmentSelector';
+import { lazyModal } from './common/lazyModal';
+import { reverseGeocode } from '../utils/geocoding';
+import { isValidLatitude, isValidLongitude } from '@filmgallery/shared/mapUtils';
 import '../styles/forms.css';
 import '../styles/sidebar.css';
+
+// Lazy-load LocationPickerModal (Leaflet is heavy — don't include in initial bundle).
+const LocationPickerModal = lazyModal(() => import('./map/LocationPickerModal.jsx'));
 
 // Field definitions for modular saving
 const FIELD_GROUPS = {
@@ -59,6 +65,8 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
   });
   // Available coordinates from LocationInput (for manual fill)
   const [availableCoords, setAvailableCoords] = useState(null);
+  // Location picker modal visibility
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   
   const [scannerEquipId, setScannerEquipId] = useState(base?.scanner_equip_id || roll?.scanner_equip_id || null);
   const [scanResolution, setScanResolution] = useState(base?.scan_resolution || roll?.scan_resolution || '');
@@ -143,6 +151,59 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
   };
 
   const hasAnyDirty = dirtyFields.size > 0;
+
+  // --- Location picker handlers ---
+  const currentLocationValue = location.latitude && location.longitude ? {
+    latitude: location.latitude,
+    longitude: location.longitude,
+    country: location.country_name || '',
+    city: location.city_name || '',
+    detail_location: detailLocation || '',
+  } : null;
+
+  const handlePickConfirm = (value) => {
+    setLocation(prev => ({
+      ...prev,
+      latitude: value.latitude,
+      longitude: value.longitude,
+      country_name: value.country || prev.country_name,
+      city_name: value.city || prev.city_name,
+    }));
+    if (value.detail_location) setDetailLocation(value.detail_location);
+    markDirty(['latitude', 'longitude', 'country', 'city', 'detail_location']);
+    setShowLocationPicker(false);
+  };
+
+  const handleReverseGeocode = async () => {
+    if (!location.latitude || !location.longitude) return;
+    const result = await reverseGeocode(location.latitude, location.longitude);
+    if (result.displayName) {
+      setDetailLocation(result.displayName);
+      markDirty('detail_location');
+    }
+    if (result.country) {
+      setLocation(prev => ({ ...prev, country_name: result.country }));
+      markDirty('country');
+    }
+    if (result.city) {
+      setLocation(prev => ({ ...prev, city_name: result.city }));
+      markDirty('city');
+    }
+  };
+
+  // ±0.0001 nudge (≈11 m, matching the deprecated PhotoMetaEditModal step).
+  const nudgeCoordinate = (field, delta) => {
+    setLocation(prev => {
+      const current = prev[field];
+      if (current == null) return prev;
+      const next = Number((current + delta).toFixed(6));
+      return { ...prev, [field]: next };
+    });
+    markDirty(field);
+  };
+
+  const latInvalid = location.latitude != null && !isValidLatitude(location.latitude);
+  const lngInvalid = location.longitude != null && !isValidLongitude(location.longitude);
 
   // Retrieve current value for a field key
   const getFieldValue = (field) => {
@@ -486,30 +547,93 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
             </button>
           </div>
         )}
+        {/* Pick on map + reverse geocode buttons */}
+        <div className="fg-field" style={{ display: 'flex', gap: 4 }}>
+          <button
+            type="button"
+            className="fg-btn fg-btn-secondary"
+            onClick={() => setShowLocationPicker(true)}
+            style={{ flex: 1 }}
+          >
+            📍 在地图上选择
+          </button>
+          <button
+            type="button"
+            className="fg-btn fg-btn-secondary"
+            onClick={handleReverseGeocode}
+            disabled={!location.latitude || !location.longitude}
+            title="反查地址"
+            style={{ flex: 1 }}
+          >
+            🔄 反查地址
+          </button>
+        </div>
         <div className="fg-sidepanel-groupGrid cols-2">
           <div className="fg-field">
             <label className="fg-label">Latitude</label>
-            <input 
-              className="fg-input" 
-              type="number" 
-              value={location.latitude || ''} 
-              onChange={e=>{
-                setLocation(l=>({ ...l, latitude: parseFloat(e.target.value) }));
-                markDirty('latitude');
-              }} 
-            />
+            <div className="fg-input-group">
+              <button
+                type="button"
+                className="fg-btn fg-btn-sm fg-btn-nudge"
+                onClick={() => nudgeCoordinate('latitude', -0.0001)}
+                disabled={location.latitude == null}
+                title="−0.0001"
+              >
+                −
+              </button>
+              <input
+                className={`fg-input ${latInvalid ? 'fg-input-error' : ''}`}
+                type="number"
+                step="0.0001"
+                value={location.latitude || ''}
+                onChange={e=>{
+                  setLocation(l=>({ ...l, latitude: parseFloat(e.target.value) }));
+                  markDirty('latitude');
+                }}
+              />
+              <button
+                type="button"
+                className="fg-btn fg-btn-sm fg-btn-nudge"
+                onClick={() => nudgeCoordinate('latitude', +0.0001)}
+                disabled={location.latitude == null}
+                title="+0.0001"
+              >
+                +
+              </button>
+            </div>
           </div>
           <div className="fg-field">
             <label className="fg-label">Longitude</label>
-            <input 
-              className="fg-input" 
-              type="number" 
-              value={location.longitude || ''} 
-              onChange={e=>{
-                setLocation(l=>({ ...l, longitude: parseFloat(e.target.value) }));
-                markDirty('longitude');
-              }} 
-            />
+            <div className="fg-input-group">
+              <button
+                type="button"
+                className="fg-btn fg-btn-sm fg-btn-nudge"
+                onClick={() => nudgeCoordinate('longitude', -0.0001)}
+                disabled={location.longitude == null}
+                title="−0.0001"
+              >
+                −
+              </button>
+              <input
+                className={`fg-input ${lngInvalid ? 'fg-input-error' : ''}`}
+                type="number"
+                step="0.0001"
+                value={location.longitude || ''}
+                onChange={e=>{
+                  setLocation(l=>({ ...l, longitude: parseFloat(e.target.value) }));
+                  markDirty('longitude');
+                }}
+              />
+              <button
+                type="button"
+                className="fg-btn fg-btn-sm fg-btn-nudge"
+                onClick={() => nudgeCoordinate('longitude', +0.0001)}
+                disabled={location.longitude == null}
+                title="+0.0001"
+              >
+                +
+              </button>
+            </div>
           </div>
         </div>
         <div className="fg-field">
@@ -743,6 +867,14 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
         </div>
       </section>
     </aside>
+
+    {/* Location picker modal (lazy-loaded) */}
+    <LocationPickerModal
+      isOpen={showLocationPicker}
+      initialValue={currentLocationValue}
+      onConfirm={handlePickConfirm}
+      onCancel={() => setShowLocationPicker(false)}
+    />
     </div>
   );
 }

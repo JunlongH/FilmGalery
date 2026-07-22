@@ -162,3 +162,70 @@ export type ReverseGeocoder = (
   latitude: number,
   longitude: number
 ) => Promise<GeocodeResult>;
+
+/**
+ * Map tile/geocoding provider. Drives both tile URL selection and the
+ * geocoding provider chain. 'osm' uses OSM/Photon/Nominatim (no key);
+ * 'amap' uses Amap REST + Amap tiles (GCJ-02, requires amapKey).
+ */
+export type MapProvider = 'osm' | 'amap';
+
+/**
+ * Shared geocoding configuration. Injected by each platform (desktop reads
+ * localStorage, mobile reads AsyncStorage, server reads env vars) so the
+ * shared geocoding module stays pure and testable.
+ */
+export interface GeocodeConfig {
+  provider: MapProvider;
+  /** AMap Web Service key. Required when provider === 'amap'. */
+  amapKey?: string;
+  /** Optional abort signal for cancellation. */
+  signal?: AbortSignal;
+  /** Abort timeout in ms. Default 5000. */
+  timeout?: number;
+  /** Injected fetch (tests). Defaults to global fetch. */
+  fetch?: typeof fetch;
+}
+
+/**
+ * Options for forward geocoding (address → coordinates).
+ */
+export interface SearchOptions extends GeocodeConfig {
+  /** Max results. Default 5. */
+  limit?: number;
+  /** ISO 3166-1 alpha-2 country code to bias search (Nominatim only). */
+  countryCode?: string;
+}
+
+/**
+ * A single forward-geocode result. Coordinates are always WGS-84 (AMap's
+ * GCJ-02 is converted at the provider boundary inside @filmgallery/shared/geocoding).
+ */
+export interface SearchResult {
+  displayName: string;
+  latitude: number;
+  longitude: number;
+  country: string;
+  city: string;
+  state: string;
+  road?: string;
+  houseNumber?: string;
+}
+
+/**
+ * The value returned by a LocationPicker interaction. Mirrors GeocodeResult
+ * (same field semantics — string fields are '' when unavailable, coordinates
+ * echoed) plus a `detail_location` field for the user-editable formatted
+ * address shown in the picker UI.
+ */
+export interface LocationPickerValue {
+  latitude: number;
+  longitude: number;
+  country: string;
+  city: string;
+  state: string;
+  /** User-editable full formatted address (picker input field). */
+  detail_location: string;
+  /** Display name, same semantics as GeocodeResult.displayName. */
+  displayName: string;
+}

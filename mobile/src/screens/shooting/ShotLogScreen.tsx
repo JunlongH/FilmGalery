@@ -7,6 +7,7 @@ import DatePickerField from '../../components/DatePickerField';
 import DraggableFab from '../../components/DraggableFab';
 import ShotModeModal from '../../components/ShotModeModal';
 import locationService from '../../services/locationService.native';
+import { useLocationPicker } from '../../context/LocationPickerContext';
 import { parseISODate, toISODateString } from '../../utils/date';
 import { getFilmItem, updateFilmItem, getMetadataOptions, getCountries, searchLocations, getFilms } from '../../api/filmItems';
 import { getCamera, getCompatibleLenses, getLenses } from '../../api/equipment';
@@ -86,6 +87,25 @@ export default function ShotLogScreen({ route, navigation }: any) {
   // Geolocation state
   const [newLatitude, setNewLatitude] = useState<any>(null);
   const [newLongitude, setNewLongitude] = useState<any>(null);
+  // Location picker
+  const { pickLocation } = useLocationPicker();
+
+  const handlePickLocation = async () => {
+    const initial = newLatitude && newLongitude ? {
+      latitude: newLatitude, longitude: newLongitude,
+      country: newCountry, city: newCity,
+      state: '', detail_location: newDetail, displayName: newDetail,
+    } : null;
+    const result = await pickLocation(initial);
+    if (result) {
+      setNewLatitude(result.latitude);
+      setNewLongitude(result.longitude);
+      if (result.country) setNewCountry(result.country);
+      if (result.city) setNewCity(result.city);
+      if (result.detail_location) setNewDetail(result.detail_location);
+    }
+  };
+
   // Preloaded location for ShotModeModal - starts fetching when screen opens
   const [preloadedLocation, setPreloadedLocation] = useState<any>(null);
   // Fixed lens camera info
@@ -855,6 +875,16 @@ export default function ShotLogScreen({ route, navigation }: any) {
           style={[styles.input, { marginBottom: spacing.xs }]}
           dense
         />
+
+        <Button
+          mode="outlined"
+          onPress={handlePickLocation}
+          icon="map-marker"
+          style={{ marginBottom: spacing.xs }}
+          compact
+        >
+          地图选择
+        </Button>
         
         <TextInput
           label={t('shot.caption')}

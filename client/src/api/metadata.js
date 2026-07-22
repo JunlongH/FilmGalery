@@ -18,10 +18,15 @@ export async function getLocations({ hasRecords = true, country, query } = {}) {
 
 /**
  * Search locations
+ *
+ * NOTE: previously called /api/locations/search which does not exist on the
+ * server (the server matches /:id for any single segment, returning 400 for
+ * non-numeric ids). Redirected to /api/locations with the same query params
+ * (country, query, hasRecords, etc.) which the server's GET / handler accepts.
  */
 export async function searchLocations(params = {}) {
   const qs = buildQueryString(params);
-  return jsonFetch(`/api/locations/search${qs}`);
+  return jsonFetch(`/api/locations${qs}`);
 }
 
 /**

@@ -24,6 +24,7 @@ export type RootStackParamList = {
   ShotLog: { itemId?: number | string; filmName?: string; autoOpenShotMode?: boolean } | undefined;
   EquipmentRolls: { type?: string; id?: number | string; name?: string } | undefined;
   LocationDiagnostic: undefined;
+  LocationPicker: { initial?: import('@filmgallery/types').LocationPickerValue | null } | undefined;
   Favorites: undefined;
   Collections: undefined;
   Films: undefined;

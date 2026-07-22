@@ -3,6 +3,10 @@ import { updateFilmItem, exportShotLogsCsv, getCountries, searchLocations, getCo
 import { getCityCoordinates } from '../utils/geocoding';
 import GeoSearchInput from './GeoSearchInput.jsx';
 import useIsDarkMode from '../hooks/useIsDarkMode';
+import { lazyModal } from './common/lazyModal';
+
+// Lazy-load LocationPickerModal (Leaflet is heavy).
+const LocationPickerModal = lazyModal(() => import('./map/LocationPickerModal.jsx'));
 
 const FALLBACK_LENSES = [
   '50mm f/1.8',
@@ -14,10 +18,24 @@ const FALLBACK_LENSES = [
 ];
 
 // Entry Edit Modal Component
-function EntryEditModal({ entry, index, onSave, onClose, countries, citiesByCountry, lensOptions, nativeLenses, adaptedLenses, fixedLensInfo, cameraMount }) {
+function EntryEditModal({ entry, index, onSave, onClose, countries, citiesByCountry, lensOptions, nativeLenses, adaptedLenses, fixedLensInfo, cameraMount, onPickLocation, pickerResult }) {
   const [editData, setEditData] = useState({ ...entry });
   const isDark = useIsDarkMode();
-  
+
+  // When the parent's LocationPicker returns a result (pickerTarget='editModal'),
+  // merge it into the form. Only fires when pickerResult changes.
+  useEffect(() => {
+    if (!pickerResult) return;
+    setEditData(prev => ({
+      ...prev,
+      latitude: pickerResult.latitude,
+      longitude: pickerResult.longitude,
+      country: pickerResult.country || prev.country,
+      city: pickerResult.city || prev.city,
+      detail_location: pickerResult.detail_location || prev.detail_location,
+    }));
+  }, [pickerResult]);
+
   const handleGeoSelect = (result) => {
     setEditData(prev => ({
       ...prev,
@@ -193,6 +211,14 @@ function EntryEditModal({ entry, index, onSave, onClose, countries, citiesByCoun
               onSelect={handleGeoSelect}
               placeholder="Search address to get coordinates..."
             />
+            <button
+              type="button"
+              className="fg-btn fg-btn-secondary"
+              onClick={() => onPickLocation && onPickLocation(editData)}
+              style={{ marginTop: 8, width: '100%' }}
+            >
+              📍 在地图上选择
+            </button>
           </div>
           
           {/* Row 5: Latitude, Longitude */}
@@ -229,19 +255,40 @@ function EntryEditModal({ entry, index, onSave, onClose, countries, citiesByCoun
           
           {/* Coordinates Preview */}
           {editData.latitude && editData.longitude && (
-            <div style={{ 
-              padding: 12, 
-              background: isDark ? '#064e3b' : '#f0fdf4', 
-              borderRadius: 8, 
+            <div style={{
+              padding: 12,
+              background: isDark ? '#064e3b' : '#f0fdf4',
+              borderRadius: 8,
               marginBottom: 20,
               display: 'flex',
               alignItems: 'center',
               gap: 8
             }}>
               <span style={{ fontSize: 18 }}>📍</span>
-              <span style={{ color: isDark ? '#d1fae5' : '#166534', fontSize: 14 }}>
+              <span style={{ color: isDark ? '#d1fae5' : '#166534', fontSize: 14, flex: 1 }}>
                 {editData.latitude.toFixed(5)}, {editData.longitude.toFixed(5)}
               </span>
+              <button
+                type="button"
+                className="fg-btn fg-btn-sm fg-btn-secondary"
+                onClick={async () => {
+                  const { reverseGeocode } = await import('../utils/geocoding');
+                  const result = await reverseGeocode(editData.latitude, editData.longitude);
+                  if (result.displayName) {
+                    setEditData(prev => ({ ...prev, detail_location: result.displayName }));
+                  }
+                  if (result.country) {
+                    setEditData(prev => ({ ...prev, country: result.country }));
+                  }
+                  if (result.city) {
+                    setEditData(prev => ({ ...prev, city: result.city }));
+                  }
+                }}
+                style={{ fontSize: 11, padding: '4px 8px' }}
+                title="反查地址"
+              >
+                🔄
+              </button>
             </div>
           )}
           
@@ -310,7 +357,11 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
   // Geolocation state
   const [newLatitude, setNewLatitude] = useState(null);
   const [newLongitude, setNewLongitude] = useState(null);
-  
+
+  // Location picker state — shared single instance for Quick-Add + EntryEditModal
+  const [pickerTarget, setPickerTarget] = useState(null); // 'quickAdd' | 'editModal' | null
+  const [editModalPickerResult, setEditModalPickerResult] = useState(null);
+
   // Edit Modal state
   const [editingEntry, setEditingEntry] = useState(null); // { index, entry }
   
@@ -321,6 +372,9 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
   const fileInputRef = useRef(null);
   // Ref to track item object without triggering effect re-runs
   const itemRef = useRef(item);
+  // Stash EntryEditModal's current editData when opening the picker so we can
+  // compute the picker's initialValue. Cleared on confirm/cancel.
+  const editModalDataRef = useRef(null);
   itemRef.current = item;
 
   // CSV Template header
@@ -758,6 +812,45 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
     if (result.detail) setNewDetail(result.detail);
   };
 
+  // --- Location picker handlers (shared by Quick-Add + EntryEditModal) ---
+  const openPickerForQuickAdd = () => setPickerTarget('quickAdd');
+  const openPickerForEditModal = (editData) => {
+    // Stash the current editData so we can compute the initialValue below.
+    editModalDataRef.current = editData;
+    setPickerTarget('editModal');
+  };
+
+  const pickerInitialValue = (() => {
+    if (pickerTarget === 'quickAdd') {
+      return newLatitude && newLongitude ? {
+        latitude: newLatitude, longitude: newLongitude,
+        country: newCountry, city: newCity, detail_location: newDetail,
+      } : null;
+    }
+    if (pickerTarget === 'editModal' && editModalDataRef.current) {
+      const d = editModalDataRef.current;
+      return d.latitude && d.longitude ? {
+        latitude: d.latitude, longitude: d.longitude,
+        country: d.country, city: d.city, detail_location: d.detail_location,
+      } : null;
+    }
+    return null;
+  })();
+
+  const handlePickConfirm = (value) => {
+    if (pickerTarget === 'quickAdd') {
+      setNewLatitude(value.latitude);
+      setNewLongitude(value.longitude);
+      if (value.country) setNewCountry(value.country);
+      if (value.city) setNewCity(value.city);
+      if (value.detail_location) setNewDetail(value.detail_location);
+    } else if (pickerTarget === 'editModal') {
+      setEditModalPickerResult(value);
+    }
+    setPickerTarget(null);
+    editModalDataRef.current = null;
+  };
+
   // Auto-fill coordinates from country/city when no specific address
   const handleAutoFillCoordinates = async () => {
     if (newLatitude && newLongitude) return; // Already have coordinates
@@ -1185,6 +1278,14 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
                   placeholder="Search address or type detail"
                   style={{ background: 'transparent' }}
                 />
+                <button
+                  type="button"
+                  className="fg-btn fg-btn-secondary"
+                  onClick={openPickerForQuickAdd}
+                  style={{ marginTop: 4, width: '100%', height: 32, fontSize: 12 }}
+                >
+                  📍 在地图上选择
+                </button>
               </div>
             </div>
             
@@ -1661,8 +1762,18 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
           adaptedLenses={adaptedLenses}
           fixedLensInfo={fixedLensInfo}
           cameraMount={cameraMount}
+          onPickLocation={openPickerForEditModal}
+          pickerResult={editModalPickerResult}
         />
       )}
+
+      {/* Location picker modal — shared by Quick-Add + EntryEditModal */}
+      <LocationPickerModal
+        isOpen={!!pickerTarget}
+        initialValue={pickerInitialValue}
+        onConfirm={handlePickConfirm}
+        onCancel={() => { setPickerTarget(null); editModalDataRef.current = null; }}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 const db = require('../../db');
 const { runAsync, allAsync } = require('../../utils/db-helpers');
 const PreparedStmt = require('../../utils/prepared-statements');
+const { isValidLatLng } = require('@filmgallery/shared/mapUtils');
 
 // Central place for allowed status transitions
 const VALID_STATUSES = ['in_stock', 'loaded', 'shot', 'sent_to_lab', 'developed', 'archived'];
@@ -160,6 +161,21 @@ async function updateFilmItem(id, patch) {
   for (const key of allowed) {
     if (Object.prototype.hasOwnProperty.call(patch, key)) {
       if (key === 'status' && patch[key]) assertStatus(patch[key]);
+      if (key === 'shot_logs' && patch[key] != null && patch[key] !== '') {
+        // shot_logs is a JSON string; parse and validate each entry.
+        try {
+          const logs = JSON.parse(patch[key]);
+          if (!Array.isArray(logs)) throw new Error('shot_logs must be an array');
+          for (const [i, entry] of logs.entries()) {
+            if (!entry.date) throw new Error(`entry[${i}]: date required`);
+            if (!isValidLatLng(entry.latitude ?? null, entry.longitude ?? null)) {
+              throw new Error(`entry[${i}]: invalid latitude/longitude (must be both null or both in range ±90/±180)`);
+            }
+          }
+        } catch (e) {
+          throw new Error(`invalid shot_logs: ${e.message}`);
+        }
+      }
       sets.push(`${key} = ?`);
       params.push(patch[key]);
     }

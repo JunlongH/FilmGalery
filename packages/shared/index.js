@@ -32,6 +32,8 @@ const coordTransform = require('./coordTransform');
 const portDiscovery = require('./portDiscovery');
 const serverCapabilities = require('./serverCapabilities');
 const geocode = require('./geocode');
+const geocoding = require('./geocoding');
+const mapUtils = require('./mapUtils');
 
 // GLSL 着色器模块 (Phase 3)
 const shaders = require('./shaders');
@@ -452,4 +454,46 @@ module.exports = {
   reverseGeocodeBigDataCloud: geocode.reverseGeocodeBigDataCloud,
   normalizeBigDataCloud: geocode.normalizeBigDataCloud,
   BDC_BASE: geocode.BDC_BASE,
+
+  // ============================================================================
+  // 统一 geocoding（正向 + 逆向，provider 链）
+  // ============================================================================
+
+  /** 统一正向地理编码（地址 → 坐标） */
+  searchAddress: geocoding.searchAddress,
+  /** 统一逆向地理编码（坐标 → 地址），永不抛错 */
+  reverseGeocode: geocoding.reverseGeocode,
+  /** 国家+城市 → 坐标 */
+  getCityCoordinates: geocoding.getCityCoordinates,
+  // 各 provider（导出便于单测）
+  searchWithAmap: geocoding.searchWithAmap,
+  searchWithPhoton: geocoding.searchWithPhoton,
+  searchWithNominatim: geocoding.searchWithNominatim,
+  reverseWithAmap: geocoding.reverseWithAmap,
+  reverseWithPhoton: geocoding.reverseWithPhoton,
+  reverseWithNominatim: geocoding.reverseWithNominatim,
+  reverseWithBigDataCloud: geocoding.reverseWithBigDataCloud,
+
+  // ============================================================================
+  // 地图工具（瓦片配置、聚类、校验、格式化）
+  // ============================================================================
+
+  /** 支持的 map provider 列表 */
+  MAP_PROVIDERS: mapUtils.MAP_PROVIDERS,
+  /** 瓦片 URL 配置（provider → style → url） */
+  TILE_LAYERS: mapUtils.TILE_LAYERS,
+  /** 解析瓦片 URL */
+  buildTileLayerUrl: mapUtils.buildTileLayerUrl,
+  /** 从 latitudeDelta 推导聚类半径 */
+  clusterRadiusFromDelta: mapUtils.clusterRadiusFromDelta,
+  /** O(n) 网格聚类 */
+  gridCluster: mapUtils.gridCluster,
+  /** lat 范围校验 (-90..90) */
+  isValidLatitude: mapUtils.isValidLatitude,
+  /** lng 范围校验 (-180..180) */
+  isValidLongitude: mapUtils.isValidLongitude,
+  /** lat/lng 成对校验（同时为 null 或同时有效） */
+  isValidLatLng: mapUtils.isValidLatLng,
+  /** 坐标格式化（decimal / dms） */
+  formatLatLng: mapUtils.formatLatLng,
 };
