@@ -32,7 +32,7 @@ import { applyFilmCurve, applyFilmCurveFloat, FILM_CURVE_PROFILES } from '../fil
 import { applyHSL, DEFAULT_HSL_PARAMS, isDefaultHSL } from '../filmLabHSL.mjs';
 import { applySplitTone, DEFAULT_SPLIT_TONE_PARAMS, isDefaultSplitTone, prepareSplitTone, applySplitToneFast } from '../filmLabSplitTone.mjs';
 import { applySaturationFloat, applySaturation, isDefaultSaturation } from '../filmLabSaturation.mjs';
-import MathOps from './math.mjs';
+import MathOps from './math/index.mjs';
 
 // ============================================================================
 // 默认值常量

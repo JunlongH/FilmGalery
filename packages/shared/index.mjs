@@ -18,7 +18,7 @@ import filmCurve from './filmLabCurve.mjs';
 import hsl from './filmLabHSL.mjs';
 import exportParams from './filmLabExport.mjs';
 import splitTone from './filmLabSplitTone.mjs';
-import render from './render.mjs';
+import render from './render/index.mjs';
 import helpers from './filmLabHelpers.mjs';
 import sourcePathResolver from './sourcePathResolver.mjs';
 import rawUtils from './rawUtils.mjs';
@@ -36,7 +36,7 @@ import geocoding from './geocoding.mjs';
 import mapUtils from './mapUtils.mjs';
 
 // GLSL 着色器模块 (Phase 3)
-import shaders from './shaders.mjs';
+import shaders from './shaders/index.mjs';
 
 // 统一导出
 const _sharedExports = {
