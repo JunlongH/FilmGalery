@@ -109,7 +109,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@filmgallery/shared': path.resolve(__dirname, '../packages/shared'),
+      '@filmgallery/shared': path.resolve(__dirname, '../packages/shared/index.mjs'),
       '@ui': path.resolve(__dirname, 'src/components/ui'),
       '@providers': path.resolve(__dirname, 'src/providers'),
     },
