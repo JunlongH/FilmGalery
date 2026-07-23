@@ -48,9 +48,10 @@ export const searchAddress = async (query, options = {}) => {
 };
 
 /**
- * Get coordinates for a country + city combination.
- * @param {string} country
- * @param {string} city
+ * Get coordinates for a country + city combination. Either may be null/empty;
+ * the search runs on whichever parts are present.
+ * @param {string|null} country
+ * @param {string|null} city
  * @returns {Promise<{latitude: number, longitude: number} | null>}
  */
 export const getCityCoordinates = async (country, city) => {

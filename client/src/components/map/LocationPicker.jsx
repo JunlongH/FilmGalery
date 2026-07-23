@@ -98,6 +98,11 @@ function MapPanner({ targetLatLng, provider }) {
  * @param {'light'|'dark'|'satellite'} [props.mapStyle='light']
  * @param {(lat: number, lng: number) => void} [props.onLatLngChange]
  * @param {(result: import('@filmgallery/types').GeocodeResult) => void} [props.onReverseGeocode]
+ * @param {{lat: number, lng: number, zoom?: number, nonce: number}|null} [props.centerOn]
+ *   Imperatively pan the map + marker to a WGS-84 coordinate (e.g. city-jump
+ *   or GPS). The nonce makes each request distinct so re-sending the same
+ *   coordinates still re-centers. initialLatLng is captured once at mount
+ *   and cannot drive subsequent moves; centerOn is the external channel.
  * @param {string} [props.className]
  */
 export default function LocationPicker({
@@ -107,6 +112,7 @@ export default function LocationPicker({
   mapStyle = 'light',
   onLatLngChange,
   onReverseGeocode,
+  centerOn = null,
   className = '',
 }) {
   const [markerPos, setMarkerPos] = useState(initialLatLng); // WGS-84 [lat, lng] | null
@@ -129,6 +135,18 @@ export default function LocationPicker({
       }
     }, 300);
   }, [provider, amapKey, onLatLngChange, onReverseGeocode]);
+
+  // External pan requests (city-jump / GPS). Drives the same panTarget that
+  // internal clicks use, so MapPanner (WGS→GCJ for amap) handles the move
+  // and the marker follows. The modal owns the lat/lng fields, so this does
+  // NOT call onLatLngChange (the caller already set them) — it only pans the
+  // map and drops the marker.
+  useEffect(() => {
+    if (!centerOn) return;
+    setMarkerPos([centerOn.lat, centerOn.lng]);
+    setPanTarget([centerOn.lat, centerOn.lng]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centerOn]);
 
   // Cleanup debounce timer on unmount.
   useEffect(() => {

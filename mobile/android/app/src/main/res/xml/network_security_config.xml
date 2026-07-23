@@ -1,21 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Cleartext permitted — required while the server runs HTTP (no TLS deployed
-  yet). When Phase 2B #7 HTTPS is fully rolled out (server-side TLS + cert),
-  this will be narrowed to domain-config for the server domain only.
-  Tracking: docs/phase2-roadmap/phase-2b-security.md §「移动端配置收窄」.
-
-  <certificates src="user" />: the desktop server uses a SELF-SIGNED cert
-  (SAN covers the host's IPs; extra IPs via FG_TLS_EXTRA_SAN). Single-user
-  deployments install that cert.pem on the phone as a user CA once
-  (Settings → Security → Install a certificate → CA certificate).
-  Android 7+ does not trust user CAs by default — this entry opts in.
--->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
-            <certificates src="user" />
         </trust-anchors>
     </base-config>
 </network-security-config>

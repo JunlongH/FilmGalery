@@ -427,7 +427,10 @@ async function reverseGeocode(latitude, longitude, opts = {}) {
  */
 async function getCityCoordinates(country, city, opts = {}) {
   if (!country && !city) return null;
-  const query = city ? `${city}, ${country}` : country;
+  // Build the query from whichever parts are present. Previously this built
+  // "Paris, null" (literal) when country was null — a bug that broke city
+  // jumps without a known country.
+  const query = [city, country].filter(Boolean).join(', ');
   const results = await searchAddress(query, { ...opts, limit: 1 });
   if (results.length > 0) {
     return { latitude: results[0].latitude, longitude: results[0].longitude };

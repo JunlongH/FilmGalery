@@ -82,19 +82,18 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
-    ndkVersion "27.3.13750724"
+    ndkVersion rootProject.ext.ndkVersion
 
-    buildToolsVersion "35.0.0"
-    compileSdk 36
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
 
     namespace 'com.filmgallery.app'
     defaultConfig {
         applicationId 'com.filmgallery.app'
-        minSdkVersion 26
-        targetSdkVersion 34
-        versionCode 13
-        versionName "3.5.2"
-        ndk { abiFilters 'arm64-v8a', 'x86_64' }
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 14
+        versionName "3.5.4"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

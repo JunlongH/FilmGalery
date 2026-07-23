@@ -25,8 +25,8 @@ export function reverseGeocode(
 ): Promise<GeocodeResult>;
 
 export function getCityCoordinates(
-  country: string,
-  city: string,
+  country: string | null,
+  city: string | null,
   opts?: GeocodeConfig
 ): Promise<{ latitude: number; longitude: number } | null>;
 

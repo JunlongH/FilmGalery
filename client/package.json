@@ -1,6 +1,6 @@
 {
   "name": "film-manager-client",
-  "version": "3.5.2",
+  "version": "3.5.4",
   "private": true,
   "engines": {
     "node": ">=22.12.0"

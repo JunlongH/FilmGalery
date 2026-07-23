@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { updateFilmItem, exportShotLogsCsv, getCountries, searchLocations, getCompatibleLenses, getLenses } from '../api';
 import { getCityCoordinates } from '../utils/geocoding';
 import GeoSearchInput from './GeoSearchInput.jsx';
@@ -820,7 +820,11 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
     setPickerTarget('editModal');
   };
 
-  const pickerInitialValue = (() => {
+  // Memoized: the IIFE previously built a NEW object on every render, which
+  // made LocationPickerModal's isOpen/initialValue reset-effect re-fire on
+  // every parent re-render (wiping the user's in-progress selection and
+  // churning re-renders). Memoize on the values that actually define it.
+  const pickerInitialValue = useMemo(() => {
     if (pickerTarget === 'quickAdd') {
       return newLatitude && newLongitude ? {
         latitude: newLatitude, longitude: newLongitude,
@@ -835,7 +839,7 @@ export default function ShotLogModal({ item, isOpen, onClose, onUpdated }) {
       } : null;
     }
     return null;
-  })();
+  }, [pickerTarget, newLatitude, newLongitude, newCountry, newCity, newDetail]);
 
   const handlePickConfirm = (value) => {
     if (pickerTarget === 'quickAdd') {

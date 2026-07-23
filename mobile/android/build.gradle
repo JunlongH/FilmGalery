@@ -22,9 +22,3 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
-
-// Override NDK version to match the locally-installed r27d (27.3.13750724).
-// The expo plugin defaults to r27c (27.1.12297006) which is unreachable from
-// this network; r27d was installed manually. Setting ext.ndkVersion after the
-// plugin apply overrides the default.
-ext.ndkVersion = "27.3.13750724"
