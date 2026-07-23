@@ -190,7 +190,7 @@ router.get('/conversations', async (req, res, next) => {
 router.get('/conversations/:id', async (req, res, next) => {
   try {
     const messages = await allAsync(
-      `SELECT id, role, content, model, image_refs, created_at
+      `SELECT id, role, content, model, image_refs, tool_calls, tool_call_id, created_at
        FROM ai_messages WHERE conversation_id = ? ORDER BY created_at ASC`,
       [req.params.id]
     );

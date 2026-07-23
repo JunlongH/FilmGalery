@@ -25,7 +25,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { reverseGeocode } from '@filmgallery/shared/geocoding';
 import { wgs84ToGcj02, gcj02ToWgs84 } from '@filmgallery/shared/coordTransform';
-import { buildTileLayerUrl } from '@filmgallery/shared/mapUtils';
+import { getTileLayerConfig } from '@filmgallery/shared/mapUtils';
 
 // Pin icon — distinct from photo markers so the picked location is obvious.
 const pinIcon = L.divIcon({
@@ -145,7 +145,10 @@ export default function LocationPicker({
     displayMarkerPos = [c.lat, c.lng];
   }
 
-  const tileUrl = buildTileLayerUrl(provider, mapStyle);
+  // Q4 fix: use getTileLayerConfig (not buildTileLayerUrl) to get subdomains.
+  // AMap tiles use {s} sharding with numeric subdomains ['1','2','3','4'].
+  // Without passing subdomains, Leaflet defaults to 'abc' → DNS failure.
+  const tileConfig = getTileLayerConfig(provider, mapStyle);
   const center = displayMarkerPos || [20, 0];
   const zoom = markerPos ? 13 : 2;
 
@@ -156,7 +159,12 @@ export default function LocationPicker({
       className={className}
       style={{ height: '100%', width: '100%' }}
     >
-      <TileLayer url={tileUrl} />
+      <TileLayer
+        url={tileConfig.url}
+        subdomains={tileConfig.subdomains || ['a', 'b', 'c']}
+        maxZoom={tileConfig.maxZoom || 19}
+        className={tileConfig.className}
+      />
       <MapClickHandler onPick={handlePick} provider={provider} />
       <MapResizer />
       <MapPanner targetLatLng={panTarget} provider={provider} />

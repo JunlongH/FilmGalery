@@ -42,6 +42,64 @@ When you encounter a task that matches one of the specialized subagents below, *
 ### `scout` — External Dependency Research (built-in)
 - **When**: Inspecting library source in opencode's managed cache (cloned repos), cross-referencing local code against upstream.
 
+## FilmGallery Domain Subagents
+
+Project-specific subagents in `.opencode/agents/`. Delegate via the Task tool when a task matches.
+
+### `api-designer` — Full-Stack API (DeepSeek V4 Pro)
+- **When**: Designing/implementing API endpoints, ensuring server route + client module + React Query hook consistency.
+- **Triggers**: "new API endpoint", "add a route for X", "wire up the client for X"
+- **Permissions**: read, edit, bash (test/build/git), no task
+
+### `codebase-explorer` — Read-Only Architecture (DeepSeek V4 Flash)
+- **When**: FilmGallery-domain architecture questions, tracing data flows end-to-end. Read-only. (Built-in `explore` is the generic equivalent; this one carries monorepo domain knowledge.)
+- **Triggers**: "how does API_BASE flow", "trace the render pipeline", "where is X implemented"
+- **Permissions**: read-only
+
+### `devops` — Docker & Release (DeepSeek V4 Pro)
+- **When**: Docker builds, NAS deployment, multi-platform builds, release packaging, SERVER_MODE config.
+- **Triggers**: "build the docker image", "NAS setup", "release package", "SERVER_MODE"
+- **Permissions**: read, edit, bash (docker/npm/git)
+
+### `mobile-dev` — React Native Mobile (DeepSeek V4 Pro)
+- **When**: Mobile screens (TypeScript), Expo config, navigation, styling, vision camera, API client integration.
+- **Triggers**: "new mobile screen", "mobile navigation", "StyleSheet", "ApiContext"
+- **Permissions**: read, edit, bash (mobile npm/expo/git)
+
+### `rendering-expert` — Render Pipeline (DeepSeek V4 Pro)
+- **When**: Film rendering pipeline, image processing, color science, GLSL shaders, Float32, CPU/GPU consistency.
+- **Triggers**: "rendering bug", "color shift", "Float32 pipeline", "shader mismatch"
+- **Permissions**: read, edit, bash (npm test/git)
+
+## Domain Skills
+
+On-demand contextual knowledge loaded into the current session when a task matches. Located in `.opencode/skills/`.
+
+| Skill | Covers | Trigger area |
+|-------|--------|--------------|
+| `client-dev` | React desktop: HeroUI, Tailwind, React Query, jsonFetch | `client/src/**` |
+| `server-dev` | Express routes/services, PreparedStmt, error handling | `server/**` |
+| `database-dev` | SQLite, WAL, migrations, prepared statements | `server/db.js`, migrations |
+| `mobile-dev-domain` | Expo + TypeScript, StyleSheet, Paper, api-client, navigation | `mobile/**` |
+| `rendering-dev` | RenderCore.processPixelFloat, Float32 pipeline, GLSL, filmLab modules | `packages/shared/**` |
+| `electron-dev` | Main/preload, IPC, window.__electron, electron-builder | `electron-*.js` |
+| `docker-deploy` | Dockerfile, compose, NAS, SERVER_MODE, buildx | `docker/**` |
+| `watch-dev` | Wear OS, TypeScript, RN primitives (no Paper), StyleSheet, compact UI | `watch-app/**` |
+
+Plus the environment playbooks: `browser-e2e-testing`, `desktop-ci-build`, `mobile-android-build`.
+
+## Slash Commands
+
+Reusable workflows in `.opencode/commands/`. Invoke as `/command <args>`.
+
+| Command | Routes to | Does |
+|---------|-----------|------|
+| `/new-api-endpoint` | `api-designer` | Full-stack endpoint: route + service + client module + React Query hook |
+| `/new-component` | primary | New desktop React component (HeroUI + Tailwind + React Query) |
+| `/new-migration` | primary | New SQLite schema migration (idempotent, indexed, snake_case) |
+| `/new-mobile-screen` | `mobile-dev` | New React Native TypeScript screen (StyleSheet + Paper + navigation) |
+| `/fix-rendering` | `rendering-expert` | Diagnose/fix render pipeline issues (Float32, shaders, consistency) |
+
 ## Custom Tools
 
 ### `generate_image`
@@ -60,10 +118,16 @@ Task fits
 ├── "generate / create / draw an image / poster / icon" → @imagine
 ├── "review this code / diff / PR for bugs"             → @review
 ├── "rename X / run one command / summarize file / commit message" → @quick
-├── "explore codebase / find how X works"               → @explore
+├── "explore codebase / find how X works"               → @explore (or @codebase-explorer for FG-domain)
 ├── "look up upstream library source"                   → @scout
+├── "new API endpoint / full-stack route + client"      → @api-designer  (or `/new-api-endpoint`)
+├── "docker / NAS / release package / SERVER_MODE"      → @devops
+├── "new mobile screen / Expo / TypeScript screen"     → @mobile-dev    (or `/new-mobile-screen`)
+├── "rendering bug / Float32 / shader / color shift"    → @rendering-expert (or `/fix-rendering`)
 ├── "implement feature / debug complex issue / refactor" → @general (or handle yourself)
 ```
+
+Domain conventions for the area you're editing are auto-loaded via the skills above — no need to memorize them.
 
 ## Project Conventions
 

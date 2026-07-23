@@ -15,8 +15,9 @@
  */
 
 import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
-import { View, TextInput, StyleSheet, SafeAreaView, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
-import { IconButton, Text, Button, Card, ActivityIndicator } from 'react-native-paper';
+import { View, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { IconButton, Text, Button, Card, ActivityIndicator, TextInput, useTheme } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import LeafletMap from '../../components/map/LeafletMap';
 import { useLocationPicker } from '../../context/LocationPickerContext';
@@ -24,12 +25,17 @@ import { ApiContext } from '../../context/ApiContext';
 import { searchAddress, reverseGeocode } from '@filmgallery/shared/geocoding';
 import { isValidLatitude, isValidLongitude } from '@filmgallery/shared/mapUtils';
 import { getCurrentPosition } from '../../services/locationService.native';
-import type { LocationPickerValue, GeocodeResult } from '@filmgallery/types';
+import type { LocationPickerValue } from '@filmgallery/types';
 
 export default function LocationPickerScreen() {
   const navigation = useNavigation();
   const { pending, resolvePick } = useLocationPicker();
   const { mapProvider, amapKey }: any = useContext(ApiContext);
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  // Guards async GPS work from touching state after unmount (back button
+  // during a slow getCurrentPosition). Checked in locateAndCenter.
+  const mountedRef = useRef(true);
 
   const initial = pending?.initial ?? null;
   const [lat, setLat] = useState<number | null>(initial?.latitude ?? null);
@@ -40,6 +46,10 @@ export default function LocationPickerScreen() {
   const [reverseGeocoding, setReverseGeocoding] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  // Imperative "pan the map here" channel for the GPS button / auto-locate.
+  // initialLatLng is captured once by LeafletMap (to avoid WebView reloads
+  // on every tap), so subsequent moves go through centerOn's nonce.
+  const [centerOn, setCenterOn] = useState<{ lat: number; lng: number; zoom?: number; nonce: number } | null>(null);
   // Prevent beforeRemove + handleCancel from calling resolvePick twice. (W9)
   const resolvedRef = useRef(false);
 
@@ -53,11 +63,15 @@ export default function LocationPickerScreen() {
           provider: mapProvider,
           amapKey,
         });
+        // Guard the async tail: if the screen unmounted while geocoding
+        // (back button during a slow GPS resolve), drop the result instead
+        // of setState-ing on an unmounted component.
+        if (!mountedRef.current) return;
         if (result.displayName) setDetail(result.displayName);
         if (result.country) setCountry(result.country);
         if (result.city) setCity(result.city);
       } finally {
-        setReverseGeocoding(false);
+        if (mountedRef.current) setReverseGeocoding(false);
       }
     },
     [mapProvider, amapKey]
@@ -89,15 +103,33 @@ export default function LocationPickerScreen() {
     setSearchResults([]);
   };
 
-  const handleUseMyLocation = async () => {
+  // Acquire the current GPS position, persist it as the picked coordinate,
+  // and imperatively pan the Leaflet map via `centerOn`. Returns success so
+  // callers (button / auto-locate) can branch. Guards against unmounted
+  // setState via mountedRef.
+  const locateAndCenter = useCallback(async (): Promise<boolean> => {
     const pos = await getCurrentPosition();
-    if (pos) {
-      handlePick(pos.latitude, pos.longitude);
-    } else {
-      // At least log the failure; better UX would be a toast. (W5)
-      console.warn('LocationPicker: getCurrentPosition returned null (permission denied or GPS off)');
+    if (!mountedRef.current || !pos) {
+      if (!pos) console.warn('LocationPicker: getCurrentPosition returned null (permission denied or GPS off)');
+      return false;
     }
-  };
+    handlePick(pos.latitude, pos.longitude);
+    setCenterOn({ lat: pos.latitude, lng: pos.longitude, zoom: 15, nonce: Date.now() });
+    return true;
+  }, [handlePick]);
+
+  // Auto-locate on entry when there is no initial coordinate (the "new
+  // location" flow): the map otherwise defaults to Shanghai with no marker.
+  // Runs once on mount; mountedRef prevents late state updates if the user
+  // navigates away before GPS resolves.
+  useEffect(() => {
+    mountedRef.current = true;
+    if (!initial) {
+      locateAndCenter();
+    }
+    return () => { mountedRef.current = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Guard: resolvePick must only fire once per screen instance.
   const doResolve = useCallback(
@@ -145,7 +177,7 @@ export default function LocationPickerScreen() {
   const mapInitial = lat != null && lng != null ? ([lat, lng] as [number, number]) : null;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <IconButton icon="arrow-left" onPress={handleCancel} />
@@ -160,14 +192,16 @@ export default function LocationPickerScreen() {
       {/* Search bar */}
       <View style={styles.searchBar}>
         <TextInput
-          style={styles.searchInput}
+          mode="outlined"
+          dense
           placeholder="搜索地址"
           value={searchText}
           onChangeText={setSearchText}
           onSubmitEditing={handleSearch}
+          style={styles.searchInput}
         />
         <IconButton icon="magnify" onPress={handleSearch} />
-        <IconButton icon="crosshairs-gps" onPress={handleUseMyLocation} />
+        <IconButton icon="crosshairs-gps" onPress={locateAndCenter} />
       </View>
       {searchResults.length > 0 && (
         <Card style={styles.searchResults}>
@@ -175,7 +209,7 @@ export default function LocationPickerScreen() {
             <TouchableOpacity
               key={i}
               onPress={() => handleSelectResult(r)}
-              style={styles.searchItem}
+              style={[styles.searchItem, { borderBottomColor: theme.colors.outline }]}
             >
               <Text>{r.displayName}</Text>
               <Text variant="bodySmall">
@@ -191,6 +225,7 @@ export default function LocationPickerScreen() {
         <LeafletMap
           mode="pick"
           initialLatLng={mapInitial}
+          centerOn={centerOn}
           onPick={handlePick}
         />
       </View>
@@ -209,23 +244,29 @@ export default function LocationPickerScreen() {
                   坐标: {lat?.toFixed(5) ?? '-'}, {lng?.toFixed(5) ?? '-'}
                 </Text>
                 <TextInput
-                  style={styles.detailInput}
+                  mode="outlined"
+                  dense
                   placeholder="详细位置"
                   value={detail}
                   onChangeText={setDetail}
+                  style={styles.detailInput}
                 />
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TextInput
-                    style={styles.cityInput}
+                    mode="outlined"
+                    dense
                     placeholder="国家"
                     value={country}
                     onChangeText={setCountry}
+                    style={styles.cityInput}
                   />
                   <TextInput
-                    style={styles.cityInput}
+                    mode="outlined"
+                    dense
                     placeholder="城市"
                     value={city}
                     onChangeText={setCity}
+                    style={styles.cityInput}
                   />
                 </View>
               </>
@@ -233,12 +274,12 @@ export default function LocationPickerScreen() {
           </Card.Content>
         </Card>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -252,10 +293,6 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
     height: 40,
   },
   searchResults: {
@@ -266,23 +303,12 @@ const styles = StyleSheet.create({
   searchItem: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   bottomCard: { margin: 8 },
   detailInput: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
     marginVertical: 8,
-    height: 40,
   },
   cityInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 40,
   },
 });

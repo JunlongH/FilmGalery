@@ -8,6 +8,15 @@ import { wgs84ToGcj02, gcj02ToWgs84 } from '@filmgallery/shared/coordTransform';
 
 const MAP_READY_TIMEOUT_MS = 15000;
 
+interface CenterOnPayload {
+  lat: number;
+  lng: number;
+  zoom?: number;
+  /** Monotonic nonce: the effect fires only when this changes, so re-sending
+   * the same coordinates still re-centers the map. */
+  nonce: number;
+}
+
 interface LeafletMapProps {
   photos?: any[];
   region?: any;
@@ -16,6 +25,10 @@ interface LeafletMapProps {
   mode?: 'view' | 'pick';
   onPick?: (lat: number, lng: number) => void;
   initialLatLng?: [number, number] | null;
+  /** Pick-mode-only: imperatively pan the map + marker to a WGS-84 coordinate.
+   * This is the GPS-button / auto-locate channel (initialLatLng is captured
+   * once and cannot drive subsequent moves). */
+  centerOn?: CenterOnPayload | null;
 }
 
 const LeafletMap = ({
@@ -26,6 +39,7 @@ const LeafletMap = ({
   mode = 'view',
   onPick,
   initialLatLng = null,
+  centerOn = null,
 }: LeafletMapProps) => {
   const theme = useTheme();
   const webViewRef = useRef<any>(null);
@@ -98,6 +112,27 @@ const LeafletMap = ({
     }
   }, [region, isMapReady, mode]);
 
+  // Pick-mode centering (GPS button / auto-locate). centerOn carries WGS-84
+  // coordinates; this component is the single WGS-84 ↔ GCJ-02 boundary (see
+  // displayInitialLatLngRef above and the MAP_PICK handler below), so for
+  // AMap we convert WGS-84 → GCJ-02 before posting — otherwise the map lands
+  // a few hundred meters off (PRC coordinate offset).
+  useEffect(() => {
+    if (mode !== 'pick' || !isMapReady || !webViewRef.current || !centerOn) return;
+    let lat = centerOn.lat;
+    let lng = centerOn.lng;
+    if (mapProvider === 'amap') {
+      const c = wgs84ToGcj02(lat, lng);
+      lat = c.lat;
+      lng = c.lng;
+    }
+    webViewRef.current.postMessage(JSON.stringify({
+      type: 'CENTER_MAP',
+      payload: { lat, lng, zoom: centerOn.zoom ?? 15 },
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centerOn, isMapReady, mode, mapProvider]);
+
   const handleMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -147,6 +182,8 @@ const LeafletMap = ({
         onError={() => setLoadFailed(true)}
         androidLayerType="hardware"
         mixedContentMode="always"
+        cacheEnabled={true}
+        startInLoadingState={true}
       />
       {!isMapReady && !loadFailed && (
         <View style={[styles.loadingOverlay, { backgroundColor: theme.colors.surfaceVariant }]}>

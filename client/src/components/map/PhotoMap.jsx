@@ -18,6 +18,7 @@ import useGeoPhotos from '../../hooks/useGeoPhotos';
 import { getApiBase } from '../../api';
 import { useTheme } from '../../providers';
 import { wgs84ToGcj02, gcj02ToWgs84 } from '@filmgallery/shared/coordTransform';
+import { getTileLayerConfig } from '@filmgallery/shared/mapUtils';
 
 // Import Leaflet CSS
 import 'leaflet/dist/leaflet.css';
@@ -47,54 +48,34 @@ const getThumbUrl = (photo) => {
 };
 
 /**
- * Tile layer configurations
+ * Build the PhotoMap layer dictionary for a provider from the shared
+ * tile-layer config (packages/shared/mapUtils.js). This is the ONLY place
+ * that maps the shared config into the shape PhotoMap consumes
+ * ({ url, attribution, name, options }). Keeping the URLs/subdomains/etc.
+ * out of this file avoids the drift that previously existed between the
+ * desktop constants and the mobile/shared config.
+ *
+ * `options` contains only Leaflet <TileLayer> props (maxZoom, subdomains,
+ * className, crossOrigin); url/attribution/name are pulled out explicitly.
  */
-const TILE_LAYERS = {
-  light: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    name: 'Light',
-    options: { maxZoom: 19, crossOrigin: 'anonymous' }
-  },
-  dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    name: 'Dark',
-    options: { maxZoom: 19, crossOrigin: 'anonymous' }
-  },
-  satellite: {
-    // ArcGIS World Imagery (ESRI) - widely used, but may fail under strict CSP/hosting setups.
-    // Add crossOrigin to reduce canvas tainting and provide maxZoom hint.
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri',
-    name: 'Satellite',
-    options: { maxZoom: 19, crossOrigin: 'anonymous' }
-  },
-};
-
-/**
- * Amap (高德) tile layer configurations
- */
-const AMAP_TILE_LAYERS = {
-  light: {
-    url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-    attribution: '&copy; <a href="https://amap.com">高德地图</a>',
-    name: '高德普通',
-    options: { maxZoom: 19, subdomains: ['1', '2', '3', '4'] }
-  },
-  dark: {
-    url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-    attribution: '&copy; <a href="https://amap.com">高德地图</a>',
-    name: '高德夜间',
-    options: { maxZoom: 19, subdomains: ['1', '2', '3', '4'], className: 'amap-dark-tile' }
-  },
-  satellite: {
-    url: 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
-    attribution: '&copy; <a href="https://amap.com">高德地图</a>',
-    name: '高德卫星',
-    options: { maxZoom: 19, subdomains: ['1', '2', '3', '4'] }
-  },
-};
+function buildPhotoMapTileLayers(provider) {
+  const out = {};
+  for (const style of ['light', 'dark', 'satellite']) {
+    const c = getTileLayerConfig(provider, style);
+    out[style] = {
+      url: c.url,
+      attribution: c.attribution,
+      name: c.name,
+      options: {
+        maxZoom: c.maxZoom,
+        subdomains: c.subdomains,
+        ...(c.className ? { className: c.className } : {}),
+        ...(c.crossOrigin ? { crossOrigin: c.crossOrigin } : {}),
+      },
+    };
+  }
+  return out;
+}
 
 /**
  * Default map center (world view)
@@ -348,8 +329,9 @@ export default function PhotoMap({ filters, onPhotoClick, selectedPhoto }) {
   // Default to 'flat' for faster initial load and more practical use
   const [viewMode, setViewMode] = useState('flat');
 
-  // Active tile layers based on map provider
-  const activeTileLayers = mapProvider === 'amap' ? AMAP_TILE_LAYERS : TILE_LAYERS;
+  // Active tile layers based on map provider — derived from the shared
+  // single source of truth (no per-provider constants in this file).
+  const activeTileLayers = useMemo(() => buildPhotoMapTileLayers(mapProvider), [mapProvider]);
 
   // Tile layer state - initialized based on theme (dark theme -> dark map)
   const [tileLayer, setTileLayer] = useState(() => theme === 'dark' ? 'dark' : 'light');

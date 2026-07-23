@@ -53,7 +53,8 @@ function applyAuth(client: ApiClient) {
   if (_onUnauthorizedCb) client.setOnUnauthorized(_onUnauthorizedCb);
 }
 
-let _client: ApiClient = createApiClient({ baseUrl: '', timeout: 5000, onError: notifyError });
+// TEST HACK (temp): default to host server via adb reverse. Revert before commit.
+let _client: ApiClient = createApiClient({ baseUrl: 'http://localhost:4001', timeout: 5000, onError: notifyError });
 
 export function configureApi(primaryUrl: string, secondaryUrl?: string | null): void {
   _client = createApiClient({

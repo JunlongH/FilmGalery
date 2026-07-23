@@ -2,20 +2,51 @@ import React, { useState } from 'react';
 import { Button, Chip, Spinner } from '@heroui/react';
 import { Search, CheckCircle2, XCircle, ShieldAlert, ChevronDown, ChevronUp } from 'lucide-react';
 
+// 从工具名生成友好标签（覆盖所有 35 个工具）
 const TOOL_LABELS = {
-  search_photos:       '搜索照片',
-  get_photo_detail:    '查看照片详情',
-  get_roll_photos:     '获取胶卷照片',
-  list_rolls:          '列出胶卷',
-  get_roll_detail:     '查看胶卷详情',
-  get_stats:           '读取统计数据',
-  search_equipment:    '搜索器材',
-  get_film_info:       '查询胶片信息',
-  list_tags:           '列出标签',
-  update_shot_log:     '更新拍摄记录',
+  // Photo
+  search_photos:         '搜索照片',
+  get_photo_detail:      '查看照片详情',
+  get_roll_photos:       '获取胶卷照片',
+  get_photo_neighbors:   '查找相邻照片',
   update_photo_metadata: '更新照片信息',
-  manage_tags:         '管理标签',
-  update_roll_info:    '更新胶卷信息',
+  batch_update_photos:   '批量更新照片',
+  set_photo_rating:      '设置照片评分',
+  toggle_photo_favorite: '收藏/取消收藏',
+  delete_photo:          '删除照片',
+  // Roll
+  list_rolls:            '列出胶卷',
+  get_roll_detail:       '查看胶卷详情',
+  update_roll:           '更新胶卷信息',
+  set_roll_cover:        '设置胶卷封面',
+  set_roll_preset:       '应用预设',
+  // Film
+  get_film_info:         '查询胶片信息',
+  list_film_items:       '列出胶片库存',
+  update_inventory_item: '更新库存项',
+  record_film_purchase:  '记录购买',
+  // Equipment
+  search_equipment:      '搜索器材',
+  add_equipment:         '添加器材',
+  update_equipment:      '更新器材',
+  // Tag
+  list_tags:             '列出标签',
+  create_tag:            '创建标签',
+  attach_tags:           '添加标签',
+  detach_tags:           '移除标签',
+  // Shot log
+  get_shot_log:          '查看拍摄记录',
+  update_shot_log:       '更新拍摄记录',
+  add_shot_log_entry:    '添加拍摄记录',
+  // Stats
+  get_stats:             '读取统计数据',
+  analyze_shooting_patterns: '分析拍摄模式',
+  cost_analysis:         '花费分析',
+  equipment_usage_stats: '设备使用统计',
+  // Render
+  get_render_params:     '查看渲染参数',
+  suggest_render_params: '建议渲染参数',
+  batch_apply_preset:    '批量应用预设',
 };
 
 /**

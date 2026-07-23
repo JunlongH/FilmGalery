@@ -8,32 +8,45 @@
  *   4. 审计日志
  */
 const { runAsync, getAsync, allAsync } = require('../utils/db-helpers');
-const { getAIConfig } = require('./ai-config');
+const { getAIConfig, checkBudget } = require('./ai-config');
 const { buildSystemPrompt } = require('./ai-context-builder');
 const { getToolSchemas, getToolHandler, getToolType, getToolSecurityLevel } = require('./ai-tools');
 const aiGateway = require('./ai-gateway');
 
-// ─────────────── 确认等待机制 ───────────────
+// ─────────────── 确认等待机制（DB 持久化，重启可恢复） ───────────────
 // confirmationId → { resolve, reject, timer }
 const pendingConfirmations = new Map();
 
 /**
- * 创建确认请求并等待用户响应
+ * 创建确认请求并等待用户响应。
+ * 写入 ai_pending_writes 表以支持重启恢复。
  * @returns {Promise<'confirmed'|'rejected'>}
  */
-function waitForConfirmation(confirmationId, timeoutMs = 60000) {
+function waitForConfirmation(confirmationId, conversationId, toolCallId, toolName, toolArgs, timeoutMs = 300000) {
   return new Promise((resolve) => {
+    // 持久化到 DB（fire-and-forget，不阻塞等待）
+    runAsync(
+      `INSERT OR REPLACE INTO ai_pending_writes (confirmation_id, conversation_id, tool_call_id, tool_name, args_json, status, created_at)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+      [confirmationId, conversationId, toolCallId, toolName, JSON.stringify(toolArgs), new Date().toISOString()]
+    ).catch(() => {});
+
     const timer = setTimeout(() => {
       pendingConfirmations.delete(confirmationId);
+      runAsync(
+        `UPDATE ai_pending_writes SET status = 'rejected', resolved_at = ? WHERE confirmation_id = ? AND status = 'pending'`,
+        [new Date().toISOString(), confirmationId]
+      ).catch(() => {});
       resolve('rejected'); // 超时自动拒绝
     }, timeoutMs);
 
-    pendingConfirmations.set(confirmationId, { resolve, timer });
+    pendingConfirmations.set(confirmationId, { resolve, timer, conversationId });
   });
 }
 
 /**
- * 用户响应确认请求
+ * 用户响应确认请求。
+ * 更新 DB 状态并 resolve 等待中的 Promise。
  * @param {string} confirmationId
  * @param {'confirmed'|'rejected'} decision
  */
@@ -43,7 +56,32 @@ function resolveConfirmation(confirmationId, decision) {
   clearTimeout(pending.timer);
   pendingConfirmations.delete(confirmationId);
   pending.resolve(decision);
+
+  runAsync(
+    `UPDATE ai_pending_writes SET status = ?, resolved_at = ? WHERE confirmation_id = ?`,
+    [decision, new Date().toISOString(), confirmationId]
+  ).catch(() => {});
+
   return true;
+}
+
+/**
+ * 服务器启动时清理：将所有残留的 pending 确认标记为 rejected。
+ * 这修复了重启后内存 Map 丢失导致确认永远卡住的问题。
+ */
+async function cleanupStaleConfirmations() {
+  try {
+    const result = await runAsync(
+      `UPDATE ai_pending_writes SET status = 'rejected', resolved_at = ?
+       WHERE status = 'pending'`,
+      [new Date().toISOString()]
+    );
+    if (result.changes > 0) {
+      console.warn(`[AI] Cleaned up ${result.changes} stale pending confirmation(s) on startup.`);
+    }
+  } catch (err) {
+    console.warn('[AI] Stale confirmation cleanup failed:', err.message);
+  }
 }
 
 // ─────────────── 内部辅助 ───────────────
@@ -135,6 +173,13 @@ async function auditLog(conversationId, actionType, toolName, toolArgs, resultSu
 async function* handleMessage({ conversationId, userMessage, context, imageContents, template, modelOverride }) {
   const config = await getAIConfig();
 
+  // 0. 预算检查
+  const budget = await checkBudget();
+  if (!budget.ok) {
+    yield { type: 'error', message: budget.reason };
+    return;
+  }
+
   // 1. 加载或创建对话
   const conversation = await getOrCreateConversation(conversationId, context || {});
 
@@ -213,6 +258,14 @@ async function* handleMessage({ conversationId, userMessage, context, imageConte
       model: modelForQuery,
     });
 
+    // 累计 token 消耗（即使在工具调用循环中）
+    if (response.usage?.prompt_tokens || response.usage?.completion_tokens) {
+      await runAsync(
+        `UPDATE ai_config SET monthly_tokens_used = monthly_tokens_used + ? WHERE id = 1`,
+        [(response.usage?.prompt_tokens || 0) + (response.usage?.completion_tokens || 0)]
+      ).catch(() => {});
+    }
+
     const assistantMsg = response.choices[0].message;
 
     if (assistantMsg.tool_calls?.length) {
@@ -253,7 +306,14 @@ async function* handleMessage({ conversationId, userMessage, context, imageConte
             security_level: securityLevel,
           };
 
-          const decision = await waitForConfirmation(confirmationId, 60000);
+          const decision = await waitForConfirmation(
+            confirmationId,
+            conversation.id,
+            toolCall.id,
+            toolName,
+            toolArgs,
+            300000
+          );
 
           if (decision === 'rejected') {
             resultStr = JSON.stringify({ rejected: true, message: '用户拒绝了此操作' });
@@ -307,10 +367,21 @@ async function* handleMessage({ conversationId, userMessage, context, imageConte
       // 无工具调用 → 直接用这条回复作为最终文本
       // 保存助手消息到 DB
       const finalContent = assistantMsg.content || '';
+      const inputTokens  = response.usage?.prompt_tokens     || 0;
+      const outputTokens = response.usage?.completion_tokens || 0;
+
+      // 累计 token 消耗
+      if (inputTokens || outputTokens) {
+        await runAsync(
+          `UPDATE ai_config SET monthly_tokens_used = monthly_tokens_used + ? WHERE id = 1`,
+          [inputTokens + outputTokens]
+        ).catch(() => {});
+      }
+
       await saveMessage(conversation.id, 'assistant', finalContent, {
         model: modelForQuery,
-        input_tokens:  response.usage?.prompt_tokens     || 0,
-        output_tokens: response.usage?.completion_tokens || 0,
+        input_tokens:  inputTokens,
+        output_tokens: outputTokens,
       });
 
       // 流式输出（字符级 yield，给前端打字机效果）
@@ -354,4 +425,4 @@ async function* handleMessage({ conversationId, userMessage, context, imageConte
   yield { type: 'done', conversation_id: conversation.id };
 }
 
-module.exports = { handleMessage, resolveConfirmation };
+module.exports = { handleMessage, resolveConfirmation, cleanupStaleConfirmations };

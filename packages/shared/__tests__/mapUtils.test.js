@@ -13,6 +13,7 @@ const {
   MAP_PROVIDERS,
   TILE_LAYERS,
   buildTileLayerUrl,
+  getTileLayerConfig,
   clusterRadiusFromDelta,
   gridCluster,
   isValidLatitude,
@@ -97,24 +98,49 @@ describe('formatLatLng', () => {
 
 describe('buildTileLayerUrl', () => {
   test('returns the OSM light URL by default', () => {
-    expect(buildTileLayerUrl('osm', 'light')).toBe(TILE_LAYERS.osm.light);
+    expect(buildTileLayerUrl('osm', 'light')).toBe(TILE_LAYERS.osm.light.url);
   });
 
   test('returns the requested provider/style when defined', () => {
-    expect(buildTileLayerUrl('osm', 'dark')).toBe(TILE_LAYERS.osm.dark);
-    expect(buildTileLayerUrl('osm', 'satellite')).toBe(TILE_LAYERS.osm.satellite);
-    expect(buildTileLayerUrl('amap', 'light')).toBe(TILE_LAYERS.amap.light);
-    expect(buildTileLayerUrl('amap', 'satellite')).toBe(TILE_LAYERS.amap.satellite);
+    expect(buildTileLayerUrl('osm', 'dark')).toBe(TILE_LAYERS.osm.dark.url);
+    expect(buildTileLayerUrl('osm', 'satellite')).toBe(TILE_LAYERS.osm.satellite.url);
+    expect(buildTileLayerUrl('amap', 'light')).toBe(TILE_LAYERS.amap.light.url);
+    expect(buildTileLayerUrl('amap', 'satellite')).toBe(TILE_LAYERS.amap.satellite.url);
   });
 
   test('falls back to OSM light for unknown provider', () => {
-    expect(buildTileLayerUrl('unknown', 'light')).toBe(TILE_LAYERS.osm.light);
+    expect(buildTileLayerUrl('unknown', 'light')).toBe(TILE_LAYERS.osm.light.url);
   });
 
-  test('falls back to OSM light for amap dark (no separate URL — CSS filter is used)', () => {
-    // AMap dark mode is simulated via CSS filter on the tile container;
-    // there is no separate dark URL in TILE_LAYERS.amap.
-    expect(buildTileLayerUrl('amap', 'dark')).toBe(TILE_LAYERS.osm.light);
+  test('falls back to OSM light for unknown style', () => {
+    expect(buildTileLayerUrl('amap', 'nonexistent')).toBe(TILE_LAYERS.osm.light.url);
+  });
+});
+
+describe('getTileLayerConfig', () => {
+  test('returns full config object with url + subdomains for amap', () => {
+    const config = getTileLayerConfig('amap', 'light');
+    expect(config.url).toContain('autonavi.com');
+    expect(config.subdomains).toEqual(['1', '2', '3', '4']);
+    expect(config.maxZoom).toBe(19);
+  });
+
+  test('returns subdomains for osm', () => {
+    const config = getTileLayerConfig('osm', 'light');
+    expect(config.url).toContain('cartocdn.com');
+    expect(config.subdomains).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  test('amap dark has className for CSS filter', () => {
+    const config = getTileLayerConfig('amap', 'dark');
+    expect(config.className).toBe('amap-dark-tile');
+    // Dark uses the same light URL (CSS filter simulates dark mode)
+    expect(config.url).toBe(TILE_LAYERS.amap.light.url);
+  });
+
+  test('falls back to OSM light for unknown provider', () => {
+    const config = getTileLayerConfig('unknown', 'light');
+    expect(config.url).toBe(TILE_LAYERS.osm.light.url);
   });
 });
 

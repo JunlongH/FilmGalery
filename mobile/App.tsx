@@ -3,6 +3,7 @@ import { NavigationContainer, createNavigationContainerRef } from '@react-naviga
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider as PaperProvider, useTheme } from 'react-native-paper';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -298,6 +299,7 @@ export default function App() {
   return (
     <ApiContext.Provider value={apiContextValue}>
       <PaperProvider theme={themeToUse as any}>
+        <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1 }}>
         <NavigationContainer ref={navigationRef} theme={themeToUse as any}>
           <LocationPickerProvider>
@@ -364,6 +366,7 @@ export default function App() {
           <ApiErrorSnackbar />
         </NavigationContainer>
         </GestureHandlerRootView>
+        </SafeAreaProvider>
       </PaperProvider>
     </ApiContext.Provider>
   );

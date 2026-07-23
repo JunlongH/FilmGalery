@@ -5,34 +5,94 @@ import {
   MARKERCLUSTER_CSS,
   MARKERCLUSTER_DEFAULT_CSS,
 } from './leafletVendor';
+import { getTileLayerConfig } from '@filmgallery/shared/mapUtils';
+
+/**
+ * Serialize a shared tile-layer config into a Leaflet `L.tileLayer` options
+ * object-literal string, merged with mobile perf defaults.
+ *
+ * Performance options (all real Leaflet GridLayer options):
+ *  - fadeAnimation: false   — avoids an Android WebView repaint glitch and
+ *    removes the per-tile fade that looks like lag on emulators.
+ *  - updateWhenZooming: false / updateWhenIdle: true — only fetch tiles once
+ *    zoom/pan settles (saves bandwidth on mobile networks).
+ *  - keepBuffer: 2 — retain 2 layers of offscreen tiles for smoother panning.
+ *
+ * NOTE: Leaflet TileLayer has NO `cache` option; HTTP caching is handled by
+ * the WebView. Do not add `cache: true` (no-op, misleading).
+ */
+function buildTileOptionsString(config: { maxZoom?: number; subdomains?: string[]; className?: string }): string {
+  const parts: string[] = [];
+  parts.push(`maxZoom: ${config.maxZoom ?? 19}`);
+  if (config.subdomains) parts.push(`subdomains: ${JSON.stringify(config.subdomains)}`);
+  if (config.className) parts.push(`className: ${JSON.stringify(config.className)}`);
+  parts.push('fadeAnimation: false');
+  parts.push('updateWhenZooming: false');
+  parts.push('updateWhenIdle: true');
+  parts.push('keepBuffer: 2');
+  return `{ ${parts.join(', ')} }`;
+}
+
+// Inline-SVG divIcon for the pick marker. Leaflet's default marker loads
+// marker-icon.png from a relative path that is unresolvable inside an inline
+// HTML WebView (no base URL) → the icon silently fails to render. A divIcon
+// with inline SVG has no external assets and always renders. Mirrors the
+// desktop LocationPicker.jsx `pinIcon`.
+const PICK_MARKER_ICON_DEF = `L.divIcon({
+  className: 'fg-pick-marker',
+  html: '<svg width="32" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z" fill="#ef4444" stroke="white" stroke-width="1.5"/></svg>',
+  iconSize: [32, 32],
+  iconAnchor: [16, 32]
+})`;
 
 export const getLeafletHtml = (
   initialRegion: any,
-  mapProvider = 'osm',
+  mapProvider: 'osm' | 'amap' = 'osm',
   isDark = false,
   mode: 'view' | 'pick' = 'view',
   initialLatLng: [number, number] | null = null
 ) => {
-  const isAmapDark = mapProvider === 'amap' && isDark;
-  const tileLayerConfig = mapProvider === 'amap'
-    ? {
-        url: `'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'`,
-        options: `{ maxZoom: 19, subdomains: ['1','2','3','4']${isAmapDark ? ", className: 'amap-dark-tile'" : ''} }`
-      }
-    : {
-        url: `'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'`,
-        options: `{ maxZoom: 20, subdomains: 'abcd' }`
-      };
+  // Single source of truth: consume the shared tile-layer config. Do NOT
+  // hardcode provider URLs here — that was the drift v4 warned about for
+  // PhotoMap.jsx. OSM dark → CartoDB Dark Matter; AMap dark → same road URL
+  // + className 'amap-dark-tile' (CSS filter, since AMap has no native dark).
+  const tileConfig = getTileLayerConfig(mapProvider, isDark ? 'dark' : 'light');
+  const tileUrl = JSON.stringify(tileConfig.url);
+  const tileOptions = buildTileOptionsString(tileConfig);
 
   const isPickMode = mode === 'pick';
+  // Always declare pickMarker with `let`. Even when there is an initial
+  // coordinate, the click handler's else-branch reassigns it; declaring
+  // `const` when initial is set would throw TypeError on that assignment
+  // if behavior ever changed.
   const pickMarkerInit = initialLatLng
-    ? `const pickMarker = L.marker([${initialLatLng[0]}, ${initialLatLng[1]}], { draggable: true }).addTo(map);`
+    ? `let pickMarker = L.marker([${initialLatLng[0]}, ${initialLatLng[1]}], { draggable: true, icon: ${PICK_MARKER_ICON_DEF} }).addTo(map);`
     : `let pickMarker = null;`;
 
-  // In pick mode, map clicks move the marker and post a MAP_PICK message.
-  // In view mode, the original photo-cluster behavior is preserved.
+  // In pick mode, map clicks move the marker and post a MAP_PICK message,
+  // and incoming CENTER_MAP messages (from the GPS button) pan the map and
+  // marker. In view mode, the original photo-cluster behavior is preserved.
   const pickModeScript = `
         ${pickMarkerInit}
+
+        function handleMessage(event) {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'CENTER_MAP') {
+                    const { lat, lng, zoom } = data.payload;
+                    map.setView([lat, lng], zoom || 15, { animate: true });
+                    if (pickMarker) {
+                        pickMarker.setLatLng([lat, lng]);
+                    } else {
+                        pickMarker = L.marker([lat, lng], { draggable: true, icon: ${PICK_MARKER_ICON_DEF} }).addTo(map);
+                    }
+                }
+            } catch (e) {
+                console.error('pick handleMessage error', e);
+            }
+        }
+        document.addEventListener('message', handleMessage);
+        window.addEventListener('message', handleMessage);
 
         map.on('click', function(e) {
             const lat = e.latlng.lat;
@@ -40,7 +100,7 @@ export const getLeafletHtml = (
             if (pickMarker) {
                 pickMarker.setLatLng([lat, lng]);
             } else {
-                pickMarker = L.marker([lat, lng], { draggable: true }).addTo(map);
+                pickMarker = L.marker([lat, lng], { draggable: true, icon: ${PICK_MARKER_ICON_DEF} }).addTo(map);
             }
             sendMessage('MAP_PICK', { lat, lng });
         });
@@ -114,12 +174,6 @@ export const getLeafletHtml = (
 
         map.addLayer(markers);
 
-        function sendMessage(type, payload) {
-            if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type, payload }));
-            }
-        }
-
         document.addEventListener('message', handleMessage);
         window.addEventListener('message', handleMessage);
 
@@ -189,10 +243,11 @@ export const getLeafletHtml = (
     <style>${MARKERCLUSTER_DEFAULT_CSS}</style>
     <style>
         body { margin: 0; padding: 0; }
-        #map { width: 100vw; height: 100vh; background-color: #f8f9fa; }
+        #map { width: 100vw; height: 100vh; background-color: ${isDark ? '#1a1a1a' : '#f8f9fa'}; }
         .amap-dark-tile {
             filter: invert(1) hue-rotate(200deg) brightness(0.85) saturate(0.7);
         }
+        .fg-pick-marker { background: transparent; border: none; }
 
         .custom-marker {
             border-radius: 12px;
@@ -276,14 +331,14 @@ export const getLeafletHtml = (
     <script>
         const startLat = ${initialRegion.latitude || 31.2304};
         const startLng = ${initialRegion.longitude || 121.4737};
-        const startZoom = ${isPickMode ? '13' : '5'};
+        const startZoom = ${isPickMode ? (initialLatLng ? '13' : '11') : '5'};
 
         const map = L.map('map', {
             zoomControl: false,
             attributionControl: false
         }).setView([startLat, startLng], startZoom);
 
-        L.tileLayer(${tileLayerConfig.url}, ${tileLayerConfig.options}).addTo(map);
+        L.tileLayer(${tileUrl}, ${tileOptions}).addTo(map);
 
         function sendMessage(type, payload) {
             if (window.ReactNativeWebView) {

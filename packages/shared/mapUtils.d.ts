@@ -2,17 +2,31 @@
  * Type declarations for @filmgallery/shared/mapUtils.
  */
 
-export const MAP_PROVIDERS: ('osm' | 'amap')[];
+export type MapProvider = 'osm' | 'amap';
+export type TileLayerStyle = 'light' | 'dark' | 'satellite';
 
-export const TILE_LAYERS: {
-  osm: { light: string; dark: string; satellite: string };
-  amap: { light: string; satellite: string };
-};
+export interface TileLayerConfig {
+  url: string;
+  subdomains?: string[];
+  maxZoom?: number;
+  className?: string;
+  attribution?: string;
+  name?: string;
+  crossOrigin?: 'anonymous' | 'use-credentials';
+}
 
-export function buildTileLayerUrl(
-  provider: 'osm' | 'amap',
-  style: 'light' | 'dark' | 'satellite'
-): string;
+export const MAP_PROVIDERS: MapProvider[];
+
+export const TILE_LAYERS: Record<MapProvider, Record<TileLayerStyle, TileLayerConfig>>;
+
+/**
+ * Backward-compat shim: returns ONLY the URL string. New callers that need
+ * subdomains/maxZoom/className should use getTileLayerConfig().
+ */
+export function buildTileLayerUrl(provider: MapProvider, style: TileLayerStyle): string;
+
+/** Resolve the full tile-layer config object for a provider + style. */
+export function getTileLayerConfig(provider: MapProvider, style: TileLayerStyle): TileLayerConfig;
 
 export function clusterRadiusFromDelta(latitudeDelta: number): number;
 

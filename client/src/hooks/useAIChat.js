@@ -190,15 +190,32 @@ export function useAIChat({ conversationId, onConversationCreated }) {
     setPendingConfirmation(null);
   }, []);
 
-  /** 从服务端对话历史恢复消息列表 */
+  /** 从服务端对话历史恢复消息列表（含工具调用） */
   const loadConversationMessages = useCallback((serverMessages) => {
-    const restored = serverMessages.map((m, i) => ({
-      id: `h-${m.id || i}`,
-      role: m.role,
-      content: m.content || '',
-      toolCalls: [],
-      isStreaming: false,
-    })).filter(m => m.role === 'user' || m.role === 'assistant');
+    const restored = serverMessages.map((m, i) => {
+      // 恢复工具调用记录
+      let toolCalls = [];
+      if (m.tool_calls) {
+        try {
+          const parsed = typeof m.tool_calls === 'string' ? JSON.parse(m.tool_calls) : m.tool_calls;
+          if (Array.isArray(parsed)) {
+            toolCalls = parsed.map(tc => ({
+              id: tc.id || `tc-${i}-${Math.random().toString(36).slice(2, 6)}`,
+              name: tc.function?.name || tc.name || 'unknown',
+              status: 'done',
+              result: null,
+            }));
+          }
+        } catch {}
+      }
+      return {
+        id: `h-${m.id || i}`,
+        role: m.role,
+        content: m.content || '',
+        toolCalls,
+        isStreaming: false,
+      };
+    }).filter(m => m.role === 'user' || m.role === 'assistant');
     setMessages(restored);
   }, []);
 

@@ -3,7 +3,11 @@ node_modules/
 
 # Build artifacts
 build/
+**/build/
+**/build_unmin/
+**/build_debug/
 dist/
+**/dist/
 dist_v*/
 *.zip
 *.apk

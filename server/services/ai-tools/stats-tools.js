@@ -92,8 +92,7 @@ const STATS_TOOLS = {
     },
     handler: async ({ year, group_by, limit = 15 }) => {
       const lim = Math.min(Number(limit) || 15, 30);
-      const yearFilter = year ? ` AND strftime('%Y', r.date_loaded) = '${String(year)}'` : '';
-      const yearFilterPhoto = year ? ` AND strftime('%Y', p.date_taken) = '${String(year)}'` : '';
+      const yearParam = year ? String(year) : null;
 
       let rows;
       switch (group_by) {
@@ -101,8 +100,10 @@ const STATS_TOOLS = {
           rows = await allAsync(
             `SELECT r.camera, COUNT(*) AS roll_count, COUNT(DISTINCT p.id) AS photo_count
              FROM rolls r LEFT JOIN photos p ON p.roll_id = r.id
-             WHERE r.camera IS NOT NULL${yearFilter}
-             GROUP BY r.camera ORDER BY roll_count DESC LIMIT ?`, [lim]
+             WHERE r.camera IS NOT NULL
+               ${yearParam ? `AND strftime('%Y', r.date_loaded) = ?` : ''}
+             GROUP BY r.camera ORDER BY roll_count DESC LIMIT ?`,
+            yearParam ? [yearParam, lim] : [lim]
           );
           break;
 
@@ -110,8 +111,10 @@ const STATS_TOOLS = {
           rows = await allAsync(
             `SELECT p.lens, COUNT(*) AS photo_count
              FROM photos p LEFT JOIN rolls r ON p.roll_id = r.id
-             WHERE p.lens IS NOT NULL${yearFilterPhoto}
-             GROUP BY p.lens ORDER BY photo_count DESC LIMIT ?`, [lim]
+             WHERE p.lens IS NOT NULL
+               ${yearParam ? `AND strftime('%Y', p.date_taken) = ?` : ''}
+             GROUP BY p.lens ORDER BY photo_count DESC LIMIT ?`,
+            yearParam ? [yearParam, lim] : [lim]
           );
           break;
 
@@ -119,8 +122,10 @@ const STATS_TOOLS = {
           rows = await allAsync(
             `SELECT p.camera, p.lens, COUNT(*) AS photo_count
              FROM photos p LEFT JOIN rolls r ON p.roll_id = r.id
-             WHERE p.camera IS NOT NULL AND p.lens IS NOT NULL${yearFilterPhoto}
-             GROUP BY p.camera, p.lens ORDER BY photo_count DESC LIMIT ?`, [lim]
+             WHERE p.camera IS NOT NULL AND p.lens IS NOT NULL
+               ${yearParam ? `AND strftime('%Y', p.date_taken) = ?` : ''}
+             GROUP BY p.camera, p.lens ORDER BY photo_count DESC LIMIT ?`,
+            yearParam ? [yearParam, lim] : [lim]
           );
           break;
 
@@ -128,8 +133,10 @@ const STATS_TOOLS = {
           rows = await allAsync(
             `SELECT f.name AS film_name, f.iso AS film_iso, COUNT(r.id) AS roll_count
              FROM rolls r JOIN films f ON r.filmId = f.id
-             WHERE 1=1${yearFilter}
-             GROUP BY f.id ORDER BY roll_count DESC LIMIT ?`, [lim]
+             WHERE 1=1
+               ${yearParam ? `AND strftime('%Y', r.date_loaded) = ?` : ''}
+             GROUP BY f.id ORDER BY roll_count DESC LIMIT ?`,
+            yearParam ? [yearParam, lim] : [lim]
           );
           break;
 
@@ -137,8 +144,10 @@ const STATS_TOOLS = {
           rows = await allAsync(
             `SELECT strftime('%Y-%m', r.date_loaded) AS month, COUNT(*) AS roll_count
              FROM rolls r
-             WHERE r.date_loaded IS NOT NULL${yearFilter}
-             GROUP BY month ORDER BY month DESC LIMIT ?`, [lim]
+             WHERE r.date_loaded IS NOT NULL
+               ${yearParam ? `AND strftime('%Y', r.date_loaded) = ?` : ''}
+             GROUP BY month ORDER BY month DESC LIMIT ?`,
+            yearParam ? [yearParam, lim] : [lim]
           );
           break;
 
@@ -155,8 +164,10 @@ const STATS_TOOLS = {
                COUNT(*) AS photo_count,
                ROUND(AVG(p.focal_length), 1) AS avg_focal_length
              FROM photos p
-             WHERE p.focal_length IS NOT NULL AND p.focal_length > 0${yearFilterPhoto}
-             GROUP BY range ORDER BY photo_count DESC`, []
+             WHERE p.focal_length IS NOT NULL AND p.focal_length > 0
+               ${yearParam ? `AND strftime('%Y', p.date_taken) = ?` : ''}
+             GROUP BY range ORDER BY photo_count DESC`,
+            yearParam ? [yearParam] : []
           );
           break;
 
@@ -190,6 +201,7 @@ const STATS_TOOLS = {
       },
     },
     handler: async ({ group_by, year }) => {
+      const yearParam = year ? String(year) : null;
       let rows;
 
       switch (group_by) {
@@ -201,8 +213,9 @@ const STATS_TOOLS = {
                     ROUND(SUM(fi.develop_price), 2)  AS develop_total
              FROM film_items fi
              WHERE fi.deleted_at IS NULL AND fi.purchase_date IS NOT NULL
-               ${year ? `AND strftime('%Y', fi.purchase_date) = '${String(year)}'` : ''}
-             GROUP BY month ORDER BY month DESC LIMIT 24`, []
+               ${yearParam ? `AND strftime('%Y', fi.purchase_date) = ?` : ''}
+             GROUP BY month ORDER BY month DESC LIMIT 24`,
+            yearParam ? [yearParam] : []
           );
           break;
 
@@ -227,8 +240,9 @@ const STATS_TOOLS = {
                     ROUND(AVG(fi.purchase_price), 2) AS avg_purchase_price
              FROM film_items fi JOIN films f ON fi.film_id = f.id
              WHERE fi.deleted_at IS NULL
-               ${year ? `AND strftime('%Y', fi.purchase_date) = '${String(year)}'` : ''}
-             GROUP BY f.id ORDER BY purchase_total DESC LIMIT 20`, []
+               ${yearParam ? `AND strftime('%Y', fi.purchase_date) = ?` : ''}
+             GROUP BY f.id ORDER BY purchase_total DESC LIMIT 20`,
+            yearParam ? [yearParam] : []
           );
           break;
 
@@ -239,8 +253,9 @@ const STATS_TOOLS = {
                     ROUND(SUM(fi.purchase_price), 2) AS purchase_total
              FROM film_items fi
              WHERE fi.deleted_at IS NULL AND fi.purchase_vendor IS NOT NULL
-               ${year ? `AND strftime('%Y', fi.purchase_date) = '${String(year)}'` : ''}
-             GROUP BY vendor ORDER BY purchase_total DESC LIMIT 15`, []
+               ${yearParam ? `AND strftime('%Y', fi.purchase_date) = ?` : ''}
+             GROUP BY vendor ORDER BY purchase_total DESC LIMIT 15`,
+            yearParam ? [yearParam] : []
           );
           break;
 
@@ -252,8 +267,9 @@ const STATS_TOOLS = {
                     ROUND(AVG(fi.develop_price), 2) AS avg_develop_price
              FROM film_items fi
              WHERE fi.deleted_at IS NULL AND fi.develop_lab IS NOT NULL
-               ${year ? `AND strftime('%Y', fi.develop_date) = '${String(year)}'` : ''}
-             GROUP BY lab ORDER BY develop_total DESC LIMIT 15`, []
+               ${yearParam ? `AND strftime('%Y', fi.develop_date) = ?` : ''}
+             GROUP BY lab ORDER BY develop_total DESC LIMIT 15`,
+            yearParam ? [yearParam] : []
           );
           break;
 
@@ -287,7 +303,7 @@ const STATS_TOOLS = {
       },
     },
     handler: async ({ equipment_type, year }) => {
-      const yearFilter = year ? ` AND strftime('%Y', r.date_loaded) = '${String(year)}'` : '';
+      const yearParam = year ? String(year) : null;
 
       let rows;
       if (equipment_type === 'camera') {
@@ -300,8 +316,10 @@ const STATS_TOOLS = {
                   MAX(r.date_loaded) AS last_used
            FROM rolls r
            LEFT JOIN photos p ON p.roll_id = r.id
-           WHERE r.camera IS NOT NULL${yearFilter}
-           GROUP BY r.camera ORDER BY roll_count DESC`, []
+           WHERE r.camera IS NOT NULL
+             ${yearParam ? `AND strftime('%Y', r.date_loaded) = ?` : ''}
+           GROUP BY r.camera ORDER BY roll_count DESC`,
+          yearParam ? [yearParam] : []
         );
       } else {
         rows = await allAsync(
@@ -313,8 +331,10 @@ const STATS_TOOLS = {
                   MAX(p.date_taken) AS last_used
            FROM photos p
            LEFT JOIN rolls r ON p.roll_id = r.id
-           WHERE p.lens IS NOT NULL${yearFilter}
-           GROUP BY p.lens ORDER BY photo_count DESC`, []
+           WHERE p.lens IS NOT NULL
+             ${yearParam ? `AND strftime('%Y', r.date_loaded) = ?` : ''}
+           GROUP BY p.lens ORDER BY photo_count DESC`,
+          yearParam ? [yearParam] : []
         );
       }
 

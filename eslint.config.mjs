@@ -24,6 +24,13 @@ export default [
       '**/build/**',
       '**/dist/**',
       '**/*.min.js',
+      // Build artifacts (webpack bundles, not source). Ignored because they
+      // embed inline eslint-disable comments for rules this config doesn't
+      // define, producing spurious "Definition for rule ... was not found"
+      // errors. client/build_unmin was also mistakenly committed; these
+      // patterns keep lint clean even if such dirs are present.
+      '**/build_unmin/**',
+      '**/build_debug/**',
     ],
   },
   {

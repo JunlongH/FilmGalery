@@ -20,39 +20,107 @@ const MAP_PROVIDERS = ['osm', 'amap'];
 // ---------------------------------------------------------------------------
 
 /**
- * Tile-layer URLs keyed by provider → style. Leaflet's {x}{y}{z} are tile
- * indices (coordinate-system independent); markers, not tiles, need
- * WGS-84↔GCJ-02 conversion when overlaying AMap tiles.
+ * Tile-layer configs keyed by provider → style.
+ *
+ * Each entry is `{ url, subdomains?, maxZoom?, className?, attribution?,
+ * name?, crossOrigin? }` — the single source of truth consumed by desktop
+ * PhotoMap.jsx + LocationPicker.jsx and mobile leaftletHtml.ts.
+ *
+ * Critical: AMap tile URLs use `{s}` subdomain sharding, but the valid
+ * subdomains are numeric ('1','2','3','4'), NOT Leaflet's default 'abc'.
+ * Without passing `subdomains={['1','2','3','4']}`, Leaflet requests
+ * `webrd0a.is.autonavi.com` which fails DNS → blank gray map.
  *
  * AMap dark mode is simulated via CSS filter on the tile container (see
- * leafletHtml.ts / PhotoMap.jsx); we don't emit a separate dark URL here.
+ * leaftletHtml.ts / PhotoMap.jsx); AMap has no native dark tiles, so the dark
+ * entry reuses the light URL with `className: 'amap-dark-tile'`.
+ *
+ * `crossOrigin: 'anonymous'` is set on OSM/ArcGIS layers (which send CORS
+ * headers); NOT on AMap layers — AMap's tile CDN does not send CORS headers,
+ * and adding crossOrigin there would break desktop tile loading.
  */
 const TILE_LAYERS = {
   osm: {
-    light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    satellite:
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    light: {
+      url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      subdomains: ['a', 'b', 'c', 'd'],
+      maxZoom: 20,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      name: 'Light',
+      crossOrigin: 'anonymous',
+    },
+    dark: {
+      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      subdomains: ['a', 'b', 'c', 'd'],
+      maxZoom: 20,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      name: 'Dark',
+      crossOrigin: 'anonymous',
+    },
+    satellite: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      maxZoom: 19,
+      attribution: 'Tiles &copy; Esri',
+      name: 'Satellite',
+      crossOrigin: 'anonymous',
+    },
   },
   amap: {
-    light:
-      'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-    satellite:
-      'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+    light: {
+      url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+      subdomains: ['1', '2', '3', '4'],
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://amap.com">高德地图</a>',
+      name: '高德普通',
+    },
+    dark: {
+      url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+      subdomains: ['1', '2', '3', '4'],
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://amap.com">高德地图</a>',
+      name: '高德夜间',
+      className: 'amap-dark-tile',
+    },
+    satellite: {
+      url: 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+      subdomains: ['1', '2', '3', '4'],
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://amap.com">高德地图</a>',
+      name: '高德卫星',
+    },
   },
 };
 
 /**
- * Resolve a tile URL for a provider + style. Falls back to OSM light so a
- * misconfigured amap/dark combo never produces an empty map.
+ * Resolve the tile layer URL for a provider + style. Falls back to OSM
+ * light so a misconfigured amap/dark combo never produces an empty map.
+ *
+ * Backward-compat shim: returns ONLY the URL string. New callers that need
+ * subdomains/maxZoom/className should use getTileLayerConfig().
  *
  * @param {'osm'|'amap'} provider
  * @param {'light'|'dark'|'satellite'} style
- * @returns {string}
+ * @returns {string} tile URL template
  */
 function buildTileLayerUrl(provider, style) {
   const layers = TILE_LAYERS[provider] || TILE_LAYERS.osm;
-  return layers[style] || TILE_LAYERS.osm.light;
+  const config = layers[style] || TILE_LAYERS.osm.light;
+  return config.url;
+}
+
+/**
+ * Get the full tile layer config (url + subdomains + maxZoom + className +
+ * attribution + name + crossOrigin). Use this instead of buildTileLayerUrl
+ * when you need subdomains etc.
+ *
+ * @param {'osm'|'amap'} provider
+ * @param {'light'|'dark'|'satellite'} style
+ * @returns {{url: string, subdomains?: string[], maxZoom?: number, className?: string, attribution?: string, name?: string, crossOrigin?: string}}
+ */
+function getTileLayerConfig(provider, style) {
+  const layers = TILE_LAYERS[provider] || TILE_LAYERS.osm;
+  const config = layers[style] || TILE_LAYERS.osm.light;
+  return config;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +264,7 @@ const _sharedExports = {
   MAP_PROVIDERS,
   TILE_LAYERS,
   buildTileLayerUrl,
+  getTileLayerConfig,
   clusterRadiusFromDelta,
   gridCluster,
   isValidLatitude,
@@ -209,6 +278,8 @@ const _e_TILE_LAYERS = _sharedExports.TILE_LAYERS;
 export { _e_TILE_LAYERS as TILE_LAYERS };
 const _e_buildTileLayerUrl = _sharedExports.buildTileLayerUrl;
 export { _e_buildTileLayerUrl as buildTileLayerUrl };
+const _e_getTileLayerConfig = _sharedExports.getTileLayerConfig;
+export { _e_getTileLayerConfig as getTileLayerConfig };
 const _e_clusterRadiusFromDelta = _sharedExports.clusterRadiusFromDelta;
 export { _e_clusterRadiusFromDelta as clusterRadiusFromDelta };
 const _e_gridCluster = _sharedExports.gridCluster;

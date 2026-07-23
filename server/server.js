@@ -395,10 +395,12 @@ CREATE TABLE IF NOT EXISTS ai_config (
   max_tokens INTEGER DEFAULT 2048,
   monthly_budget_usd REAL DEFAULT 10.0,
   monthly_tokens_used INTEGER DEFAULT 0,
+  budget_reset_at TEXT,
   allow_image_analysis INTEGER DEFAULT 1,
   image_max_resolution TEXT DEFAULT 'medium',
   confirm_before_write INTEGER DEFAULT 1,
   max_tool_calls_per_request INTEGER DEFAULT 15,
+  engine TEXT DEFAULT 'legacy',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -496,9 +498,23 @@ CREATE TABLE IF NOT EXISTS ai_models (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-`;
 
-// Seed locations if needed
+CREATE TABLE IF NOT EXISTS ai_pending_writes (
+  confirmation_id TEXT PRIMARY KEY,
+  conversation_id INTEGER,
+  thread_id TEXT,
+  tool_call_id TEXT,
+  tool_name TEXT NOT NULL,
+  args_json TEXT,
+  status TEXT DEFAULT 'pending',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  resolved_at DATETIME,
+  FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_pending_writes_status ON ai_pending_writes(status);
+CREATE INDEX IF NOT EXISTS idx_ai_pending_writes_conv ON ai_pending_writes(conversation_id);
+`;
 const seedLocations = async () => {
 	// ... (implementation if needed, or keep empty if handled elsewhere)
 };
@@ -530,6 +546,25 @@ const seedLocations = async () => {
 			});
 		});
 		console.log('DB schema ensured');
+
+		// ── Phase 0: AI config column additions (idempotent for existing DBs) ──
+		const { runAsync: _runAsync } = require('./utils/db-helpers');
+		const _ensureColumn = async (table, col, type) => {
+			try {
+				await _runAsync(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+				console.log(`[SERVER] Added column ${table}.${col}`);
+			} catch (_e) {
+				// "duplicate column name" = already exists, expected on re-run
+			}
+		};
+		try {
+			await _ensureColumn('ai_config', 'engine', 'TEXT DEFAULT \'legacy\'');
+			await _ensureColumn('ai_config', 'budget_reset_at', 'TEXT');
+			await _ensureColumn('ai_models', 'tokens_per_dollar', 'INTEGER');
+			console.log('[SERVER] AI schema columns ensured.');
+		} catch (colErr) {
+			console.warn('[SERVER] AI column ensure (non-fatal):', colErr.message);
+		}
 
         // Recompute roll display_seq on startup. Now a single window-function
         // UPDATE (2C.1.3); the legacy ensureXxxColumn runtime fallbacks are
