@@ -19,6 +19,7 @@ const MDNS_BROWSE_TIMEOUT = MDNS_CONFIG.BROWSE_TIMEOUT;
 export interface ProbeResult {
   port: number;
   version: string;
+  scheme: string;
 }
 
 export interface PortScanResult {
@@ -70,11 +71,16 @@ export interface DiscoverPortResult {
 export interface ValidateServerResult {
   valid: boolean;
   version?: string;
+  url?: string;
 }
 
-async function probePort(ip: string, port: number): Promise<ProbeResult | null> {
+/**
+ * Probe a single scheme (http or https) on a host:port.
+ * Returns the discover payload + scheme on success, null on failure.
+ */
+async function probeScheme(ip: string, port: number, scheme: string): Promise<ProbeResult | null> {
   try {
-    const url = `http://${ip}:${port}/api/discover`;
+    const url = `${scheme}://${ip}:${port}/api/discover`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DISCOVERY_TIMEOUT);
 
@@ -91,13 +97,21 @@ async function probePort(ip: string, port: number): Promise<ProbeResult | null> 
         return {
           port: data.port || port,
           version: data.version || 'unknown',
+          scheme,
         };
       }
     }
-  } catch (e) {
-    // Port not reachable or not FilmGallery, silently ignore
+  } catch {
+    // Port not reachable, cert not trusted, or not FilmGallery — try next.
   }
   return null;
+}
+
+/**
+ * Probe a port trying HTTPS first (server prefers TLS), then HTTP.
+ */
+async function probePort(ip: string, port: number): Promise<ProbeResult | null> {
+  return (await probeScheme(ip, port, 'https')) || (await probeScheme(ip, port, 'http'));
 }
 
 export async function discoverByPortScan(ip: string): Promise<PortScanResult | null> {
@@ -111,7 +125,7 @@ export async function discoverByPortScan(ip: string): Promise<PortScanResult | n
     if (results[i]) {
       return {
         port: results[i]!.port,
-        fullUrl: `http://${cleanIp}:${results[i]!.port}`,
+        fullUrl: `${results[i]!.scheme}://${cleanIp}:${results[i]!.port}`,
         version: results[i]!.version,
         method: 'portscan',
         ip: cleanIp,
@@ -175,14 +189,19 @@ export function discoverByMdns(timeout: number = MDNS_BROWSE_TIMEOUT): Promise<M
       const port = service.port || parseInt(txt.port, 10) || 4000;
 
       if (ip) {
-        services.push({
+        const entry: MdnsService = {
           name: service.name,
           ip: ip,
           port: port,
-          fullUrl: `http://${ip}:${port}`,
+          fullUrl: `https://${ip}:${port}`,
           version: txt.version || 'unknown',
           device: txt.device || service.name,
           method: 'mdns',
+        };
+        services.push(entry);
+        // Verify the scheme works; downgrade to http if https fails.
+        probeScheme(ip, port, 'https').then((r) => {
+          if (!r) entry.fullUrl = `http://${ip}:${port}`;
         });
       }
     });
@@ -322,25 +341,31 @@ export async function discoverPort(ip: string): Promise<DiscoverPortResult | Por
 }
 
 export async function validateServer(url: string): Promise<ValidateServerResult> {
-  try {
-    const cleanUrl = url.replace(/\/$/, '');
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), DISCOVERY_TIMEOUT);
+  const cleanUrl = url.replace(/\/$/, '');
+  // Try the URL as-is first; if it fails, try the alternate scheme
+  // (server may run HTTPS while the URL says http, or vice-versa).
+  const altScheme = cleanUrl.startsWith('https://')
+    ? cleanUrl.replace(/^https:/, 'http:')
+    : cleanUrl.replace(/^http:/, 'https:');
 
-    const response = await fetch(`${cleanUrl}/api/discover`, {
-      signal: controller.signal,
-      headers: { Accept: 'application/json' },
-    });
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const data = await response.json();
-      if (data.app === APP_IDENTIFIER) {
-        return { valid: true, version: data.version };
+  for (const candidate of [cleanUrl, altScheme]) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), DISCOVERY_TIMEOUT);
+      const response = await fetch(`${candidate}/api/discover`, {
+        signal: controller.signal,
+        headers: { Accept: 'application/json' },
+      });
+      clearTimeout(timeoutId);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.app === APP_IDENTIFIER) {
+          return { valid: true, version: data.version, url: candidate };
+        }
       }
+    } catch {
+      // Try next scheme.
     }
-  } catch (e) {
-    // Not reachable or not valid
   }
   return { valid: false };
 }

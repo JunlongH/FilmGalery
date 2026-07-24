@@ -11,7 +11,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Card, CardBody, Chip, Spinner, Input } from '@heroui/react';
 import {
   KeyRound, Copy, Check, RefreshCw, ShieldCheck, ShieldAlert,
-  Eye, EyeOff, Wifi,
+  Eye, EyeOff, Wifi, Download,
 } from 'lucide-react';
 import { getServerSecret, regenerateSecret, checkAuth } from '../../api/auth';
 import {
@@ -70,6 +70,22 @@ function HostAuthPanel() {
     }
   };
 
+  const handleDownloadCa = async () => {
+    try {
+      const res = await fetch(`${getApiBase()}/api/auth/ca-cert`);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'filmgallery-ca.pem';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('[Auth] CA cert download failed:', e);
+    }
+  };
+
   const masked = secret ? `${secret.slice(0, 8)}${'•'.repeat(16)}${secret.slice(-8)}` : '';
 
   const serverUrl = getApiBase();
@@ -107,6 +123,9 @@ function HostAuthPanel() {
               </div>
               <Button size="sm" variant="flat" color="warning" onPress={handleRegenerate} isLoading={regenerating}>
                 <RefreshCw className="w-4 h-4 mr-1" /> 重新生成
+              </Button>
+              <Button size="sm" variant="flat" onPress={handleDownloadCa}>
+                <Download className="w-4 h-4 mr-1" /> CA 证书
               </Button>
             </div>
           ) : (

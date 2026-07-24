@@ -148,11 +148,15 @@ export default function SettingsScreen({ navigation }: any) {
       return;
     }
     try {
-      const res = await fetch(`${clean}/api/rolls`);
-      if (res.ok) {
-        alert(t('settings.connectOk', { url: clean }));
+      const res = await validateServer(clean);
+      if (res.valid) {
+        // Auto-correct the scheme if the server answered on a different one.
+        if (res.url && res.url !== clean) {
+          setUrl(res.url);
+        }
+        alert(t('settings.connectOk', { url: res.url || clean }));
       } else {
-        alert(t('settings.connectStatus', { url: clean, status: res.status }));
+        alert(t('settings.connectFail', { url: clean, message: 'unreachable' }));
       }
     } catch (e) {
       alert(t('settings.connectFail', { url: clean, message: (e as Error).message }));
