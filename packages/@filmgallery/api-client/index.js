@@ -116,7 +116,7 @@ function createHttpHelpers({ getBaseUrl, setBaseUrl, primaryBaseUrl, backupUrl, 
   };
 
   // Phase 2B #1 — auth token injection.
-  // `authToken` is the plaintext bearer token issued by /api/pairing/verify.
+  // `authToken` is the plaintext bearer secret (shared-secret auth).
   // Stored in-memory only; mobile/watch persist it via platform secure storage
   // (expo-secure-store / keychain) and feed it back through setAuthToken.
   let authToken = null;

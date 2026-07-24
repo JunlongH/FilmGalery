@@ -1,83 +1,150 @@
-# FilmGallery Agent 系统重构方案
+# FilmGallery Agent 系统全面重构方案
 
-> 子目录入口文档。本方案基于对现有 AI 助手代码的深度审计 + 两个独立子代理（adversarial reviewer / architecture researcher）的交叉论证得出。所有引用的代码位置均经过实际验证。
+> 基于对现有 35 个工具 + 编排层的深度代码审计，以及 LangGraph/LangChain/OpenAI function-calling 最佳实践研究制定。旧版架构文档已归档至 `../agent-redesign-v1-archived/`。
 
 ## 文档结构
 
-| 文件 | 内容 | 读者 |
-|---|---|---|
-| `README.md`（本文件） | 执行摘要 + 决策门 + 文档导航 | 决策者、快速浏览 |
-| `DESIGN.md` | 完整架构设计：状态图、节点、检查点、流式协议、中断恢复、工具组织、记忆、安全 | 实施工程师 |
-| `MIGRATION.md` | 5 阶段迁移计划（feature flag 双引擎共存）、每阶段交付物、风险与回滚 | 实施工程师、运维 |
-| `ALTERNATIVES.md` | LangGraph vs 修补现有 orchestrator vs Vercel AI SDK vs 自研最小状态机 vs Mastra 的横向对比 | 决策者、架构评审 |
+| 文件 | 内容 |
+|---|---|
+| `README.md`（本文件） | 现状诊断、根因分析、方案概览、文档导航 |
+| `DIAGNOSIS.md` | 完整审计报告：6 个致命 bug + 22 个架构缺陷 + 逐工具发现 |
+| `TOOL-FRAMEWORK.md` | 标准化工具框架规范：接口定义、验证、错误、事务、幂等 |
+| `TOOLS.md` | 按域工具清单与重构方案（8 域、~38 工具的完整规范） |
+| `ARCHITECTURE.md` | LangGraph 单代理架构：状态图、检查点、流式、中断恢复 |
+| `MIGRATION.md` | 4 阶段迁移计划（双引擎共存 → 全量切换） |
 
 ## 一句话结论
 
-**采用 LangGraph.js 单代理架构（非 supervisor 多代理），自定义基于现有 `sqlite3` 的 `BaseCheckpointSaver`（避免引入 `better-sqlite3` 第二个原生模块），完整保留现有 35 个工具与 SSE 事件协议，通过 feature flag 与 legacy orchestrator 共存，分 5 阶段迁移。**
+**现有 agent tools 几乎不可用是因为工具层存在 6 个致命 bug（3 个工具 100% 失败）和系统性的架构缺陷（无验证、无事务、无错误恢复、死代码、跨请求状态泄漏）。不是"修补"能解决的，需要基于 LangGraph 全面重构工具框架与编排层。**
 
-## 核心设计决策（一句话各一条）
+## 现状诊断
 
-1. **单代理，非多代理 supervisor** —— 35 个工具远低于"需要路由 LLM"的阈值（~50+）；单用户场景下 supervisor 的额外 LLM 调用是纯开销。两个子代理在此点完全一致。
-2. **自定义 `SqliteSaver`，不引入 `better-sqlite3`** —— 官方 `@langchain/langgraph-checkpoint-sqlite` 硬依赖 `better-sqlite3`，会与现有 `sqlite3` ^5.1.7 共存，加倍 Electron 原生模块重建负担。自写 ~150 LOC 的 `BaseCheckpointSaver` 实现可避免此问题。
-3. **保留 `ai-gateway.js`，包一层 `BaseChatModel` 适配器** —— 现有网关已支持 OpenAI/Azure/DeepSeek/Ollama/Groq/vLLM/GLM，且带 configHash 客户端缓存与 per-request 临时 override。重写会丢失这些能力。
-4. **保留 SSE 事件协议不变** —— 通过自定义 `StreamTransformer` 把 LangGraph 的 `messages`/`tools`/`interrupts` 通道投影到现有 `{conversation_id, tool_call, write_confirmation, tool_result, text_delta, done}` 事件。移动端零改动。
-5. **保留全部 35 个工具与 3 级安全模型** —— 现有工具架构（`{schema, handler, type, securityLevel}` + `<database_result>` 注入防护 + 审计日志）是资产，不是负债。仅做 SQL 注入修复与命名空间分组。
-6. **不引入 RAG / 向量检索 / CLIP 嵌入** —— 单用户几千张照片的场景下，结构化搜索（EXIF/标签/日期/地点）已足够；"找相似照片"用 LLM 视觉直接看图即可。`sqlite-vec` 在 Electron 里的跨平台原生扩展维护成本远超收益。两个子代理均强烈反对。
-7. **不引入 supervisor / 子代理 / 规划节点** —— 单用户、单领域、35 工具，多代理只会放大成本与延迟。如未来工具数突破 ~60 或需要独立视觉模型人格，再评估。
-8. **服务端保持 JavaScript（ESM/CJS），不迁移 TypeScript** —— `AGENTS.md` 明确客户端用 JSX；服务端无 `.ts` 文件。LangGraph.js 提供 CJS 构建，`require()` 即可用。`Annotation.Root` / `StateGraph` 是运行时构造，非类型专用。
-9. **`interrupt()` + 持久检查点替代内存 `Map`** —— 这是修复"重启丢失待确认写操作"bug 的正确原语，而非补丁。检查点在 `ai_checkpoints.db`（独立文件，避免污染主库）。
-10. **真实 token 级流式替代字符级假流式** —— LangGraph `stream.messages` 投影直接给出 `text-delta`，替代 `ai-orchestrator.js:317-320` 的逐字符 emit。
+### 致命 bug（导致工具 100% 失败）
 
-## 决策门（已与用户确认 2026-07-23）
+| # | 工具 | 问题 | 影响 |
+|---|---|---|---|
+| C1 | `set_roll_cover` | SQL 写入不存在的列 `cover_photo_id`/`cover_path`（实际是 `cover_photo`/`coverPath`） | **100% 失败** |
+| C2 | `add_equipment`/`update_equipment` | 用统一的 `COMMON_ALLOWED` 字段列表覆盖所有设备类型，但 flash/scanner/film_back 表没有 `type`/`mount` 列 | **flash/scanner/film_back 100% 失败** |
+| C3 | `record_film_purchase` | INSERT 不设 `updated_at`，但 `list_film_items` 按 `updated_at DESC` 排序 → 新项排在最后不可见 | **LLM 误判为失败→重复创建** |
+| C4 | `suggest_render_params` | 从 `{}` 开始叠加参数，写入残缺 preset_json（缺 30+ 必需字段）→ 渲染器 NaN/黑屏 | **破坏渲染管线** |
+| C5 | `attach_tags` | `catch {}` 吞掉所有错误（含 FK 违规），返回 `ok:true` | **假成功** |
+| C6 | 5 个批量工具 | 无事务，中途失败产生不一致状态 | **部分写入无法回滚** |
 
-两个子代理在"是否采用 LangGraph"上存在分歧。经与用户讨论优缺点后，**DC1 决策为"先做 Phase 0 再决定"**——Phase 0 修补 legacy 引擎（1 周，独立可合并）后，根据实际效果再评估是否继续 LangGraph 路径。Phase 0 无论如何都该做，是零成本决策点。
+### 架构级缺陷（22 项，详见 DIAGNOSIS.md）
 
-其余 4 个议题已确认：
+最关键的 8 项：
 
-| 议题 | 决策 |
+1. **跨请求 API 凭证泄漏** — `ai-gateway.js` 的 `_tempOverride` 是模块级单例，写确认暂停期间其他请求会使用错误的 API key
+2. **30 条消息窗口截断工具调用序列** — 在 assistant(tool_calls) 和 tool(result) 之间截断 → API 400 错误
+3. **`response.choices[0]` 无防御性解析** — 空响应直接崩溃
+4. **`sanitizeToolResult` 可被注入突破** — 不转义 `</database_result>` 标签
+5. **3 个 helper 函数是死代码** — `buildWhere`/`pickAllowed`/`buildUpdateSet` 从未被调用
+6. **`max_tokens=2048` 对工具阶段太小** — 复杂工具 schema 消耗 token，截断后 JSON.parse 静默变 `{}`
+7. **系统提示与工具冲突** — 提示说"绝不删除"，但 `delete_photo` 是注册的可调用工具
+8. **DB 统计不一致** — context-builder 不过滤 `deleted_at`，stats-tools 过滤 → 同一数据两个数字
+
+### 根因分析
+
+| 根因 | 占比 | 说明 |
+|---|---|---|
+| Schema 列名不匹配 | ~40% | 工具 SQL 写入不存在的列 |
+| 静默吞错 + 假成功 | ~20% | `catch {}` + `ok:true` + 错误计数 |
+| 写后读可见性缺口 | ~15% | `updated_at` NULL → 排序不可见 → 误判失败 → 重复创建 |
+| 无事务 → 部分写入 | ~10% | 中途失败无法回滚 |
+| 原始 SQLite 错误不可操作 | ~10% | LLM 无法从 `"no such column"` 自我恢复 |
+| 读写竞争 → 丢失更新 | ~5% | 无乐观锁/版本号 |
+
+## 方案概览
+
+### 架构：LangGraph 单代理 + 标准化工具框架
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  LangGraph StateGraph                                       │
+│                                                             │
+│  START → loadContext → agent ──────┐                        │
+│                     ↑              │                        │
+│                     │         guardWrite                     │
+│                     │              │                        │
+│                     │         interrupt()  ← 持久化检查点    │
+│                     │              │                        │
+│                     │         executeTools                   │
+│                     │         ├─ input validation (Zod)      │
+│                     │         ├─ semantic validation         │
+│                     │         ├─ transaction wrapper         │
+│                     │         └─ structured result/error     │
+│                     └──────────────┘                        │
+│                     │                                       │
+│                     ▼ (无 tool_calls)                       │
+│                    END                                      │
+│                                                             │
+│  检查点: 自定义 SqliteSaver (现有 sqlite3, 不引入依赖)      │
+│  Provider: ai-gateway.js → LangChainModelAdapter            │
+│  工具: 8 域模块, 每域独立 schema + handler + 验证           │
+│  错误: 结构化错误信封 {ok, error:{type,retryable,hint}}     │
+│  事务: db.transaction() 包裹所有多步写入                    │
+│  幂等: idempotency_key + 去重表                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 工具框架标准化
+
+每个工具必须遵循统一规范（详见 `TOOL-FRAMEWORK.md`）：
+
+```js
+{
+  name: 'photo_update_metadata',        // snake_case, 域前缀
+  domain: 'photo',                       // 所属域
+  type: 'write',                         // read | write
+  securityLevel: 1,                      // 0=auto, 1=confirm, 2=confirm+preview
+  description: '...',                    // 含"何时使用"+"参数说明"+"副作用"
+  inputSchema: z.object({...}),          // Zod schema, 自动生成 OpenAI JSON Schema
+  handler: async (args, runtime) => {    // 验证→语义检查→事务→结构化结果
+    // Layer 1: Zod 已验证类型/格式
+    // Layer 2: 语义验证（存在性、FK、权限）
+    // Layer 3: 参数化 SQL + 事务
+    return toolOk({ ... }) or toolError('not_found', '...', { hint: '...' })
+  }
+}
+```
+
+### 工具清单重构
+
+8 域 ~38 工具（详见 `TOOLS.md`），关键变化：
+
+| 域 | 现有 | 重构后 | 关键改进 |
+|---|---|---|---|
+| photo | 9 | 8 | 修 `set_roll_cover` 列名；`delete_photo` 改软删除；加输入验证 |
+| roll | 5 | 5 | 修 `set_roll_cover`；`update_roll` 加 `updated_at` 列 |
+| film | 4 | 4 | `record_film_purchase` 设 `updated_at` + 事务 + 幂等 |
+| equipment | 3 | 4 | 按设备类型分异 schema（不再统一 COMMON_ALLOWED） |
+| tag | 4 | 5 | `attach_tags` 不再吞错；加 `tag_rename`/`tag_merge` |
+| shot-log | 3 | 3 | 加乐观锁防丢失更新 |
+| stats | 4 | 4 | 已修复 SQL 注入（Phase 0） |
+| render | 3 | 5 | `suggest_render_params` 从完整模板叠加；加 `render_status`/`render_cancel` |
+
+### 迁移策略
+
+4 阶段，双引擎共存（详见 `MIGRATION.md`）：
+
+1. **Phase 1**（1 周）：工具框架 + Zod 验证 + 结构化错误 + 事务 — 修复所有致命 bug
+2. **Phase 2**（3-4 天）：LangGraph 图骨架 + 自定义检查点 + provider 适配
+3. **Phase 3**（3 天）：HITL 中断 + 流式协议映射
+4. **Phase 4**（1 周浸泡）：默认切换 + 清理
+
+## 设计原则
+
+| 原则 | 实现 |
 |---|---|
-| DC1 整体路径 | **先做 Phase 0 再决定**（Phase 0 完成后评估是否继续 LangGraph） |
-| DC4 `/confirm` 后续事件 | **方案 A：新 SSE 流**（前端 `confirmAction` 后开新连接） |
-| 预算 token 单价 | **按 provider 分别配置** `ai_models.tokens_per_dollar` 列 |
-| safeStorage fallback | **强制环境变量**（keychain 不可用时 DB 不存 key） |
-| 检查点保留 | **每会话 N=20 + 30 天清理** |
-
-### LangGraph vs 修补路径权衡（供 DC1 后续评估）
-
-| 维度 | 修补现有 orchestrator（review 子代理推荐） | LangGraph 单代理（本方案） |
-|---|---|---|
-| 工期 | 2–3 周 | 2–3 月 |
-| 修复 15 个痛点 | ✅ 全部，但为补丁式 | ✅ 全部，且为架构式 |
-| 重启后保留待确认写操作 | ⚠️ 需自建 `ai_pending_writes` 表 + 轮询 | ✅ 检查点原生支持 |
-| 真实 token 流式 | ⚠️ 需手写 OpenAI 流式 tool-call 解析 | ✅ `stream.messages` 原生 |
-| 时间旅行调试 | ❌ 无 | ✅ 检查点历史回放 |
-| 未来扩展（多代理、复杂工作流） | ❌ 需重写 | ✅ 图拓扑天然支持 |
-| 依赖体积增量 | ~0 | ~15 MB JS + 0 原生（自定义 saver） |
-| 迁移风险 | 低 | 中（双引擎共存可回退） |
-| 框架锁定 | 无 | LangChain 生态 |
-
-**Phase 0 完成后，DC1 重新评估标准**：
-- legacy 引擎重启生存性是否满足（若满足且无扩展需求，可止步）
-- 是否需要时间旅行调试（复杂工具链问题排查）
-- 是否预期未来多代理/复杂工作流扩展
-- 团队对 LangGraph 学习曲线的接受度
-
-## 关键文件索引（实施时参考）
-
-| 现有文件 | 角色 | 重构动作 |
-|---|---|---|
-| `server/services/ai-orchestrator.js` | legacy 引擎主循环 | 保留为 fallback；Phase 4 删除 |
-| `server/services/ai-gateway.js` | OpenAI 兼容网关 | 保留，包一层 `LangChainModelAdapter` |
-| `server/services/ai-tools/index.js` | 35 工具注册表 | 保留，加 `LangGraphToolAdapter` 桥接 `tool()` |
-| `server/services/ai-context-builder.js` | 系统提示构建 | 迁移为 `loadContext` 节点 |
-| `server/routes/ai-chat.js` | SSE 路由 | 加 `engine` 分支 + `/confirm` 改用 `Command({resume})` |
-| `server/server.js:388-498` | AI 表 schema | 加 `ai_config.engine` 列 + 新 `ai_pending_writes` 表 |
-| `client/src/components/AIPanel/` | 桌面 UI | Phase 3 后可选增强（无需改动即可工作） |
-| `mobile/src/components/AIChatSheet.tsx` | 移动 UI | 独立修复 write_confirmation 处理 + context 传递 |
-| `docs/AI-AGENT-PLAN.md` | 既有路线图 | 本方案为其后继， supersede 工具矩阵与安全模型部分 |
+| **系统** | 统一工具接口、统一错误信封、统一验证三层防线 |
+| **优雅** | Zod schema 自动生成 OpenAI JSON Schema；helper 函数实际被使用 |
+| **完善** | 38 工具覆盖全部 CRUD；事务/幂等/乐观锁/审计全覆盖 |
+| **鲁棒** | 防御性解析、错误可恢复、sanitizeToolResult 转义、跨请求隔离 |
+| **高效** | 真实 token 流式、工具动态选择（≤12/turn）、stats 缓存 |
+| **模块化** | 8 域独立文件；每域自含 schema + handler + 验证 |
 
 ## 下一步
 
-1. **立即开始 Phase 0**（`MIGRATION.md`）：修补 legacy 引擎的 P4/P5/P6/P11/P12/P15，使其获得重启生存性与安全修复。1 周，独立可合并。
-2. Phase 0 完成后，按 DC1 评估标准重新决策是否继续 LangGraph 路径（Phase 1–4）。
-3. 若选继续 LangGraph，4 个已决策议题（DC4 方案 A、预算按 provider、safeStorage 强制 env、检查点 N=20+30天）将在 Phase 1–3 实施时落地。
+1. 阅读 `DIAGNOSIS.md` 了解全部问题细节
+2. 阅读 `TOOL-FRAMEWORK.md` 了解标准化规范
+3. 从 `MIGRATION.md` Phase 1 开始（修复致命 bug，1 周内见效）

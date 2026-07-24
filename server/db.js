@@ -272,6 +272,15 @@ db.serialize(() => {
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_device_fp ON sessions(device_fp, device_kind)`);
 
+  // Shared-secret auth (replaces the sessions/pairing apparatus). One row,
+  // id=1. Plaintext so the host settings UI can re-display it for clients.
+  db.run(`CREATE TABLE IF NOT EXISTS auth_config (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    secret     TEXT    NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   // Y.2 (P1-17): Photo/roll query indexes are created by schema-migration.js
   // (run via runAllMigrations in server.js:515). That migration creates:
   //   idx_photos_roll(roll_id), idx_photos_date_taken(date_taken),

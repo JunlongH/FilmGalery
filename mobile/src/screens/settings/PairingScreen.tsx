@@ -1,61 +1,52 @@
 /**
- * Phase 2B #1 — Mobile pairing screen.
+ * Mobile access-key screen — shared-secret auth.
  *
- * Flow: user enters the 6-digit code shown on the desktop server →
- * POST /api/pairing/verify → store token via SecureStore → navigate back.
- * On 401 (revoked/expired), App.tsx navigates here automatically.
+ * Flow: user enters/pastes the secret shown on the desktop server →
+ * validate via GET /api/auth/check → store via SecureStore → navigate back.
+ * On 401 (invalid/rotated secret), App.tsx navigates here automatically.
  */
 import React, { useState, useCallback } from 'react';
 import { useT } from '../../i18n';
-import { View, Text, TextInput, Button, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { View, Text, TextInput, Button, ActivityIndicator, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { api, saveAuthToken } from '../../api/client';
-import { getDeviceFingerprint } from '../../utils/deviceFp';
 
 export default function PairingScreen() {
   const t = useT();
   const navigation = useNavigation<any>();
-  const [code, setCode] = useState('');
+  const [secret, setSecret] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handlePair = useCallback(async () => {
-    if (code.length !== 6) {
+  const handleConnect = useCallback(async () => {
+    const trimmed = secret.trim();
+    if (!trimmed) {
       setError(t('pair.enterCode'));
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const fp = await getDeviceFingerprint();
-      const deviceName = `${Platform.OS === 'ios' ? 'iPhone' : 'Android'} ${fp.slice(-4)}`;
+      // Store the secret as the auth token, then validate via /api/auth/check.
+      await saveAuthToken(trimmed);
       // biome-ignore lint: api-client is loosely typed
-      const res: any = await api.http.post('/api/pairing/verify', {
-        code,
-        deviceName,
-        deviceKind: 'mobile',
-        deviceFp: fp,
-      });
-      if (res.token) {
-        await saveAuthToken(res.token);
+      const res: any = await api.http.get('/api/auth/check');
+      if (res && res.authenticated) {
         navigation.navigate('Main');
       } else {
-        setError(t('pair.noToken'));
+        setError(t('pair.invalid'));
       }
     } catch (e: any) {
-      const msg = e?.body?.error || e?.message || t('pair.failed');
       const status = e?.status;
-      if (status === 423) {
-        setError(t('pair.locked'));
-      } else if (status === 401) {
+      if (status === 401 || status === 403) {
         setError(t('pair.invalid'));
       } else {
-        setError(msg);
+        setError(e?.body?.error || e?.message || t('pair.failed'));
       }
     } finally {
       setLoading(false);
     }
-  }, [code, navigation]);
+  }, [secret, navigation, t]);
 
   const handleCancel = useCallback(() => {
     navigation.goBack();
@@ -69,12 +60,15 @@ export default function PairingScreen() {
       </Text>
 
       <TextInput
-        style={styles.codeInput}
-        value={code}
-        onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
-        placeholder="000000"
-        keyboardType="number-pad"
-        maxLength={6}
+        style={styles.secretInput}
+        value={secret}
+        onChangeText={setSecret}
+        placeholder={t('pair.enterCode')}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="default"
+        multiline
+        numberOfLines={2}
         autoFocus
       />
 
@@ -87,8 +81,8 @@ export default function PairingScreen() {
           <Button title={t('common.cancel')} onPress={handleCancel} color="#999" />
           <Button
             title={t('pair.pair')}
-            onPress={handlePair}
-            disabled={code.length !== 6}
+            onPress={handleConnect}
+            disabled={!secret.trim()}
           />
         </View>
       )}
@@ -116,18 +110,18 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     lineHeight: 20,
   },
-  codeInput: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    letterSpacing: 12,
+  secretInput: {
+    fontSize: 14,
+    fontFamily: 'monospace',
     textAlign: 'center',
     borderWidth: 2,
     borderColor: '#007AFF',
     borderRadius: 12,
     paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     width: '100%',
-    maxWidth: 300,
+    maxWidth: 320,
+    minHeight: 56,
   },
   error: {
     color: '#FF3B30',

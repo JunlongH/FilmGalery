@@ -14,9 +14,9 @@ export const API_BASE = (typeof window !== 'undefined' && window.__electron?.API
 // Phase 2B #1 — Auth token (remote mode)
 // ============================================================================
 // When the desktop client connects to a REMOTE server (non-loopback), the
-// server's auth middleware requires a Bearer token. The token is obtained
-// via the pairing flow (POST /api/pairing/verify) and persisted in
-// localStorage. Loopback connections pass through auth without a token.
+// server's auth middleware requires a Bearer secret. The secret is obtained
+// from the host's settings UI (GET /api/auth/secret) and persisted in
+// localStorage. Loopback connections pass through auth without a secret.
 
 let _authToken = (() => {
   try { return localStorage.getItem('__fg_auth_token') || null; }

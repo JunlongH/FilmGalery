@@ -1,135 +1,67 @@
 /**
- * Auth middleware — Phase 2B #1.
+ * Auth middleware — shared-secret strategy.
  *
- * Strategy (docs/phase2-roadmap/phase-2b-security.md §「策略：本机放行，远端强制」):
  *   - loopback peer: pass through (desktop single-box UX, zero friction).
- *   - remote peer: require `Authorization: Bearer <token>` validated against
- *     the sessions table. Missing/invalid/revoked → 401.
+ *   - remote peer: require `Authorization: Bearer <secret>` validated against
+ *     the shared secret (constant-time compare, in-memory cached — no DB hit).
  *
- * Soft mode (env AUTH_SOFT_MODE=1): remote requests without a valid token are
- * allowed through but flagged with `X-Auth-Soft-Mode: warn`. This is the
- * upgrade window for already-paired mobile clients (one release). A 401 in
- * soft mode would force every lagging mobile client to re-pair simultaneously.
+ * Soft mode (AUTH_SOFT_MODE !== '0', default ON): remote requests without a
+ * valid secret are allowed through but flagged with X-Auth-Soft-Mode: warn and
+ * req.authenticated=false. This is the transition window while clients adopt
+ * the shared secret. Set AUTH_SOFT_MODE=0 to hard-enforce once all clients
+ * carry the secret.
  *
- * Whitelist (pre-auth): /api/discover (port discovery), /api/health/*
- * (liveness), /api/pairing/* (the pairing flow itself). OPTIONS preflight is
- * handled by `app.options('*')` mounted earlier in server.js and never reaches
- * this middleware. Static /uploads/* is mounted earlier still (D5豁免).
+ * Whitelist (pre-auth): /api/discover (port discovery), /api/health/* (liveness).
+ * OPTIONS preflight is handled by `app.options('*')` mounted earlier in
+ * server.js and never reaches this middleware. Static /uploads/* is mounted
+ * earlier still.
  *
- * Cache: positive verify results cached 60s (LRU, capacity 1000). Negative
- * results are NEVER cached so revocation is immediate.
+ * req.authenticated: true for loopback + valid-secret callers; false for
+ * soft-mode pass-through; unset for whitelisted paths. Routes can branch on
+ * it (e.g. /api/auth/check).
  */
 const { isLoopback } = require('./network');
-
-const LRU_MAX = 1000;
-const LRU_TTL_MS = 60 * 1000;
 
 const WHITELIST = [
   /^\/api\/discover$/,
   /^\/api\/health(\/|$)/,
-  /^\/api\/pairing(\/|$)/,
 ];
 
 function isWhitelisted(reqPath) {
   return WHITELIST.some((re) => re.test(reqPath));
 }
 
-function createAuthMiddleware({ sessionsStore, softMode = false }) {
-  const cache = new Map(); // token -> { session, expiresAt }
-
-  function cacheGet(token) {
-    const entry = cache.get(token);
-    if (!entry) return null;
-    if (entry.expiresAt < Date.now()) {
-      cache.delete(token);
-      return null;
-    }
-    // Refresh insertion order so recently-used entries survive eviction.
-    cache.delete(token);
-    cache.set(token, entry);
-    return entry.session;
-  }
-
-  function cacheSet(token, session) {
-    if (cache.size >= LRU_MAX) {
-      const firstKey = cache.keys().next().value;
-      cache.delete(firstKey);
-    }
-    cache.set(token, { session, expiresAt: Date.now() + LRU_TTL_MS });
-  }
-
-  /**
-   * Drop every cache entry whose session was revoked (the row itself, or any
-   * session derived from it via `issued_by`). Called by the sessions route
-   * after a successful revoke so the next request hits the DB and 401s.
-   *
-   * This is the only path that can evict a still-TTL-fresh positive entry —
-   * the plan demands revocation be immediate, not wait for the 60s TTL.
-   */
-  function invalidateBySessionId(sessionId) {
-    for (const [token, entry] of cache) {
-      const s = entry.session;
-      if (s.id === sessionId || s.issued_by === sessionId) {
-        cache.delete(token);
-      }
-    }
-  }
-
-  async function authorize(req) {
-    // 1. Loopback always passes (desktop single-box).
-    if (isLoopback(req.ip)) return { ok: true };
-
-    // 2. Pre-auth whitelist.
-    if (isWhitelisted(req.path)) return { ok: true };
-
-    // 3. Extract Bearer token.
-    const header = req.headers['authorization'] || '';
-    const match = /^Bearer\s+([A-Za-z0-9+/=]+)$/i.exec(header);
-    if (!match) {
-      return softMode ? { ok: true, soft: true } : { ok: false, status: 401 };
-    }
-    const token = match[1];
-
-    // 4. Cache lookup, then DB.
-    let session = cacheGet(token);
-    if (!session) {
-      try {
-        session = await sessionsStore.verify(token);
-      } catch (err) {
-        console.error('[AUTH] verify error:', err.message);
-        return { ok: false, status: 500, message: 'auth verify failed' };
-      }
-      if (session) cacheSet(token, session);
-      else return softMode ? { ok: true, soft: true } : { ok: false, status: 401 };
-    }
-
-    return { ok: true, session };
-  }
-
+function createAuthMiddleware({ secretStore, softMode = false }) {
   function auth(req, res, next) {
-    authorize(req).then((result) => {
-      if (result.ok) {
-        if (result.soft) res.setHeader('X-Auth-Soft-Mode', 'warn');
-        if (result.session) {
-          req.session = result.session;
-          sessionsStore.touch(result.session.id);
-        }
-        next();
-      } else {
-        // Funnel auth failures through errorHandler for a consistent response
-        // shape (ok/error/code/errorId). The `expose` flag is derived from
-        // status in classifyError: <500 → client message visible.
-        const err = new Error(result.message || 'Unauthorized');
-        err.status = result.status || 401;
-        err.code = result.status >= 500 ? 'AUTH_INTERNAL' : 'UNAUTHORIZED';
-        next(err);
-      }
-    }).catch((err) => next(err));
+    // 1. Loopback always passes (desktop single-box).
+    if (isLoopback(req.ip)) {
+      req.authenticated = true;
+      return next();
+    }
+    // 2. Pre-auth whitelist.
+    if (isWhitelisted(req.path)) {
+      return next();
+    }
+    // 3. Extract + verify Bearer secret.
+    const header = req.headers['authorization'] || '';
+    const match = /^Bearer\s+(.+)$/i.exec(header.trim());
+    const token = match ? match[1].trim() : null;
+    if (token && secretStore.verifySecret(token)) {
+      req.authenticated = true;
+      return next();
+    }
+    // 4. Soft mode — pass through with warning.
+    if (softMode) {
+      res.setHeader('X-Auth-Soft-Mode', 'warn');
+      req.authenticated = false;
+      return next();
+    }
+    // 5. Hard reject.
+    const err = new Error('Unauthorized');
+    err.status = 401;
+    err.code = 'UNAUTHORIZED';
+    return next(err);
   }
-
-  // Exposed for tests / health checks + revoke invalidation hook.
-  auth._cache = cache;
-  auth.invalidateBySessionId = invalidateBySessionId;
   return auth;
 }
 

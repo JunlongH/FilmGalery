@@ -106,7 +106,7 @@ describe('runAllMigrations — fresh DB integration', () => {
       // Spot-check the high-traffic tables — these are the ones the route
       // layer queries against. If any are missing the whole app crashes.
       for (const expected of ['films', 'rolls', 'photos', 'tags', 'photo_tags',
-                              'film_items', 'presets', 'sessions', 'equip_cameras']) {
+                              'film_items', 'presets', 'sessions', 'auth_config', 'equip_cameras']) {
         expect(tables).toContain(expected);
       }
     } finally {

@@ -199,54 +199,32 @@ app.use('/uploads/rolls', express.static(rollsDir, staticOptions));
 
 // --- Routes (mount after schema is ensured just before listen) ---
 const mountRoutes = () => {
-  // --- Phase 2B #1 auth ---
-  // Mount order (see docs/phase2-roadmap/phase-2b-security.md §1):
+  // --- auth (shared-secret) ---
+  // Mount order:
   //   app.options('*') [preflight short-circuit, top-level]
-  //   → /uploads/* static [top-level, D5豁免]
+  //   → /uploads/* static [top-level, exempt]
   //   → /api/shutdown [top-level, has own loopback gate]
   //   → auth middleware (HERE)
-  //   → /api/pairing (whitelisted inside auth; /code is loopback-gated)
-  //   → /api/sessions (auth-gated)
+  //   → /api/auth [secret mgmt; /secret + /regenerate are loopback-gated]
   //   → remaining /api/* routes
   //   → /api/* 404 catch-all
   //
-  // `/api/discover` + `/api/health*` are inside this function but are
-  // whitelisted inside the auth middleware (regex), so they remain reachable
-  // pre-pairing.
-  const { createSessionsStore } = require('./utils/sessions-store');
+  // `/api/discover` + `/api/health*` are whitelisted inside the auth
+  // middleware (regex), so they remain reachable pre-auth.
   const { createAuthMiddleware } = require('./utils/auth');
-  const { createPairingRouter } = require('./routes/pairing');
-  const { createSessionsRouter } = require('./routes/sessions');
+  const { createAuthSettingsRouter } = require('./routes/auth-settings');
+  const secretStore = require('./utils/auth-secret');
   // `db` is lazy-loaded after migrations complete (see line ~506 in the IIFE);
   // by the time mountRoutes() runs, the module cache is warm so this require
   // returns the same connection the rest of the server uses.
   const db = require('./db');
-  const sessionsStore = createSessionsStore(db);
-  // Soft mode default OFF: remote requests without a valid Bearer token are
-  // hard-rejected with 401. The original "one release" upgrade window for
-  // already-paired mobile clients has long passed. Set AUTH_SOFT_MODE=1 to
-  // temporarily re-enable the soft path (200 + X-Auth-Soft-Mode: warn) for
-  // transitional deployments. Loopback peers always pass through regardless.
-  const authSoftMode = process.env.AUTH_SOFT_MODE === '1';
-  const authMiddleware = createAuthMiddleware({ sessionsStore, softMode: authSoftMode });
-  app.use(authMiddleware);
-
-  // Pairing flow — open (the 6-digit code is the credential). /code defends
-  // itself with a loopback gate. Stricter rate limit than the global /api one.
-  const pairingLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 5,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { ok: false, error: 'Too many pairing attempts, please slow down.' },
-  });
-  app.use('/api/pairing', pairingLimiter, createPairingRouter({ sessionsStore }));
-  app.use('/api/sessions', createSessionsRouter({
-    sessionsStore,
-    // Cascade cache invalidation: a revoke must take effect on the next
-    // request, not after the 60s LRU TTL.
-    onRevoke: (id) => authMiddleware.invalidateBySessionId(id),
-  }));
+  // Soft mode default ON: remote requests without a valid Bearer secret pass
+  // through with X-Auth-Soft-Mode: warn. This is the transition window while
+  // clients adopt the shared secret. Set AUTH_SOFT_MODE=0 to hard-enforce 401.
+  // Loopback peers always pass through regardless.
+  const authSoftMode = process.env.AUTH_SOFT_MODE !== '0';
+  app.use(createAuthMiddleware({ secretStore, softMode: authSoftMode }));
+  app.use('/api/auth', createAuthSettingsRouter({ secretStore, db }));
 
   // short-lived response caching for relatively static endpoints
   app.use('/api/films', cacheSeconds(120), require('./routes/films'));
@@ -573,6 +551,11 @@ const seedLocations = async () => {
         const { recomputeRollSequence } = require('./services/roll-service');
         await recomputeRollSequence();
         console.log('[SERVER] Roll sequence recomputed.');
+
+        // Ensure the shared auth secret exists (creates + caches on first boot).
+        const secretStore = require('./utils/auth-secret');
+        await secretStore.ensureSecret(db);
+        console.log('[SERVER] Auth secret ensured.');
 
         // (Removed old ad-hoc ALTER TABLE blocks as they are now in schema-migration.js)
 

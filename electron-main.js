@@ -198,7 +198,7 @@ async function startServer(forceRestart = false) {
     const cmd = process.execPath;
     const args = [serverEntry];
     LOG('attempt spawn', cmd, args.join(' '));
-    const env = { ...process.env, USER_DATA: app.getPath('userData'), ELECTRON_RUN_AS_NODE: '1', AUTH_SOFT_MODE: '0' };
+    const env = { ...process.env, USER_DATA: app.getPath('userData'), ELECTRON_RUN_AS_NODE: '1', AUTH_SOFT_MODE: '1' };
     if (appConfig && typeof appConfig.dataRoot === 'string' && appConfig.dataRoot.trim()) {
       env.DATA_ROOT = appConfig.dataRoot.trim();
       LOG('startServer: DATA_ROOT set to', env.DATA_ROOT);
