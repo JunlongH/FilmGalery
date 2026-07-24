@@ -217,3 +217,23 @@ export async function cleanupExportHistory(keepCount = 100) {
   });
   return resp.json();
 }
+
+// ─── Digital mode APIs ───
+
+export {
+  getAlbums, getAlbum, getAlbumPhotos,
+  createAlbum, updateAlbum, deleteAlbum, restoreAlbum,
+  setAlbumCover, addAlbumPhotos, removeAlbumPhoto, sortAlbumPhotos,
+} from './albums';
+
+export {
+  digitalPreviewImport, digitalExecuteImport, getDigitalImportProgress, cancelDigitalImport, checkDigitalImportHash,
+} from './digital-import';
+
+export {
+  developPreview, developSave, developExport, getDevelopParams,
+} from './digital-develop';
+
+export {
+  getAppConfig, updateAppConfig, setOnboardingChoice,
+} from './app-config';

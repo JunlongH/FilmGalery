@@ -30,7 +30,7 @@
     "start": "electron .",
     "test": "jest --config tests/jest.config.js",
     "test:verbose": "jest --config tests/jest.config.js --verbose",
-    "lint": "eslint server packages tests tools"
+    "lint": "eslint server packages tests tools && node tools/check-join-rolls.js"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",

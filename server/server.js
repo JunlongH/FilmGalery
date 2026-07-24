@@ -179,6 +179,14 @@ const caseInsensitiveStatic = (root, options = {}) => {
 // Serve local temp uploads for previews (no long cache). Mount BEFORE /uploads.
 app.use('/uploads/tmp', express.static(localTmpDir));
 
+// Serve digital thumb directories with short-lived cache (thumbs are mutable — regenerated on re-develop)
+app.use('/uploads/digital', (req, res, next) => {
+  if (/\/thumb\//.test(req.path)) {
+    return express.static(path.join(uploadsDir, 'digital'), thumbStaticOptions)(req, res, next);
+  }
+  next();
+});
+
 // Serve thumb directories with short-lived cache (thumbs are mutable — regenerated on re-export)
 // Must be mounted BEFORE the generic /uploads route so it takes priority.
 app.use('/uploads/rolls', (req, res, next) => {
@@ -253,6 +261,12 @@ const mountRoutes = () => {
   app.use('/api/edge-detection', require('./routes/edge-detection')); // Edge detection for auto-crop
   app.use('/api/raw', require('./routes/raw')); // RAW file decoding
   app.use('/api/filesystem', require('./routes/filesystem')); // Filesystem browsing for hybrid mode
+  // --- Digital mode routes (Part 3) ---
+  app.use('/api/app-config', require('./routes/app-config'));
+  app.use('/api/albums', cacheSeconds(10), require('./routes/albums'));
+  app.use('/api/digital-sessions', cacheSeconds(30), require('./routes/digital-sessions'));
+  app.use('/api/digital/import', require('./routes/digital-import'));
+  app.use('/api/digital-develop', require('./routes/digital-develop'));
   // Stricter limiter on billable AI endpoints
   const aiLimiter = rateLimit({
     windowMs: 60 * 1000,

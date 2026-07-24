@@ -16,6 +16,7 @@ const sharp = require('sharp');
 sharp.cache(false);
 const { buildPipeline } = require('../services/filmlab-service');
 const { runAsync, allAsync, getAsync, validatePhotoUpdate, paginateQuery } = require('../utils/db-helpers');
+const { buildSourceTypeClause } = require('../../packages/shared/photographyMode');
 const { isPathConfined, safeUnlink } = require('../utils/path-security');
 const { savePhotoTags, attachTagsToPhotos } = require('../services/tag-service');
 const { uploadsDir } = require('../config/paths');
@@ -101,7 +102,7 @@ function buildCurveLUT(points) {
 
 // Get all photos with optional filtering
 router.get('/', async (req, res, next) => {
-  const { camera, lens, photographer, location_id, film, year, month, ym, q, favorite } = req.query;
+  const { camera, lens, photographer, location_id, film, year, month, ym, q, favorite, mode, album_id, session_id, include_deleted } = req.query;
 
   const toArray = (v) => {
     if (v === undefined || v === null) return [];
@@ -155,9 +156,9 @@ router.get('/', async (req, res, next) => {
            COALESCE(lens.focal_length_max, rlens.focal_length_max) AS lens_equip_focal_max,
            COALESCE(lens.max_aperture, rlens.max_aperture) AS lens_equip_max_aperture,
            flash.name AS flash_equip_name, flash.brand AS flash_equip_brand, flash.guide_number AS flash_equip_gn
-    FROM photos p
-    JOIN rolls r ON p.roll_id = r.id
-    LEFT JOIN locations l ON p.location_id = l.id
+     FROM photos p
+     LEFT JOIN rolls r ON p.roll_id = r.id
+     LEFT JOIN locations l ON p.location_id = l.id
     LEFT JOIN films f ON r.filmId = f.id
     LEFT JOIN equip_cameras cam ON p.camera_equip_id = cam.id
     LEFT JOIN equip_cameras rcam ON r.camera_equip_id = rcam.id
@@ -179,9 +180,9 @@ router.get('/', async (req, res, next) => {
            COALESCE(lens.focal_length_max, rlens.focal_length_max) AS lens_equip_focal_max,
            COALESCE(lens.max_aperture, rlens.max_aperture) AS lens_equip_max_aperture,
            flash.name AS flash_equip_name, flash.brand AS flash_equip_brand, flash.guide_number AS flash_equip_gn
-    FROM photos p
-    JOIN rolls r ON p.roll_id = r.id
-    LEFT JOIN films f ON r.filmId = f.id
+     FROM photos p
+     LEFT JOIN rolls r ON p.roll_id = r.id
+     LEFT JOIN films f ON r.filmId = f.id
     LEFT JOIN equip_cameras cam ON p.camera_equip_id = cam.id
     LEFT JOIN equip_cameras rcam ON r.camera_equip_id = rcam.id
     LEFT JOIN equip_lenses lens ON p.lens_equip_id = lens.id
@@ -190,6 +191,36 @@ router.get('/', async (req, res, next) => {
     WHERE 1=1
   `;
   const params = [];
+
+  // Mode filter (source_type): film / digital / all
+  if (mode && mode !== 'all') {
+    const { clause, params: modeParams } = buildSourceTypeClause(mode);
+    if (clause) {
+      sql += ` AND ${clause}`;
+      params.push(...modeParams);
+    }
+  }
+
+  // Session filter (digital import batches)
+  if (session_id) {
+    const sid = parseInt(session_id, 10);
+    if (Number.isNaN(sid)) return res.status(400).json({ error: 'Invalid session_id' });
+    sql += ` AND p.session_id = ?`;
+    params.push(sid);
+  }
+
+  // Album filter (M2M via album_photos)
+  if (album_id) {
+    const aid = parseInt(album_id, 10);
+    if (Number.isNaN(aid)) return res.status(400).json({ error: 'Invalid album_id' });
+    sql += ` AND EXISTS (SELECT 1 FROM album_photos ap WHERE ap.album_id = ? AND ap.photo_id = p.id)`;
+    params.push(aid);
+  }
+
+  // Soft-delete filter (default: exclude deleted)
+  if (include_deleted !== 'true') {
+    sql += ` AND p.deleted_at IS NULL`;
+  }
 
   // Full-text search (q parameter)
   if (q && typeof q === 'string' && q.trim()) {
@@ -340,7 +371,7 @@ router.get('/random', async (req, res, next) => {
            ) as lens_name,
            COALESCE(loc.city_name, p.city) as city
     FROM photos p
-    JOIN rolls r ON p.roll_id = r.id
+    LEFT JOIN rolls r ON p.roll_id = r.id
     LEFT JOIN films f ON f.id = r.filmId
     LEFT JOIN locations loc ON loc.id = p.location_id
     WHERE p.full_rel_path IS NOT NULL OR p.positive_rel_path IS NOT NULL
@@ -363,7 +394,7 @@ router.get('/single/:id', async (req, res, next) => {
     const sql = `
       SELECT p.*, COALESCE(f.name, r.film_type) AS film_name, r.title AS roll_title
       FROM photos p
-      JOIN rolls r ON r.id = p.roll_id
+      LEFT JOIN rolls r ON r.id = p.roll_id
       LEFT JOIN films f ON f.id = r.filmId
       WHERE p.id = ?
     `;
@@ -384,7 +415,7 @@ router.get('/favorites', async (req, res, next) => {
   const sql = `
     SELECT p.*, COALESCE(f.name, r.film_type) AS film_name, r.title AS roll_title
     FROM photos p
-    JOIN rolls r ON r.id = p.roll_id
+    LEFT JOIN rolls r ON r.id = p.roll_id
     LEFT JOIN films f ON f.id = r.filmId
     WHERE IFNULL(CAST(p.rating AS INTEGER), 0) <> 0
     ORDER BY p.id DESC
@@ -414,6 +445,7 @@ router.get('/negatives', async (req, res, next) => {
     JOIN rolls r ON r.id = p.roll_id
     LEFT JOIN films f ON f.id = r.filmId
     WHERE IFNULL(CAST(p.is_negative_source AS INTEGER), 0) = 1
+      AND (p.source_type = 'film' OR p.source_type IS NULL)
     ORDER BY p.id DESC
   `;
   try {
@@ -548,6 +580,7 @@ router.put('/:id/update-positive', uploadDefault.single('image'), async (req, re
     const row = await PreparedStmt.getAsync('photos.getByRollSimple', [id]);
 
     if (!row) return res.status(404).json({ error: 'Photo not found' });
+    if (row.roll_id == null) return res.status(400).json({ error: 'Digital photos have no roll storage' });
 
     const rollId = row.roll_id;
     const frameNum = row.frame_number || '00';
@@ -639,6 +672,7 @@ router.post('/:id/ingest-positive', uploadDefault.single('image'), async (req, r
       console.error('[INGEST-POSITIVE] Photo not found:', id);
       return res.status(404).json({ error: 'Photo not found' });
     }
+    if (row.roll_id == null) return res.status(400).json({ error: 'Digital photos have no roll storage' });
     console.log('[INGEST-POSITIVE] Photo row:', row);
 
     const rollId = row.roll_id;
@@ -796,6 +830,7 @@ router.post('/:id/export-positive', async (req, res, next) => {
     // Fetch photo row to get original path & roll info
     const row = await getAsync('SELECT id, roll_id, frame_number, original_rel_path, negative_rel_path, positive_rel_path, full_rel_path, positive_thumb_rel_path FROM photos WHERE id = ?', [id]);
     if (!row) return res.status(404).json({ error: 'Photo not found' });
+    if (row.roll_id == null) return res.status(400).json({ error: 'Digital photos have no roll storage' });
     
     // 【重要】使用严格源路径选择，不允许跨类型回退
     const sourceResult = getStrictSourcePath(row, sourceType, {
@@ -1186,10 +1221,10 @@ router.post('/:id/download-with-exif', async (req, res, next) => {
              rlens.max_aperture AS roll_lens_max_aperture,
              -- Scanner info
              pscan.name AS scanner_name, pscan.brand AS scanner_brand, pscan.model AS scanner_model,
-             pscan.type AS scanner_type
-      FROM photos p
-      JOIN rolls r ON r.id = p.roll_id
-      LEFT JOIN films f ON f.id = r.filmId
+              pscan.type AS scanner_type
+       FROM photos p
+       LEFT JOIN rolls r ON r.id = p.roll_id
+       LEFT JOIN films f ON f.id = r.filmId
       LEFT JOIN equip_cameras pcam ON p.camera_equip_id = pcam.id
       LEFT JOIN equip_lenses plens ON p.lens_equip_id = plens.id
       LEFT JOIN equip_cameras rcam ON r.camera_equip_id = rcam.id

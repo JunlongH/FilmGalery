@@ -26,7 +26,7 @@ router.get('/:tagId/photos', asyncHandler(async (req, res) => {
     SELECT p.*, COALESCE(f.name, r.film_type) AS film_name, r.title AS roll_title
     FROM photo_tags pt
     JOIN photos p ON p.id = pt.photo_id
-    JOIN rolls r ON r.id = p.roll_id
+    LEFT JOIN rolls r ON r.id = p.roll_id
     LEFT JOIN films f ON f.id = r.filmId
     WHERE pt.tag_id = ?
     ORDER BY p.id DESC

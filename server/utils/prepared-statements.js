@@ -31,7 +31,9 @@ const STATEMENTS = {
   'photos.listByRoll': 'SELECT p.*, COALESCE(l.country_name, p.country) AS country_name, COALESCE(l.city_name, p.city) AS city_name, l.country_code, l.city_lat AS location_lat, l.city_lng AS location_lng FROM photos p LEFT JOIN locations l ON p.location_id = l.id WHERE p.roll_id = ? ORDER BY p.frame_number',
   'photos.getByRollSimple': 'SELECT id, roll_id, frame_number, full_rel_path, thumb_rel_path, positive_rel_path, positive_thumb_rel_path FROM photos WHERE id = ?',
   'photos.updateRating': 'UPDATE photos SET rating = ? WHERE id = ?',
-  'photos.delete': 'DELETE FROM photos WHERE id = ?',
+  'photos.delete': 'UPDATE photos SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?',
+  'photos.hardDelete': 'DELETE FROM photos WHERE id = ?', // Caller MUST delete photo_tags first (no FK cascade)
+  'photos.checkHash': 'SELECT id, source_type FROM photos WHERE content_hash = ?',
   
   // Tags
   'tags.getAll': 'SELECT * FROM tags ORDER BY name',
@@ -56,6 +58,61 @@ const STATEMENTS = {
   'films.getById': 'SELECT * FROM films WHERE id = ?',
   'films.listAll': 'SELECT * FROM films ORDER BY name',
   'films.getThumb': 'SELECT thumbPath FROM films WHERE id = ?',
+
+  // Digital Sessions
+  'digitalSessions.list': `
+    SELECT ds.*, c.brand || ' ' || c.model AS camera_name,
+           (SELECT thumb_rel_path FROM photos
+            WHERE session_id = ds.id AND deleted_at IS NULL
+            ORDER BY date_taken DESC LIMIT 1) AS cover_thumb
+    FROM digital_sessions ds
+    LEFT JOIN equip_cameras c ON ds.camera_id = c.id
+    WHERE ds.deleted_at IS NULL AND (? IS NULL OR ds.import_batch = ?)
+    ORDER BY ds.session_date DESC NULLS LAST, ds.id DESC`,
+
+  'digitalSessions.getByBatchId': `
+    SELECT * FROM digital_sessions WHERE import_batch = ? AND deleted_at IS NULL`,
+
+  'digitalSessions.getById': `
+    SELECT ds.*, c.brand || ' ' || c.model AS camera_name
+    FROM digital_sessions ds
+    LEFT JOIN equip_cameras c ON ds.camera_id = c.id
+    WHERE ds.id = ? AND ds.deleted_at IS NULL`,
+
+  // Albums
+  // Params: [includeDeleted(0|1), parentId, parentId]
+  'albums.list': `
+    SELECT a.*,
+           (SELECT thumb_rel_path FROM photos WHERE id = a.cover_photo_id) AS cover_thumb
+    FROM albums a
+    WHERE (? = 1 OR a.deleted_at IS NULL) AND (? IS NULL OR a.parent_id = ?)
+    ORDER BY a.sort_order, a.updated_at DESC`,
+
+  'albums.getById': `
+    SELECT a.*
+    FROM albums a
+    WHERE a.id = ? AND a.deleted_at IS NULL`,
+
+  'albums.photos': `
+    SELECT p.*, ap.sort_order AS album_sort_order, ap.added_at AS album_added_at,
+           r.title AS roll_title,
+           ds.label AS session_label, ds.session_date
+    FROM album_photos ap
+    JOIN photos p ON ap.photo_id = p.id
+    LEFT JOIN rolls r ON p.roll_id = r.id
+    LEFT JOIN digital_sessions ds ON p.session_id = ds.id
+    WHERE ap.album_id = ? AND p.deleted_at IS NULL
+    ORDER BY ap.sort_order, ap.added_at`,
+
+  // Photos (digital-aware)
+  'photos.listDigital': `
+    SELECT p.*, ds.label AS session_label, ds.session_date,
+           c.brand || ' ' || c.model AS camera_name
+    FROM photos p
+    LEFT JOIN digital_sessions ds ON p.session_id = ds.id
+    LEFT JOIN equip_cameras c ON p.camera_equip_id = c.id
+    WHERE p.source_type = 'digital' AND p.deleted_at IS NULL
+    ORDER BY p.date_taken DESC NULLS LAST, p.id DESC`,
 };
 
 /**

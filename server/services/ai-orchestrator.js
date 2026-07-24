@@ -236,6 +236,15 @@ async function* handleMessage({ conversationId, userMessage, context, imageConte
   let toolCallCount = 0;
   let continueLooping = true;
 
+  // Read photography_mode once for tool filtering
+  let photographyMode = 'all';
+  try {
+    const appCfg = await getAsync('SELECT photography_mode FROM app_config WHERE id = 1');
+    if (appCfg && appCfg.photography_mode) photographyMode = appCfg.photography_mode;
+  } catch (_) {
+    console.warn('[ai-orchestrator] Could not read photography_mode from app_config, defaulting to all:', _.message || _);
+  }
+
   // 模型选择：优先使用指定的模型覆盖，其次使用全局配置
   let modelForQuery;
   if (modelOverride) {
@@ -254,7 +263,7 @@ async function* handleMessage({ conversationId, userMessage, context, imageConte
   while (continueLooping && toolCallCount < maxToolCalls) {
     const response = await aiGateway.chatCompletion({
       messages,
-      tools: getToolSchemas(),
+      tools: getToolSchemas(photographyMode),
       model: modelForQuery,
     });
 

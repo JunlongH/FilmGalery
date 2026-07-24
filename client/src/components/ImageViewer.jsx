@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, lazy, Suspense } from 'react';
 import { buildUploadUrl, updatePositiveFromNegative, getSingleDownloadUrl } from '../api';
 import { addCacheKey } from '../utils/imageOptimization';
 import FilmLab from './FilmLab/FilmLab';
@@ -7,11 +7,14 @@ import ModalDialog from './ModalDialog';
 import PhotoDetailsSidebar from './PhotoDetailsSidebar.jsx';
 import { useAIPanel } from './AIPanel/AIPanelContext';
 
+const DigitalDevelop = lazy(() => import('./digital/DigitalDevelop'));
+
 export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUpdate, viewMode = 'positive', roll, batchRenderCallback }) {
   const [i, setI] = useState(index);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [showInverter, setShowInverter] = useState(false);
+  const [showDigitalDevelop, setShowDigitalDevelop] = useState(false);
   const [dialog, setDialog] = useState({ isOpen: false, type: 'alert', title: '', message: '', onConfirm: null });
   const dragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
@@ -238,6 +241,11 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
 
   // 源类型选择器弹窗
   const handleFilmLabClick = () => {
+    // 数码照片走 DigitalDevelop
+    if (img?.source_type === 'digital') {
+      setShowDigitalDevelop(true);
+      return;
+    }
     // 如果只有一种源可用，直接打开FilmLab
     const availableCount = Object.values(availableSources).filter(Boolean).length;
     if (availableCount <= 1) {
@@ -256,6 +264,27 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
     setShowSourceSelector(false);
     setShowInverter(true);
   };
+
+  if (showDigitalDevelop) {
+    const sourcePath = img?.positive_rel_path
+      ? addCacheKey(buildUploadUrl(`/uploads/${img.positive_rel_path}`), img.updated_at)
+      : imgUrl;
+    return (
+      <Suspense fallback={null}>
+        <ErrorBoundary name="DigitalDevelop">
+          <DigitalDevelop
+            photoId={img.id}
+            imageUrl={sourcePath}
+            onClose={() => setShowDigitalDevelop(false)}
+            onSaved={() => {
+              setShowDigitalDevelop(false);
+              if (onPhotoUpdate) onPhotoUpdate();
+            }}
+          />
+        </ErrorBoundary>
+      </Suspense>
+    );
+  }
 
   if (showInverter) {
     // 使用选定的源类型（获取严格匹配的源路径）
@@ -433,7 +462,7 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
         <div className="iv-title">{img.caption || img.frame_number || `Image ${i+1} / ${images.length}`}</div>
         <div className="iv-controls">
           <button className="iv-btn" onClick={() => setShowDetails(true)} title="Edit Meta">Edit Meta</button>
-          <button className="iv-btn" onClick={handleFilmLabClick} title="Film Lab (Invert/Color)">Film Lab</button>
+          <button className="iv-btn" onClick={handleFilmLabClick} title={img?.source_type === 'digital' ? 'Develop' : 'Film Lab (Invert/Color)'}>{img?.source_type === 'digital' ? 'Develop' : 'Film Lab'}</button>
           <button className="iv-btn" onClick={handleDownload} title="Save to Disk">Download</button>
           <button className="iv-btn" onClick={zoomOut}>−</button>
           <button className="iv-btn" onClick={reset}>Reset</button>

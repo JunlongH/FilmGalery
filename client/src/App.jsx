@@ -5,7 +5,7 @@ import { QueryClientProvider, useQueryClient, useQuery } from '@tanstack/react-q
 import { queryClient, prefetchCommonData, getCacheStrategy } from './lib';
 import TitleBar from './components/TitleBar';
 import ConflictBanner from './components/ConflictBanner';
-import { getTags, bustImageCache } from './api';
+import { getTags, bustImageCache, getAppConfig } from './api';
 import FloatingRefreshButton from './components/FloatingRefreshButton';
 import PageLoading from './components/common/PageLoading';
 // HeroUI Provider for modern UI components
@@ -35,7 +35,14 @@ const LutLibrary = lazy(() => import('./components/Settings/LutLibrary'));
 const Settings = lazy(() => import('./components/Settings'));
 const AIPanel = lazy(() => import('./components/AIPanel/AIPanel'));
 
-function LayoutInner({ tags, handleHardRefresh }) {
+// Digital mode — lazy-loaded routes
+const LibraryView = lazy(() => import('./components/digital/LibraryView'));
+const AlbumLibrary = lazy(() => import('./components/digital/albums/AlbumLibrary'));
+const AlbumDetail = lazy(() => import('./components/digital/albums/AlbumDetail'));
+const DigitalImportWizard = lazy(() => import('./components/digital/DigitalImportWizard'));
+const OnboardingModal = lazy(() => import('./components/digital/OnboardingModal'));
+
+function LayoutInner({ tags, handleHardRefresh, appConfig, onOpenOnboarding }) {
   const { togglePanel, isOpen: isAIPanelOpen } = useAIPanel();
   // AIPanel 首次打开后才挂载（并从此保持挂载以保留会话状态与关闭动画），
   // 以此延迟其数据请求与 react-markdown 依赖链的加载
@@ -64,7 +71,7 @@ function LayoutInner({ tags, handleHardRefresh }) {
           <TitleBar />
           <div className="app-body">
             {/* Modern Sidebar */}
-            <Sidebar tags={tags} />
+            <Sidebar tags={tags} appConfig={appConfig} />
 
             {/* Main Content */}
             <main className="main flex-1 min-w-0 min-h-0 overflow-auto bg-transparent">
@@ -85,6 +92,11 @@ function LayoutInner({ tags, handleHardRefresh }) {
                   <Route path="/equipment" element={<EquipmentManager />} />
                   <Route path="/luts" element={<LutLibrary />} />
                   <Route path="/settings" element={<Settings />} />
+                  {/* Digital mode routes */}
+                  <Route path="/library" element={<LibraryView />} />
+                  <Route path="/albums" element={<AlbumLibrary />} />
+                  <Route path="/albums/:id" element={<AlbumDetail />} />
+                  <Route path="/digital-import" element={<DigitalImportWizard />} />
                 </Routes>
               </Suspense>
             </main>
@@ -98,6 +110,13 @@ function LayoutInner({ tags, handleHardRefresh }) {
           </div>
         </div>
         <FloatingRefreshButton onRefresh={handleHardRefresh} />
+
+        {/* Onboarding modal — shown when onboarding_completed is falsy */}
+        {appConfig && !appConfig.onboarding_completed && (
+          <Suspense fallback={null}>
+            <OnboardingModal appConfig={appConfig} />
+          </Suspense>
+        )}
       </SidebarProvider>
     </HeroUIProvider>
   );
@@ -112,6 +131,13 @@ function Layout() {
     queryKey: ['tags'],
     queryFn: getTags,
     ...getCacheStrategy('tags'),
+  });
+
+  // App config (photography mode + onboarding state)
+  const { data: appConfig } = useQuery({
+    queryKey: ['app-config'],
+    queryFn: getAppConfig,
+    ...getCacheStrategy('appConfig'),
   });
   const tags = useMemo(
     () => (Array.isArray(tagsData) ? tagsData : []).filter(tag => tag.photos_count > 0),
@@ -156,7 +182,7 @@ function Layout() {
 
   return (
     <AIPanelProvider>
-      <LayoutInner tags={tags} handleHardRefresh={handleHardRefresh} />
+      <LayoutInner tags={tags} handleHardRefresh={handleHardRefresh} appConfig={appConfig} />
     </AIPanelProvider>
   );
 }

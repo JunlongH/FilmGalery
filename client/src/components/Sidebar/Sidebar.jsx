@@ -23,6 +23,9 @@ import {
   BarChart2, 
   Aperture, 
   Settings,
+  Images,
+  BookMarked,
+  FolderPlus,
   ChevronLeft,
   ChevronRight,
   Sun,
@@ -42,15 +45,16 @@ const SIDEBAR_COLLAPSED_WIDTH = 72;
 
 // 快捷键映射
 const SHORTCUTS = {
-  '1': '/',
+  '1': '/library',
   '2': '/rolls',
   '3': '/films',
-  '4': '/calendar',
-  '5': '/map',
-  '6': '/favorites',
-  '7': '/themes',
-  '8': '/stats',
-  '9': '/equipment',
+  '4': '/albums',
+  '5': '/digital-import',
+  '6': '/calendar',
+  '7': '/map',
+  '8': '/favorites',
+  '9': '/themes',
+  '0': '/stats',
   ',': '/settings',
 };
 
@@ -60,7 +64,7 @@ const SHORTCUTS = {
  * @param {Object} props
  * @param {Array} [props.tags] - 主题标签列表
  */
-export function Sidebar({ tags = [] }) {
+export function Sidebar({ tags = [], appConfig }) {
   const { isCollapsed, toggleCollapsed } = useSidebar();
   const { theme, toggleTheme } = useTheme();
   const { isOpen: aiPanelOpen, togglePanel: toggleAIPanel } = useAIPanel();
@@ -109,15 +113,19 @@ export function Sidebar({ tags = [] }) {
     >
       {/* Navigation - 直接开始，不需要 Header */}
       <div className="flex-1 overflow-y-auto pt-2 pb-4 px-3 space-y-6 custom-scrollbar">
-        {/* 主导航 */}
+        {/* Library — 全库浏览(胶片+数码混合) */}
         <SidebarSection>
           <SidebarItem
-            to="/"
-            icon={<Home className="w-5 h-5" />}
-            label="Overview"
-            exact
+            to="/library"
+            icon={<Images className="w-5 h-5" />}
+            label="Library"
             shortcut="⌘1"
           />
+        </SidebarSection>
+
+        {/* 胶片 — 仅在 show_film_section 启用时显示 */}
+        {(!appConfig || appConfig.show_film_section !== 0) && (
+        <SidebarSection title="Film">
           <SidebarItem
             to="/rolls"
             icon={<Camera className="w-5 h-5" />}
@@ -131,32 +139,57 @@ export function Sidebar({ tags = [] }) {
             shortcut="⌘3"
           />
         </SidebarSection>
-        
+        )}
+
+        {/* 数码 — 仅在 digital_enabled + show_digital_section 启用时显示 */}
+        {appConfig && appConfig.digital_enabled !== 0 && appConfig.show_digital_section !== 0 && (
+        <SidebarSection title="Digital" divider>
+          <SidebarItem
+            to="/albums"
+            icon={<BookMarked className="w-5 h-5" />}
+            label="Albums"
+            shortcut="⌘4"
+          />
+          <SidebarItem
+            to="/digital-import"
+            icon={<FolderPlus className="w-5 h-5" />}
+            label="Import"
+            shortcut="⌘5"
+          />
+        </SidebarSection>
+        )}
+
         {/* 浏览 */}
         <SidebarSection title="Browse" divider>
+          <SidebarItem
+            to="/"
+            icon={<Home className="w-5 h-5" />}
+            label="Overview"
+            exact
+          />
           <SidebarItem
             to="/calendar"
             icon={<Calendar className="w-5 h-5" />}
             label="Calendar"
-            shortcut="⌘4"
+            shortcut="⌘6"
           />
           <SidebarItem
             to="/map"
             icon={<Map className="w-5 h-5" />}
             label="Map"
-            shortcut="⌘5"
+            shortcut="⌘7"
           />
           <SidebarItem
             to="/favorites"
             icon={<Heart className="w-5 h-5" />}
             label="Favorites"
-            shortcut="⌘6"
+            shortcut="⌘8"
           />
           <SidebarItem
             to="/themes"
             icon={<Tag className="w-5 h-5" />}
             label="Themes"
-            shortcut="⌘7"
+            shortcut="⌘9"
           >
             {/* 子菜单：主题标签 */}
             {tags.map((tag) => (
@@ -175,13 +208,12 @@ export function Sidebar({ tags = [] }) {
             to="/stats"
             icon={<BarChart2 className="w-5 h-5" />}
             label="Statistics"
-            shortcut="⌘8"
+            shortcut="⌘0"
           />
           <SidebarItem
             to="/equipment"
             icon={<Aperture className="w-5 h-5" />}
             label="Equipment"
-            shortcut="⌘9"
           />
           <SidebarItem
             to="/luts"

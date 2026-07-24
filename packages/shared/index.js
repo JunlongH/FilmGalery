@@ -35,6 +35,9 @@ const geocode = require('./geocode');
 const geocoding = require('./geocoding');
 const mapUtils = require('./mapUtils');
 
+// 摄影模式（film / digital / all）
+const photographyMode = require('./photographyMode');
+
 // GLSL 着色器模块 (Phase 3)
 const shaders = require('./shaders');
 
@@ -496,4 +499,17 @@ module.exports = {
   isValidLatLng: mapUtils.isValidLatLng,
   /** 坐标格式化（decimal / dms） */
   formatLatLng: mapUtils.formatLatLng,
+
+  // ============================================================================
+  // 摄影模式（film / digital / all）
+  // ============================================================================
+
+  PHOTO_MODES: photographyMode.PHOTO_MODES,
+  VALID_MODES: photographyMode.VALID_MODES,
+  normalizeMode: photographyMode.normalizeMode,
+  isFilmMode: photographyMode.isFilmMode,
+  isDigitalMode: photographyMode.isDigitalMode,
+  isAllMode: photographyMode.isAllMode,
+  sourceTypeFilter: photographyMode.sourceTypeFilter,
+  buildSourceTypeClause: photographyMode.buildSourceTypeClause,
 };

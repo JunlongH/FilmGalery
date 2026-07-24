@@ -23,9 +23,10 @@ const EQUIPMENT_CONFIG = {
       'has_built_in_flash', 'flash_gn',
       'production_year_start', 'production_year_end',
       'meter_type', 'shutter_type', 'shutter_speed_min', 'shutter_speed_max', 'weight_g', 'battery_type',
-      'serial_number', 'purchase_date', 'purchase_price', 'condition', 'notes', 'image_path', 'status'
+      'serial_number', 'purchase_date', 'purchase_price', 'condition', 'notes', 'image_path', 'status',
+      'is_digital', 'sensor_type', 'sensor_width_mm', 'sensor_height_mm', 'megapixels', 'crop_factor', 'sensor_format'
     ],
-    booleanFields: ['has_fixed_lens', 'has_built_in_flash'],
+    booleanFields: ['has_fixed_lens', 'has_built_in_flash', 'is_digital'],
     requiredFields: ['name'],
     defaultValues: { status: 'owned' },
     listJoin: `

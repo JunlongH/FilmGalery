@@ -1,0 +1,295 @@
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button, Progress } from '@heroui/react';
+import { Upload, Check, AlertCircle, FileImage, X, FolderPlus } from 'lucide-react';
+import {
+  digitalPreviewImport, digitalExecuteImport, getDigitalImportProgress, cancelDigitalImport,
+  getAlbums,
+} from '../../api';
+import { getCacheStrategy } from '../../lib';
+
+const STEPS = ['Select Files', 'Preview', 'Importing'];
+const ACCEPTED = '.jpg,.jpeg,.png,.tif,.tiff,.cr2,.cr3,.nef,.arw,.rw2,.raf,.dng';
+
+export default function DigitalImportWizard() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef(null);
+  const [step, setStep] = useState(0);
+  const [files, setFiles] = useState([]);
+  const [previewResult, setPreviewResult] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [albumId, setAlbumId] = useState(null);
+  const [jobId, setJobId] = useState(null);
+  const [progress, setProgress] = useState(null);
+  const [error, setError] = useState(null);
+
+  const { data: albums = [] } = useQuery({
+    queryKey: ['albums'],
+    queryFn: () => getAlbums(),
+    ...getCacheStrategy('digitalAlbums'),
+  });
+
+  // File selection
+  const handleFiles = useCallback(async (selectedFiles) => {
+    const arr = Array.from(selectedFiles);
+    if (arr.length === 0) return;
+    setFiles(arr);
+    setError(null);
+    setUploading(true);
+    setStep(1);
+    try {
+      const result = await digitalPreviewImport(arr);
+      setPreviewResult(result);
+    } catch (err) {
+      setError(err.message || 'Preview failed');
+      setStep(0);
+    } finally {
+      setUploading(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    handleFiles(e.dataTransfer.files);
+  }, [handleFiles]);
+
+  // Execute import
+  async function handleExecute() {
+    setUploading(true);
+    setError(null);
+    try {
+      const res = await digitalExecuteImport({
+        files: previewResult.files,
+        album_id: albumId,
+      });
+      setJobId(res.jobId);
+      setStep(2);
+      setUploading(false);
+    } catch (err) {
+      setError(err.message || 'Import failed to start');
+      setUploading(false);
+    }
+  }
+
+  // Poll progress
+  useEffect(() => {
+    if (!jobId) return;
+    let cancelled = false;
+    let timer;
+    const poll = async () => {
+      try {
+        const p = await getDigitalImportProgress(jobId);
+        if (cancelled) return;
+        setProgress(p);
+        if (p.status === 'completed') {
+          queryClient.invalidateQueries({ queryKey: ['albums'] });
+          queryClient.invalidateQueries({ queryKey: ['library-photos'] });
+          setTimeout(() => navigate(albumId ? `/albums/${albumId}` : '/library'), 1500);
+          return;
+        }
+        if (p.status === 'failed') {
+          setError(p.error || 'Import failed');
+          return;
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+        return;
+      }
+      if (!cancelled) timer = setTimeout(poll, 1000);
+    };
+    timer = setTimeout(poll, 1000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [jobId]);
+
+  async function handleCancel() {
+    if (!jobId) return;
+    try { await cancelDigitalImport(jobId); } catch {}
+    navigate('/library');
+  }
+
+  function handleReset() {
+    setFiles([]);
+    setPreviewResult(null);
+    setStep(0);
+    setError(null);
+  }
+
+  return (
+    <div className="flex flex-col min-h-full bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-6 md:p-8 max-w-4xl mx-auto w-full">
+      <h2 className="text-3xl font-bold tracking-tight mb-2">Import Digital Photos</h2>
+
+      {/* Step indicator */}
+      <div className="flex items-center gap-2 mb-8">
+        {STEPS.map((label, i) => (
+          <React.Fragment key={i}>
+            <div className={`flex items-center gap-2 ${i === step ? 'text-primary font-medium' : i < step ? 'text-green-500' : 'text-zinc-400'}`}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${i === step ? 'bg-primary text-white' : i < step ? 'bg-green-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700'}`}>
+                {i < step ? <Check className="w-3.5 h-3.5" /> : i + 1}
+              </div>
+              <span className="text-sm">{label}</span>
+            </div>
+            {i < STEPS.length - 1 && <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <span className="text-sm">{error}</span>
+          <button onClick={() => setError(null)} className="ml-auto"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
+      {/* Step 0: File selection */}
+      {step === 0 && (
+        <div
+          onDrop={handleDrop}
+          onDragOver={(e) => e.preventDefault()}
+          onClick={() => fileInputRef.current?.click()}
+          className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-2xl p-12 cursor-pointer hover:border-primary hover:bg-primary/5 transition-all"
+        >
+          <Upload className="w-16 h-16 text-zinc-300 dark:text-zinc-600 mb-4" />
+          <p className="text-lg font-medium mb-1">Drop photos here or click to browse</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            JPEG, PNG, TIFF, or RAW (CR2/CR3/NEF/ARW/RW2/RAF/DNG)
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={ACCEPTED}
+            className="hidden"
+            onChange={(e) => handleFiles(e.target.files)}
+          />
+        </div>
+      )}
+
+      {/* Step 1: Preview */}
+      {step === 1 && (
+        <div className="flex-1">
+          {uploading ? (
+            <div className="flex items-center justify-center py-20">
+              <Progress size="sm" isIndeterminate className="max-w-xs" />
+              <span className="ml-3 text-sm text-zinc-500">Analyzing {files.length} files...</span>
+            </div>
+          ) : previewResult ? (
+            <>
+              <PreviewTable result={previewResult} />
+              <div className="mt-6 flex items-center gap-4">
+                <select
+                  className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
+                  value={albumId ?? ''}
+                  onChange={e => setAlbumId(e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">No album (library only)</option>
+                  {albums.map(a => (
+                    <option key={a.id} value={a.id}>{a.title}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-6 flex items-center gap-2">
+                <Button variant="flat" onPress={handleReset}>Back</Button>
+                <Button
+                  color="primary"
+                  onPress={handleExecute}
+                  isDisabled={previewResult.files.length === 0}
+                >
+                  <FolderPlus className="w-4 h-4" /> Import {previewResult.files.filter(f => !f.duplicate).length} Photos
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+
+      {/* Step 2: Progress */}
+      {step === 2 && (
+        <div className="flex-1 flex flex-col items-center justify-center">
+          {progress ? (
+            <>
+              <div className="w-full max-w-md mb-6">
+                <Progress
+                  value={progress.processed / Math.max(progress.total, 1) * 100}
+                  color={progress.status === 'failed' ? 'danger' : 'primary'}
+                  size="lg"
+                />
+                <div className="flex justify-between mt-2 text-sm text-zinc-500">
+                  <span>{progress.processed} / {progress.total}</span>
+                  <span>{progress.status}</span>
+                </div>
+              </div>
+              {progress.status === 'completed' && (
+                <p className="text-green-500 flex items-center gap-2">
+                  <Check className="w-5 h-5" /> Import complete! Redirecting...
+                </p>
+              )}
+              {progress.status !== 'completed' && progress.status !== 'failed' && (
+                <Button variant="flat" color="danger" onPress={handleCancel}>Cancel Import</Button>
+              )}
+            </>
+          ) : (
+            <p className="text-zinc-500">Starting import...</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreviewTable({ result }) {
+  const files = result.files || [];
+  const dupes = files.filter(f => f.duplicate).length;
+  const raws = files.filter(f => f.is_raw).length;
+
+  return (
+    <div>
+      <div className="grid grid-cols-3 gap-4 mb-4">
+        <StatBox label="Total" value={files.length} />
+        <StatBox label="RAW" value={raws} icon={<FileImage className="w-4 h-4" />} />
+        <StatBox label="Duplicates" value={dupes} warning={dupes > 0} />
+      </div>
+      <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden max-h-80 overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400">
+            <tr>
+              <th className="text-left p-2 font-medium">Filename</th>
+              <th className="text-left p-2 font-medium hidden sm:table-cell">Camera</th>
+              <th className="text-left p-2 font-medium hidden md:table-cell">Date</th>
+              <th className="text-left p-2 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {files.map((f, i) => (
+              <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
+                <td className="p-2 truncate max-w-48">{f.original_filename || f.filename}</td>
+                <td className="p-2 hidden sm:table-cell text-zinc-500">{f.source_model || '—'}</td>
+                <td className="p-2 hidden md:table-cell text-zinc-500">{f.date_taken?.slice(0, 10) || '—'}</td>
+                <td className="p-2">
+                  {f.duplicate ? (
+                    <span className="text-xs text-amber-500">Duplicate</span>
+                  ) : f.is_raw ? (
+                    <span className="text-xs text-blue-500">RAW</span>
+                  ) : (
+                    <span className="text-xs text-green-500">OK</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function StatBox({ label, value, icon, warning }) {
+  return (
+    <div className={`rounded-lg p-3 ${warning ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-zinc-50 dark:bg-zinc-800/50'}`}>
+      <div className="flex items-center gap-1 text-xs text-zinc-500">{icon}{label}</div>
+      <div className={`text-xl font-bold ${warning ? 'text-amber-600' : ''}`}>{value}</div>
+    </div>
+  );
+}

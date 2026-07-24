@@ -28,7 +28,10 @@ const COMPUTE_ROUTES = [
   '/api/raw/preview',
   '/api/batch-render',
   '/api/edge-detection/detect',
-  '/api/edge-detection/auto-crop'
+  '/api/edge-detection/auto-crop',
+  '/api/digital-develop/preview',
+  '/api/digital-develop/export',
+  '/api/digital/import/preview'
 ];
 
 // 参数化 compute 路由（无法用前缀表达，前缀 /api/photos 属于 DATA 类）
@@ -94,7 +97,8 @@ function getCapabilities() {
     capabilities: {
       data: true,
       compute: computeEnabled,
-      storage: true
+      storage: true,
+      digital: true
     },
     endpoints: {
       data: DATA_ROUTES,

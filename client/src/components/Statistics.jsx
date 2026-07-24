@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
@@ -9,6 +9,7 @@ import WordCloud from './WordCloud';
 import { API_BASE as API } from '../api';
 import { getCacheStrategy } from '../lib';
 import { StatCard, ChartCard, StatsModeToggle } from './Statistics/';
+import FilterChips from './digital/FilterChips';
 import { useNavigate } from 'react-router-dom';
 import { Camera, Image, DollarSign, TrendingUp, Package, Wallet, AlertTriangle, Store } from 'lucide-react';
 
@@ -22,9 +23,11 @@ const formatStat = (val) => {
 const statsCache = getCacheStrategy('stats');
 
 export default function Statistics({ mode = 'stats' }) {
-  const { data: summary } = useQuery({ queryKey: ['stats-summary'], queryFn: () => fetch(`${API}/api/stats/summary`).then(r => r.json()), ...statsCache });
-  const { data: gear } = useQuery({ queryKey: ['stats-gear'], queryFn: () => fetch(`${API}/api/stats/gear`).then(r => r.json()), ...statsCache });
-  const { data: activity } = useQuery({ queryKey: ['stats-activity'], queryFn: () => fetch(`${API}/api/stats/activity`).then(r => r.json()), ...statsCache });
+  const [sourceMode, setSourceMode] = useState(() => localStorage.getItem('fg-stats-source') || 'all');
+  const srcParam = `?mode=${sourceMode}`;
+  const { data: summary } = useQuery({ queryKey: ['stats-summary', sourceMode], queryFn: () => fetch(`${API}/api/stats/summary${srcParam}`).then(r => r.json()), ...statsCache });
+  const { data: gear } = useQuery({ queryKey: ['stats-gear', sourceMode], queryFn: () => fetch(`${API}/api/stats/gear${srcParam}`).then(r => r.json()), ...statsCache });
+  const { data: activity } = useQuery({ queryKey: ['stats-activity', sourceMode], queryFn: () => fetch(`${API}/api/stats/activity${srcParam}`).then(r => r.json()), ...statsCache });
   const { data: costs } = useQuery({ queryKey: ['stats-costs'], queryFn: () => fetch(`${API}/api/stats/costs`).then(r => r.json()), enabled: mode === 'spending', ...statsCache });
   const { data: locations } = useQuery({ queryKey: ['stats-locations'], queryFn: () => fetch(`${API}/api/stats/locations`).then(r => r.json()).catch(() => []), ...statsCache });
   const { data: themes } = useQuery({ queryKey: ['stats-themes'], queryFn: () => fetch(`${API}/api/stats/themes`).then(r => r.json()), ...statsCache });
@@ -91,6 +94,11 @@ export default function Statistics({ mode = 'stats' }) {
   const navigate = useNavigate();
   const handleModeChange = (mode) => navigate(mode === 'spending' ? '/spending' : '/stats');
 
+  const handleSourceChange = (v) => {
+    setSourceMode(v);
+    localStorage.setItem('fg-stats-source', v);
+  };
+
   return (
     <div className="w-full min-h-full bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-6 lg:p-8 space-y-8 animate-fade-in pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-700 pb-6">
@@ -103,6 +111,7 @@ export default function Statistics({ mode = 'stats' }) {
           </p>
         </div>
         <StatsModeToggle mode={isSpending ? 'spending' : 'stats'} onModeChange={handleModeChange} />
+        {!isSpending && <FilterChips value={sourceMode} onChange={handleSourceChange} />}
       </div>
 
       {!isSpending ? (

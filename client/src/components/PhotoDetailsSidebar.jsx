@@ -20,7 +20,8 @@ const FIELD_GROUPS = {
   equipment: ['camera', 'lens', 'camera_equip_id', 'lens_equip_id', 'photographer'],
   params: ['aperture', 'shutter_speed', 'iso', 'focal_length'],
   location: ['location_id', 'country', 'city', 'detail_location', 'latitude', 'longitude'],
-  scanning: ['scanner_equip_id', 'scan_resolution', 'scan_software', 'scan_lab', 'scan_date', 'scan_cost', 'scan_notes']
+  scanning: ['scanner_equip_id', 'scan_resolution', 'scan_software', 'scan_lab', 'scan_date', 'scan_cost', 'scan_notes'],
+  // Note: digital source fields (source_make, etc.) are read-only display, not in FIELD_GROUPS
 };
 
 const ALL_FIELDS = Object.values(FIELD_GROUPS).flat();
@@ -667,7 +668,8 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
         </div>
       </section>
 
-      {/* --- SCANNING SECTION --- */}
+      {/* --- SCANNING SECTION (film only) --- */}
+      {base?.source_type !== 'digital' && (
       <section className="fg-sidepanel-section">
         <SectionHeader title="Scanning Info" sectionKey="scanning" />
         <div className="fg-separator" />
@@ -744,6 +746,41 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
           />
         </div>
       </section>
+      )}
+
+      {/* --- DIGITAL SOURCE SECTION (digital only) --- */}
+      {base?.source_type === 'digital' && (
+      <section className="fg-sidepanel-section">
+        <SectionHeader title="Digital Source" sectionKey="digital" />
+        <div className="fg-separator" />
+        <div className="fg-sidepanel-groupGrid cols-2">
+          <div className="fg-field">
+            <label className="fg-label">Camera Make</label>
+            <input className="fg-input" placeholder="—" value={base?.source_make || ''} readOnly />
+          </div>
+          <div className="fg-field">
+            <label className="fg-label">Camera Model</label>
+            <input className="fg-input" placeholder="—" value={base?.source_model || ''} readOnly />
+          </div>
+          <div className="fg-field">
+            <label className="fg-label">Software</label>
+            <input className="fg-input" placeholder="—" value={base?.source_software || ''} readOnly />
+          </div>
+          <div className="fg-field">
+            <label className="fg-label">Lens</label>
+            <input className="fg-input" placeholder="—" value={base?.source_lens || ''} readOnly />
+          </div>
+          <div className="fg-field">
+            <label className="fg-label">Color Space</label>
+            <input className="fg-input" placeholder="—" value={base?.color_space || ''} readOnly />
+          </div>
+          <div className="fg-field">
+            <label className="fg-label">White Balance</label>
+            <input className="fg-input" placeholder="—" value={base?.white_balance || ''} readOnly />
+          </div>
+        </div>
+      </section>
+      )}
 
       {/* --- CAPTION SECTION --- */}
       <section className="fg-sidepanel-section">

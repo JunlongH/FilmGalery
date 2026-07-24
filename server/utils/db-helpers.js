@@ -38,10 +38,10 @@ const getAsync = (sql, params = []) => new Promise((resolve, reject) => {
 });
 
 async function validatePhotoUpdate(photoId, body) {
-  const row = await getAsync('SELECT p.id, p.roll_id, r.start_date, r.end_date FROM photos p JOIN rolls r ON r.id=p.roll_id WHERE p.id=?', [photoId]);
+  const row = await getAsync('SELECT p.id, p.roll_id, p.source_type, r.start_date, r.end_date FROM photos p LEFT JOIN rolls r ON r.id=p.roll_id WHERE p.id=?', [photoId]);
   if (!row) throw new Error('Photo not found');
   const date_taken = body.date_taken;
-  if (date_taken) {
+  if (date_taken && row.source_type === 'film' && row.roll_id) {
     const d = new Date(date_taken);
     const s = row.start_date ? new Date(row.start_date) : null;
     const e = row.end_date ? new Date(row.end_date) : null;

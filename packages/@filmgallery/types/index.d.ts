@@ -53,6 +53,31 @@ export interface Roll extends BaseEntity {
   display_seq?: number;
 }
 
+export interface CropParams {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  flip_h: boolean;
+  flip_v: boolean;
+}
+
+export interface DevelopParams {
+  white_balance?: { temp: number; tint: number };
+  exposure?: number;
+  contrast?: number;
+  highlights?: number;
+  shadows?: number;
+  whites?: number;
+  blacks?: number;
+  hsl?: Record<string, { hue: number; sat: number; lum: number }>;
+  tone_curve?: { rgb: number[]; red: number[]; green: number[]; blue: number[] };
+  split_tone?: { highlights: { color: string; balance: number }; shadows: { color: string; balance: number } };
+  lut?: string;
+  crop?: CropParams;
+}
+
 export interface Photo extends BaseEntity {
   roll_id?: number;
   filename?: string;
@@ -72,6 +97,17 @@ export interface Photo extends BaseEntity {
   width?: number;
   height?: number;
   thumb_path?: string;
+  source_type?: string;
+  session_id?: number;
+  content_hash?: string;
+  media_type?: string;
+  stack_id?: string;
+  stack_role?: string;
+  white_balance?: string;
+  color_space?: string;
+  original_filename?: string;
+  develop_params_json?: string;
+  scene_id?: string;
 }
 
 export interface Tag extends BaseEntity {
@@ -94,6 +130,46 @@ export interface Camera extends BaseEntity {
   type?: string;
   format?: string;
   notes?: string;
+  is_digital?: number;
+  sensor_type?: string;
+  sensor_width_mm?: number;
+  sensor_height_mm?: number;
+  megapixels?: number;
+  crop_factor?: number;
+  sensor_format?: string;
+}
+
+export interface Album extends BaseEntity {
+  title?: string;
+  description?: string;
+  parent_id?: number;
+  cover_photo_id?: number;
+  date_start?: string;
+  date_end?: string;
+  sort_order?: number;
+  is_smart?: number;
+  smart_rule_json?: string;
+  deleted_at?: string;
+  photo_count?: number;
+}
+
+export interface DigitalSession extends BaseEntity {
+  import_batch?: string;
+  session_date?: string;
+  camera_id?: number;
+  label?: string;
+  notes?: string;
+  file_count?: number;
+  total_size_bytes?: number;
+  import_source?: string;
+  deleted_at?: string;
+}
+
+export interface AppConfig extends BaseEntity {
+  photography_mode?: string;
+  default_import_dir?: string;
+  auto_organize?: number;
+  duplicate_detection?: number;
 }
 
 export interface Lens extends BaseEntity {

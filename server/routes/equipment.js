@@ -139,8 +139,18 @@ function createCrudRoutes(type, extraRoutes = {}) {
 // Film Formats (simple CRUD)
 createCrudRoutes('formats');
 
-// Cameras
-createCrudRoutes('cameras');
+// Cameras (with digital mode filter)
+createCrudRoutes('cameras', {
+  listFilter: async (req, items) => {
+    if (req.query.type) {
+      items = items.filter(c => c.type === req.query.type);
+    }
+    if (req.query.mode === 'digital') {
+      items = items.filter(c => c.is_digital === 1);
+    }
+    return items;
+  }
+});
 
 // Lenses (with camera compatibility filtering)
 createCrudRoutes('lenses', {

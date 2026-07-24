@@ -22,6 +22,7 @@ const TAG_TOOLS       = require('./tag-tools');
 const SHOT_LOG_TOOLS  = require('./shot-log-tools');
 const STATS_TOOLS     = require('./stats-tools');
 const RENDER_TOOLS    = require('./render-tools');
+const DIGITAL_TOOLS   = require('./digital-tools');
 
 // ─── 合并所有工具到单一注册表 ───
 const TOOLS = {
@@ -33,12 +34,24 @@ const TOOLS = {
   ...SHOT_LOG_TOOLS,
   ...STATS_TOOLS,
   ...RENDER_TOOLS,
+  ...DIGITAL_TOOLS,
 };
+
+const FILM_ONLY_TOOL_KEYS = new Set([
+  ...Object.keys(ROLL_TOOLS),
+  ...Object.keys(FILM_TOOLS),
+  ...Object.keys(SHOT_LOG_TOOLS),
+  ...Object.keys(RENDER_TOOLS),
+]);
 
 // ─── 导出接口（与旧版 ai-tools.js 完全兼容） ───
 
-function getToolSchemas() {
-  return Object.values(TOOLS).map(t => t.schema);
+function getToolSchemas(mode) {
+  const allSchemas = Object.values(TOOLS).map(t => t.schema);
+  if (mode === 'digital') {
+    return allSchemas.filter(s => !FILM_ONLY_TOOL_KEYS.has(s.function.name));
+  }
+  return allSchemas;
 }
 
 function getToolHandler(name) {

@@ -35,6 +35,9 @@ import geocode from './geocode.mjs';
 import geocoding from './geocoding.mjs';
 import mapUtils from './mapUtils.mjs';
 
+// 摄影模式（film / digital / all）
+import * as photographyMode from './photographyMode.mjs';
+
 // GLSL 着色器模块 (Phase 3)
 import shaders from './shaders/index.mjs';
 
@@ -496,6 +499,16 @@ const _sharedExports = {
   isValidLatLng: mapUtils.isValidLatLng,
   /** 坐标格式化（decimal / dms） */
   formatLatLng: mapUtils.formatLatLng,
+
+  // 摄影模式（film / digital / all）
+  PHOTO_MODES: photographyMode.PHOTO_MODES,
+  VALID_MODES: photographyMode.VALID_MODES,
+  normalizeMode: photographyMode.normalizeMode,
+  isFilmMode: photographyMode.isFilmMode,
+  isDigitalMode: photographyMode.isDigitalMode,
+  isAllMode: photographyMode.isAllMode,
+  sourceTypeFilter: photographyMode.sourceTypeFilter,
+  buildSourceTypeClause: photographyMode.buildSourceTypeClause,
 };
 const _e_RenderCore = _sharedExports.RenderCore;
 export { _e_RenderCore as RenderCore };
@@ -807,4 +820,21 @@ const _e_isValidLatLng = _sharedExports.isValidLatLng;
 export { _e_isValidLatLng as isValidLatLng };
 const _e_formatLatLng = _sharedExports.formatLatLng;
 export { _e_formatLatLng as formatLatLng };
+
+const _e_PHOTO_MODES = _sharedExports.PHOTO_MODES;
+export { _e_PHOTO_MODES as PHOTO_MODES };
+const _e_VALID_MODES = _sharedExports.VALID_MODES;
+export { _e_VALID_MODES as VALID_MODES };
+const _e_normalizeMode = _sharedExports.normalizeMode;
+export { _e_normalizeMode as normalizeMode };
+const _e_isFilmMode = _sharedExports.isFilmMode;
+export { _e_isFilmMode as isFilmMode };
+const _e_isDigitalMode = _sharedExports.isDigitalMode;
+export { _e_isDigitalMode as isDigitalMode };
+const _e_isAllMode = _sharedExports.isAllMode;
+export { _e_isAllMode as isAllMode };
+const _e_sourceTypeFilter = _sharedExports.sourceTypeFilter;
+export { _e_sourceTypeFilter as sourceTypeFilter };
+const _e_buildSourceTypeClause = _sharedExports.buildSourceTypeClause;
+export { _e_buildSourceTypeClause as buildSourceTypeClause };
 export default _sharedExports;

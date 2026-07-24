@@ -5,10 +5,19 @@ const { allAsync, getAsync } = require('../utils/db-helpers');
 // GET /api/stats/summary
 router.get('/summary', async (req, res, next) => {
   try {
+    const { normalizeMode } = require('../../packages/shared/photographyMode');
+    const mode = normalizeMode(req.query.mode);
+    let photoCondition = '';
+    if (mode === 'film') {
+      photoCondition = "AND (p.source_type = 'film' OR p.source_type IS NULL)";
+    } else if (mode === 'digital') {
+      photoCondition = "AND p.source_type = 'digital'";
+    }
     const sql = `
       SELECT 
         (SELECT COUNT(*) FROM rolls) as total_rolls,
-        (SELECT COUNT(*) FROM photos WHERE roll_id IN (SELECT id FROM rolls)) as total_photos,
+        (SELECT COUNT(*) FROM photos p WHERE p.roll_id IN (SELECT id FROM rolls)${photoCondition}) as total_photos,
+        (SELECT COUNT(*) FROM photos p WHERE p.source_type = 'digital') as total_digital_photos,
         (SELECT COUNT(*) FROM film_items WHERE deleted_at IS NULL AND status = 'in_stock') as inventory_in_stock,
         (SELECT COUNT(*) FROM film_items WHERE deleted_at IS NULL) as inventory_total,
         (
@@ -33,6 +42,14 @@ router.get('/summary', async (req, res, next) => {
 // Statistics are based on PHOTO count (not roll count)
 router.get('/gear', async (req, res, next) => {
   try {
+    const { normalizeMode } = require('../../packages/shared/photographyMode');
+    const mode = normalizeMode(req.query.mode);
+    const sourceTypeCondition = mode === 'film'
+      ? "(p.source_type = 'film' OR p.source_type IS NULL)"
+      : mode === 'digital'
+        ? "p.source_type = 'digital'"
+        : '1=1';
+
     // Camera statistics - count photos per camera
     // Priority: photo.camera > roll.camera (equipment or text)
     const sqlCameras = `
@@ -44,7 +61,8 @@ router.get('/gear', async (req, res, next) => {
           r.camera
         ) as camera_name
         FROM photos p
-        JOIN rolls r ON p.roll_id = r.id
+        LEFT JOIN rolls r ON p.roll_id = r.id
+        WHERE ${sourceTypeCondition}
       ) 
       WHERE camera_name IS NOT NULL AND camera_name != '' AND camera_name NOT IN ('-', '--', '—')
       GROUP BY camera_name
@@ -81,7 +99,8 @@ router.get('/gear', async (req, res, next) => {
             )
           END as lens_name
         FROM photos p
-        JOIN rolls r ON p.roll_id = r.id
+        LEFT JOIN rolls r ON p.roll_id = r.id
+        WHERE ${sourceTypeCondition}
       )
       WHERE lens_name IS NOT NULL AND lens_name != '' AND lens_name NOT IN ('-', '--', '—')
       GROUP BY lens_name
@@ -91,8 +110,9 @@ router.get('/gear', async (req, res, next) => {
     const sqlFilms = `
       SELECT f.name, COUNT(p.id) as count 
       FROM photos p
-      JOIN rolls r ON p.roll_id = r.id
-      JOIN films f ON r.filmId = f.id 
+      LEFT JOIN rolls r ON p.roll_id = r.id
+      JOIN films f ON r.filmId = f.id
+      WHERE ${sourceTypeCondition}
       GROUP BY f.name
     `;
 
@@ -472,6 +492,76 @@ router.get('/inventory', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ─── Digital-only statistics ───
+
+router.get('/digital/cameras', async (req, res, next) => {
+  try {
+    const rows = await allAsync(`
+      SELECT COALESCE(
+        (SELECT brand || ' ' || model FROM equip_cameras WHERE id = p.camera_equip_id),
+        p.camera
+      ) as camera_name, COUNT(*) as count
+      FROM photos p
+      WHERE p.source_type = 'digital' AND p.deleted_at IS NULL
+      GROUP BY camera_name
+      HAVING camera_name IS NOT NULL AND camera_name != ''
+      ORDER BY count DESC
+      LIMIT 20
+    `);
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+router.get('/digital/focal-lengths', async (req, res, next) => {
+  try {
+    const rows = await allAsync(`
+      SELECT
+        CASE
+          WHEN p.focal_length IS NULL THEN 'unknown'
+          WHEN p.focal_length < 18 THEN '< 18mm'
+          WHEN p.focal_length < 28 THEN '18-27mm'
+          WHEN p.focal_length < 50 THEN '28-49mm'
+          WHEN p.focal_length < 85 THEN '50-84mm'
+          WHEN p.focal_length < 135 THEN '85-134mm'
+          WHEN p.focal_length < 300 THEN '135-299mm'
+          ELSE '>= 300mm'
+        END as focal_range, COUNT(*) as count
+      FROM photos p
+      WHERE p.source_type = 'digital' AND p.deleted_at IS NULL
+      GROUP BY focal_range
+      ORDER BY count DESC
+    `);
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+router.get('/digital/monthly', async (req, res, next) => {
+  try {
+    const rows = await allAsync(`
+      SELECT strftime('%Y-%m', date_taken) as month, COUNT(*) as count
+      FROM photos
+      WHERE source_type = 'digital' AND deleted_at IS NULL AND date_taken IS NOT NULL
+      GROUP BY month
+      ORDER BY month ASC
+    `);
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+router.get('/digital/sensors', async (req, res, next) => {
+  try {
+    const rows = await allAsync(`
+      SELECT ec.sensor_format as format, COUNT(*) as count
+      FROM photos p
+      JOIN equip_cameras ec ON p.camera_equip_id = ec.id
+      WHERE p.source_type = 'digital' AND p.deleted_at IS NULL AND ec.sensor_format IS NOT NULL
+      GROUP BY ec.sensor_format
+      ORDER BY count DESC
+    `);
+    res.json(rows);
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

@@ -72,7 +72,7 @@ async function getPhotoWithRoll(photoId) {
              pscan.name AS scanner_name, pscan.brand AS scanner_brand, pscan.model AS scanner_model,
              pscan.type AS scanner_type
       FROM photos p
-      JOIN rolls r ON r.id = p.roll_id
+       LEFT JOIN rolls r ON r.id = p.roll_id
       LEFT JOIN films f ON f.id = r.filmId
       LEFT JOIN equip_cameras pcam ON p.camera_equip_id = pcam.id
       LEFT JOIN equip_lenses plens ON p.lens_equip_id = plens.id
@@ -123,7 +123,7 @@ async function getPhotosWithRoll(photoIds) {
              pscan.name AS scanner_name, pscan.brand AS scanner_brand, pscan.model AS scanner_model,
              pscan.type AS scanner_type
       FROM photos p
-      JOIN rolls r ON r.id = p.roll_id
+       LEFT JOIN rolls r ON r.id = p.roll_id
       LEFT JOIN films f ON f.id = r.filmId
       LEFT JOIN equip_cameras pcam ON p.camera_equip_id = pcam.id
       LEFT JOIN equip_lenses plens ON p.lens_equip_id = plens.id

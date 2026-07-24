@@ -24,6 +24,11 @@ const { createFilmsApi } = require('./films');
 const { createLocationsApi } = require('./locations');
 const { createStatsApi } = require('./stats');
 const { createMetadataApi } = require('./metadata');
+const { createAlbumsApi } = require('./albums');
+const { createDigitalSessionsApi } = require('./digital-sessions');
+const { createDigitalImportApi } = require('./digital-import');
+const { createDigitalDevelopApi } = require('./digital-develop');
+const { createAppConfigApi } = require('./app-config');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -106,6 +111,11 @@ function createApiClient(config = {}) {
     locations: createLocationsApi(http),
     stats: createStatsApi(http),
     metadata: createMetadataApi(http),
+    albums: createAlbumsApi(http),
+    digitalSessions: createDigitalSessionsApi(http),
+    digitalImport: createDigitalImportApi(http),
+    digitalDevelop: createDigitalDevelopApi(http),
+    appConfig: createAppConfigApi(http),
   };
 }
 

@@ -553,6 +553,50 @@ export default function EquipmentEditModal({
                   </Field>
                 </div>
               )}
+              
+              {/* Digital Camera Toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '32px', paddingTop: '12px', marginTop: '12px', borderTop: '1px solid var(--heroui-divider)' }}>
+                <StyledCheckbox
+                  isSelected={form.is_digital === 1}
+                  onValueChange={(v) => handleChange('is_digital', v ? 1 : 0)}
+                >
+                  Digital Camera
+                </StyledCheckbox>
+              </div>
+              
+              {/* Digital Sensor Details */}
+              {form.is_digital === 1 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--heroui-divider)' }}>
+                  <Field label="Sensor Size">
+                    <Select
+                      placeholder="Select"
+                      selectedKeys={form.sensor_type ? [form.sensor_type] : []}
+                      onSelectionChange={(keys) => handleChange('sensor_type', Array.from(keys)[0])}
+                      variant="bordered"
+                      size="sm"
+                      classNames={selectClassNames}
+                      popoverProps={selectPopoverProps}
+                    >
+                      {['Full Frame', 'APS-C', 'APS-H', 'Micro 4/3', '1-inch', 'Medium Format', 'Other'].map(s => <SelectItem key={s}>{s}</SelectItem>)}
+                    </Select>
+                  </Field>
+                  <Field label="Sensor Width (mm)">
+                    <Input type="number" placeholder="36.0" step="0.1" value={form.sensor_width_mm?.toString() || ''} onValueChange={(v) => handleChange('sensor_width_mm', v ? parseFloat(v) : null)} variant="bordered" size="sm" classNames={inputClassNames} />
+                  </Field>
+                  <Field label="Sensor Height (mm)">
+                    <Input type="number" placeholder="24.0" step="0.1" value={form.sensor_height_mm?.toString() || ''} onValueChange={(v) => handleChange('sensor_height_mm', v ? parseFloat(v) : null)} variant="bordered" size="sm" classNames={inputClassNames} />
+                  </Field>
+                  <Field label="Megapixels">
+                    <Input type="number" placeholder="24" value={form.megapixels?.toString() || ''} onValueChange={(v) => handleChange('megapixels', v ? parseFloat(v) : null)} variant="bordered" size="sm" classNames={inputClassNames} />
+                  </Field>
+                  <Field label="Crop Factor">
+                    <Input type="number" placeholder="1.0" step="0.01" value={form.crop_factor?.toString() || ''} onValueChange={(v) => handleChange('crop_factor', v ? parseFloat(v) : null)} variant="bordered" size="sm" classNames={inputClassNames} />
+                  </Field>
+                  <Field label="Sensor Technology">
+                    <Input placeholder="e.g. CMOS" value={form.sensor_format || ''} onValueChange={(v) => handleChange('sensor_format', v)} variant="bordered" size="sm" classNames={inputClassNames} />
+                  </Field>
+                </div>
+              )}
             </GlassCard>
           </>
         )}
