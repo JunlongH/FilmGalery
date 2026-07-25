@@ -91,11 +91,26 @@ export default function DigitalImportWizard() {
         if (p.status === 'completed') {
           queryClient.invalidateQueries({ queryKey: ['albums'] });
           queryClient.invalidateQueries({ queryKey: ['library-photos'] });
-          setTimeout(() => navigate(albumIdRef.current ? `/albums/${albumIdRef.current}` : '/library'), 1500);
+          if ((p.failed || 0) === 0) {
+            setTimeout(() => navigate(albumIdRef.current ? `/albums/${albumIdRef.current}` : '/library'), 1500);
+            return;
+          }
+          const errs = Array.isArray(p.errors) ? p.errors : [];
+          const first = errs
+            .slice(0, 3)
+            .map((e) => (e.file ? `${e.file}: ${e.error}` : e.error))
+            .filter(Boolean)
+            .join('; ');
+          setError(
+            `Import partially failed: ${p.failed} of ${p.total} file(s) could not be imported.` +
+              (first ? ` First errors: ${first}` : ''),
+          );
           return;
         }
         if (p.status === 'failed') {
-          setError(p.error || 'Import failed');
+          const errs = Array.isArray(p.errors) ? p.errors : [];
+          const last = errs.length > 0 ? errs[errs.length - 1] : null;
+          setError(last?.error || 'Import failed');
           return;
         }
       } catch (err) {
@@ -236,10 +251,33 @@ export default function DigitalImportWizard() {
                   <span>{progress.status}</span>
                 </div>
               </div>
-              {progress.status === 'completed' && (
+              {progress.status === 'completed' && (progress.failed || 0) === 0 && (
                 <p className="text-green-500 flex items-center gap-2">
                   <Check className="w-5 h-5" /> Import complete! Redirecting...
                 </p>
+              )}
+              {progress.status === 'completed' && (progress.failed || 0) > 0 && (
+                <div className="flex flex-col items-center gap-3">
+                  <p className="text-amber-500 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5" /> Import finished with {progress.failed} failure(s).
+                  </p>
+                  <Button
+                    variant="flat"
+                    color="primary"
+                    onPress={() => navigate(albumIdRef.current ? `/albums/${albumIdRef.current}` : '/library')}
+                  >
+                    Go to library
+                  </Button>
+                </div>
+              )}
+              {progress.status === 'failed' && (
+                <Button
+                  variant="flat"
+                  color="primary"
+                  onPress={() => navigate(albumIdRef.current ? `/albums/${albumIdRef.current}` : '/library')}
+                >
+                  Back to library
+                </Button>
               )}
               {progress.status !== 'completed' && progress.status !== 'failed' && (
                 <Button variant="flat" color="danger" onPress={handleCancel}>Cancel Import</Button>

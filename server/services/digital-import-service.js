@@ -308,6 +308,36 @@ async function execute(body, jobId, jobRegistry) {
 
   jobRegistry.start(jobId, items.length);
 
+  // Pre-flight: verify uploaded temp files still exist. They can be swept by
+  // the 1-hour stale-tmp cleanup, an OS tmp cleaner, or a process restart
+  // between preview and execute — which would otherwise surface as a silent
+  // per-file ENOENT storm in the loop below.
+  const processable = items.filter((i) => !i.duplicate);
+  if (processable.length > 0) {
+    const missing = [];
+    for (const it of processable) {
+      try {
+        await fsp.access(it.file.path);
+      } catch (e) {
+        if (e?.code !== 'ENOENT') {
+          console.warn(`[DigitalImport] temp file check failed for ${it.file.originalname}: ${e.message}`);
+        }
+        missing.push(it.file.originalname);
+      }
+    }
+    if (missing.length === processable.length) {
+      console.error(
+        `[DigitalImport] Job ${jobId} aborted: all ${missing.length} temp file(s) missing before execute.`,
+      );
+      await cleanupTempFiles(items);
+      jobRegistry.fail(
+        jobId,
+        `Uploaded temp files expired before import (${missing.join(', ')}) — please re-import your photos.`,
+      );
+      return;
+    }
+  }
+
   // 1. Create session
   const firstDate = items.find((i) => i.exif?.dateTimeOriginal)?.exif.dateTimeOriginal || null;
   const sessionResult = await runAsync(
@@ -337,6 +367,10 @@ async function execute(body, jobId, jobRegistry) {
       photoRows.push(row);
       jobRegistry.tick(jobId, it.file.originalname);
     } catch (e) {
+      console.error(
+        `[DigitalImport] Failed to import ${it.file.originalname}:`,
+        e.message,
+      );
       jobRegistry.recordError(jobId, it.file.originalname, e.message);
     }
   }
@@ -361,6 +395,27 @@ async function execute(body, jobId, jobRegistry) {
     } catch (e) {
       await runAsync('ROLLBACK').catch(() => {});
       jobRegistry.recordError(jobId, 'album-join', e.message);
+    }
+  }
+
+  // 5. If nothing was imported and at least one file failed, fail the job
+  //    loudly so the client surfaces the error instead of navigating away
+  //    to an empty library.
+  if (photoRows.length === 0) {
+    const job = jobRegistry.get(jobId);
+    const failedCount = job?.failed || 0;
+    if (failedCount > 0) {
+      const firstErr = job?.errors?.[0];
+      const firstMsg = firstErr?.error || 'Unknown error';
+      console.error(
+        `[DigitalImport] Job ${jobId} failed: 0 of ${items.length} photo(s) imported (${failedCount} error(s)).`,
+      );
+      await cleanupTempFiles(items);
+      jobRegistry.fail(
+        jobId,
+        `No photos imported — ${failedCount} file${failedCount === 1 ? '' : 's'} failed. First error: ${firstMsg}`,
+      );
+      return;
     }
   }
 

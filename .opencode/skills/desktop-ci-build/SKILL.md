@@ -1,6 +1,6 @@
 ---
 name: desktop-ci-build
-description: Use when building Windows/macOS/Linux desktop installers via GitHub Actions for the FilmGallery Electron app (Electron 26 + electron-builder + native modules). Covers the CRA→Vite migration lockfile pitfalls, Windows VS 2026 Preview detection failure (pin windows-2022), macOS libraw linker path (LIBRARY_PATH), npm ci vs npm install with platform-specific native binaries (rolldown), PowerShell vs bash on Windows runners, GitHub release creation via gh CLI (not softprops), and log diagnosis via GitHub MCP token. Trigger keywords: electron-builder, windows exe, nsis, AppImage, deb, CI build failure, GitHub Actions, release, rolldown, vite build, node-gyp, visual studio not found, npm ci lockfile sync.
+description: Use when building Windows/macOS/Linux desktop installers via GitHub Actions for the FilmGallery Electron app (Electron 26 + electron-builder + native modules). Covers Windows VS 2026 Preview detection failure (pin windows-2022), macOS libraw linker path (LIBRARY_PATH), npm install vs npm ci with platform-specific native binaries (rolldown), PowerShell vs bash on Windows runners, GitHub release creation via gh CLI (not softprops), and log diagnosis via GitHub MCP token. Trigger keywords: electron-builder, windows exe, nsis, AppImage, deb, CI build failure, GitHub Actions, release, rolldown, vite build, node-gyp, visual studio not found, npm ci lockfile sync.
 ---
 
 # Desktop CI build & release (GitHub Actions)
@@ -155,18 +155,10 @@ npm install --legacy-peer-deps
 
 This lets each platform resolve its own optional dependencies fresh.
 
-## 4. CRA → Vite migration: the lockfile trap
+## 4. Build script: use `build-client`, not `build`
 
-When migrating from `react-scripts` (CRA) to `vite`:
-
-1. **Regenerate the lockfile** — the old lockfile contains react-scripts, craco, webpack, and 1300+ transitive deps that Vite doesn't need
-2. **Commit BOTH package.json AND package-lock.json** — a lockfile without the matching package.json (or vice versa) causes `npm ci` to fail with "Missing: X from lock file"
-3. **Move `index.html`** from `public/index.html` (CRA convention) to project root `index.html` (Vite convention)
-4. **Clear CI npm cache** — the GitHub Actions cache key is based on the lockfile hash. If the lockfile changes, the cache should invalidate. But the cache can restore OLD node_modules that still have react-scripts. Use `rm -rf node_modules` before install.
-
-**The `build-client` vs `build` distinction:** The root `build` script may
-include steps that reference files not in git (e.g. `build:gpu` → `node
-electron-gpu/build.js`). Always use `npm run build-client` in CI, not
+The root `build` script may include steps that reference files not in git
+(e.g. `build:gpu`). Always use `npm run build-client` in CI, not
 `npm run build`, unless every sub-step is verified.
 
 ## 5. Release creation: use `gh` CLI, not softprops
@@ -271,21 +263,7 @@ Tests that pass locally but fail on CI are usually environment-specific. Capture
 | TypeScript type error on CI but not local | Different @types versions resolved | Add explicit dep in package.json |
 | ESLint errors on CI but not local | `CI=true` makes CRA treat warnings as errors | Fix the warnings or set `CI=false` |
 
-## 8. The `git add -A` pitfall
-
-When working in a shared repository with parallel agents/sessions:
-
-- **NEVER use `git add -A`** blindly — it sweeps in all working-tree changes including other agents' incomplete work
-- **Always specify exact files:** `git add .github/workflows/build-desktop.yml client/src/api/pairing.js`
-- **Before committing, check:** `git diff --cached --stat` to see exactly what's staged
-- If untracked files from parallel work appear, leave them untouched
-
-Symptoms of swept-in parallel work:
-- Build fails referencing files that don't exist in your mental model (e.g. `electron-gpu/build.js`)
-- `package.json` has scripts you didn't write (e.g. `build:gpu`)
-- Lockfiles out of sync because the migration was disk-only, never committed
-
-## 9. electron-builder local build (when CI is slow)
+## 8. electron-builder local build (when CI is slow)
 
 For immediate local builds (Linux only — Windows cross-compile needs wine32):
 
@@ -312,93 +290,12 @@ The NSIS installer target requires wine32 to finalize the installer payload embe
 2. OR swap `rcedit-ia32.exe` → `rcedit-x64.exe` in the winCodeSign cache (wine64 can run x64 binaries)
 3. OR push a tag and let GitHub Actions build natively on `windows-2022`
 
-## 10. Mobile Android build — EAS quota exhaustion + local fallback
-
-### The problem: EAS Free plan monthly quota
-
-EAS (Expo Application Services) Cloud builds have a monthly limit on the
-Free plan (30 Android builds / 15 iOS builds). When exhausted:
-
-```
-This account has used its Android builds from the Free plan this month,
-which will reset in N days. Upgrade your plan for more builds...
-Error: build command failed.
-```
-
-### The fix: local gradle build on the GitHub Actions runner
-
-`ubuntu-latest` has the Android SDK pre-installed. Build the APK locally
-as a fallback when EAS fails:
-
-```yaml
-# Step 1: try EAS first (fast, offloaded to cloud)
-- name: Build Android APK (EAS Cloud)
-  id: eas
-  continue-on-error: true
-  run: cd mobile && npx eas build -p android --profile preview --non-interactive
-  env:
-    EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
-# Step 2: fallback to local gradle build
-- name: Build Android APK locally (EAS fallback)
-  if: steps.eas.outcome == 'failure'
-  working-directory: mobile
-  run: |
-    npx expo prebuild --platform android --clean --no-install
-    cd android
-    echo "sdk.dir=${ANDROID_HOME}" > local.properties
-    ./gradlew assembleDebug --no-daemon
-
-- name: Upload APK
-  if: steps.eas.outcome == 'failure'
-  uses: actions/upload-artifact@v4
-  with:
-    name: android-apk
-    path: mobile/android/app/build/outputs/apk/debug/*.apk
-```
-
-Key points:
-- **`continue-on-error: true`** on EAS step — the job doesn't fail when
-  quota is exhausted. `steps.eas.outcome` is `'failure'`, triggering the
-  fallback.
-- **Java 17 required** — `actions/setup-java@v4` with `zulu` distribution.
-  Gradle 8.x needs JDK 17+.
-- **`expo prebuild --clean`** — regenerates the native Android project
-  from app.json (needed because the `android/` dir might be stale or
-  git-ignored prebuild artifacts).
-- **`assembleDebug`** not `assembleRelease` — release builds need a
-  keystore (not available on CI without secrets). Debug-signed APK is
-  fine for sideloading.
-- **Build time: ~22 min** on ubuntu-latest (vs ~3 min for EAS Cloud).
-  The first build downloads Gradle + compiles all native modules.
-- **iOS cannot be built locally on Linux** — requires macOS. Use
-  `continue-on-error: true` on the iOS EAS step so the overall workflow
-  passes when Android succeeds even if iOS quota is exhausted.
-- **APK is ~65MB** (debug build with all ABIs: armeabi-v7a, x86, x86_64).
-
-### `gh release upload` for APK
-
-Attach the APK to the tag's release:
-
-```yaml
-- name: Attach APK to release
-  if: steps.eas.outcome == 'failure' && startsWith(github.ref, 'refs/tags/v')
-  run: |
-    APK=$(find mobile/android/app/build/outputs -name "*.apk" | head -1)
-    if [ -n "$APK" ]; then
-      gh release upload "${{ github.ref_name }}" "$APK" \
-        --repo "${{ github.repository }}" --clobber || true
-    fi
-  env:
-    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-
-## 11. Quick troubleshooting matrix
+## 9. Quick troubleshooting matrix
 
 | Error | Root cause | Fix |
 |-------|-----------|-----|
 | `npm ci: Missing X from lock file` | package.json modified but lockfile not regenerated | `rm package-lock.json && npm install` then commit both |
-| `Could not find a required file: index.html in public/` | CRA convention, but project migrated to Vite | Ensure `build` script is `vite build` not `craco build`; verify `index.html` is at project root |
+| `Could not find a required file: index.html` | index.html not at project root | Ensure `index.html` is at project root (Vite convention) |
 | `Cannot find module 'rolldown-binding.win32-x64-msvc.node'` | Lockfile generated on Linux, missing Win optional dep | `rm -rf node_modules package-lock.json && npm install` |
 | `gyp ERR! find VS unknown version "undefined"` | VS 2026 Preview on windows-latest | Pin to `windows-2022` |
 | `ld: library 'raw' not found` (macOS) | Homebrew lib path not in linker search | `LIBRARY_PATH=/opt/homebrew/lib` |
@@ -406,4 +303,4 @@ Attach the APK to the tag's release:
 | `Failed to upload release asset. 422 already_exists` | softprops race condition on re-runs | Switch to `gh release create/upload --clobber` |
 | `Resource not accessible by personal access token` | Fine-grained PAT lacks `Contents: Write` scope | Re-create token with proper scopes, or use `GITHUB_TOKEN` in workflow |
 | Tests pass locally, fail on CI | Environment-specific (timestamps, module resolution) | Capture jest JSON artifact; check ORDER BY tie-breaks, modulePaths |
-| `react-scripts/config/webpack.config.js` in stack trace | Stale CRA node_modules from npm cache | `rm -rf node_modules package-lock.json` before install |
+
