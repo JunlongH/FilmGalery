@@ -1,6 +1,6 @@
 {
   "name": "film-gallery-desktop",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "private": true,
   "description": "Film Gallery — Electron desktop wrapper for the Film Manager app",
   "main": "electron-main.js",
