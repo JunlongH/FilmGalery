@@ -15,15 +15,15 @@ import ImageViewer from './common/LazyImageViewer';
 import { AnimatedContainer, HoverPhotoCard, ActionButton } from './ui';
 import { Heart } from 'lucide-react';
 
-export default function Favorites() {
+export default function Favorites({ mode }) {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const { data: photos = [], isLoading } = useQuery({
-    queryKey: ['favorites'],
+    queryKey: ['favorites', mode || 'all'],
     queryFn: async () => {
-      const p = await getFavoritePhotos();
+      const p = await getFavoritePhotos(mode);
       return Array.isArray(p) ? p : [];
     },
     ...getCacheStrategy('photos'),
@@ -86,7 +86,7 @@ export default function Favorites() {
               photo={photo}
               onSelect={() => setSelectedPhotoIndex(idx)}
               onUnlike={() => onUnlike(photo.id)}
-              onGoToRoll={() => navigate(`/rolls/${photo.roll_id}`)}
+              onGoToRoll={photo.roll_id ? () => navigate(`/rolls/${photo.roll_id}`) : undefined}
             />
           </AnimatedContainer>
         ))}
@@ -108,9 +108,10 @@ export default function Favorites() {
  * FavoriteCard - 使用共享的 HoverPhotoCard 组件
  */
 function FavoriteCard({ photo, onSelect, onUnlike, onGoToRoll }) {
+  // Digital photos have no roll/film — fall back to the camera name instead.
   const subtitle = [
-    photo.roll_title || 'Untitled Roll',
-    photo.film_name || 'Unknown Film'
+    photo.roll_title || (photo.roll_id ? 'Untitled Roll' : null),
+    photo.film_name || (photo.roll_id ? 'Unknown Film' : photo.camera)
   ].filter(Boolean).join(' • ');
 
   return (

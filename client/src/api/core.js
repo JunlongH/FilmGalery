@@ -182,6 +182,38 @@ export async function postJson(url, data) {
 }
 
 /**
+ * POST JSON data and return the response as a Blob.
+ * For endpoints that answer with binary payloads (image/jpeg etc.).
+ * Error handling mirrors jsonFetch: non-2xx responses are parsed for
+ * server `error`/`message` and thrown.
+ */
+export async function postForBlob(url, data, options = {}) {
+  const { signal } = options;
+  const apiBase = getApiBase();
+  const r = await fetch(`${apiBase}${url}`, {
+    method: 'POST',
+    headers: withAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(data),
+    signal
+  });
+  if (!r.ok) {
+    if (r.status === 401 && _onUnauthorized) {
+      try { _onUnauthorized(r); } catch { /* swallow */ }
+    }
+    const text = await r.text();
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { parsed = undefined; }
+    const serverMsg = parsed && (parsed.error || parsed.message);
+    const msg = (typeof serverMsg === 'string' && serverMsg) || `HTTP ${r.status} ${r.statusText || ''}`.trim();
+    const err = new Error(msg || `HTTP ${r.status}`);
+    err.status = r.status;
+    if (parsed !== undefined) err.body = parsed;
+    throw err;
+  }
+  return r.blob();
+}
+
+/**
  * PUT JSON data
  */
 export async function putJson(url, data) {

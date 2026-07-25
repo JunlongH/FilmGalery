@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Icon } from '../../components/ui';
 import { spacing, radius } from '../../theme';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useLibraryMode } from '../../hooks/useLibraryMode';
 import { useT } from '../../i18n';
 
 const numColumns = 2;
@@ -19,11 +20,12 @@ export default function ThemesScreen({ navigation }: any) {
   const theme = useTheme();
   const t = useT();
   const { baseUrl } = useContext(ApiContext);
+  const mode = useLibraryMode();
 
   const { data, loading, refresh } = useApiQuery<any[]>(
-    baseUrl ? `tags@${baseUrl}` : null,
+    baseUrl ? `tags@${baseUrl}#${mode}` : null,
     async () => {
-      const res = await api.http.get('/api/tags');
+      const res = await api.http.get('/api/tags', { mode });
       return res.filter((t: any) => t.photos_count > 0);
     },
   );
@@ -72,7 +74,7 @@ export default function ThemesScreen({ navigation }: any) {
           title={item.name}
           subtitle={t('collections.photosCount', { count: item.photos_count })}
           style={styles.cardContainer}
-          onPress={() => navigation.navigate('TagDetail', { tagId: item.id, tagName: item.name })}
+          onPress={() => navigation.navigate('TagDetail', { tagId: item.id, tagName: item.name, mode })}
         />
       </Animated.View>
     );

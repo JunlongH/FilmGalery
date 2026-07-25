@@ -28,8 +28,8 @@ async function fetchStats() {
   const apiBase = getApiBase();
   const [rollsRes, photosRes, favsRes, locsRes, filmsRes] = await Promise.all([
     fetch(`${apiBase}/api/rolls`).then(r => r.json()),
-    fetch(`${apiBase}/api/photos`).then(r => r.json()),
-    fetch(`${apiBase}/api/photos?favorite=true`).then(r => r.json()),
+    fetch(`${apiBase}/api/photos?mode=film`).then(r => r.json()),
+    fetch(`${apiBase}/api/photos?favorite=true&mode=film`).then(r => r.json()),
     fetch(`${apiBase}/api/locations?hasRecords=true`).then(r => r.json()),
     fetch(`${apiBase}/api/films`).then(r => r.json()),
   ]);

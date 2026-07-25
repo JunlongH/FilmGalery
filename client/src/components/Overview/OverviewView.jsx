@@ -28,7 +28,7 @@ export default function OverviewView() {
     <div className="h-full overflow-y-auto custom-scrollbar">
       <div className="p-6 max-w-[1800px] mx-auto">
         {/* Hero Carousel */}
-        <HeroCarousel onPhotoClick={handlePhotoClick} />
+        <HeroCarousel mode="film" onPhotoClick={handlePhotoClick} />
 
         {/* Quick Stats */}
         <QuickStats />

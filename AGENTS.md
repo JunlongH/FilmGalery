@@ -31,6 +31,13 @@ When you encounter a task that matches one of the specialized subagents below, *
 - **Commit message workflow**: Run `git status` + `git diff --staged` + `git log --oneline -5` to learn style, then output Conventional Commits format. Do NOT run `git commit`.
 - **Not for**: Multi-step refactors, architecture decisions, exploration ("how does X work" → `explore`).
 
+### `coder` — Coding Executor (GLM-5.2)
+- **Model**: zhipuai-coding-plan/glm-5.2 (same model as the primary agent — design intent transfers with zero cross-model drift)
+- **When**: The primary agent delegates concrete coding work — implementing a designed feature, fixing an identified bug, refactoring a bounded set of files, writing tests. This is the project's primary coding executor.
+- **Triggers**: "implement X", "fix bug Y", "refactor Z", "write tests for W", `/new-api-endpoint`, `/new-mobile-screen`
+- **Permissions**: read, glob, grep, list, edit, bash (lint/test/build/git). No task, no webfetch.
+- **Self-check**: shares the primary agent's blind spots — always route non-trivial finished code through `@review` for an independent cross-vendor check.
+
 ### `general` — Complex Multi-Step Tasks (built-in, GLM-5.2)
 - **When**: Tasks too complex for `quick` but not fitting `review`/`explore`/`vision`. Multi-file refactors, implementing features that span modules, debugging chains across components.
 - **Full tool access** (except todo).
@@ -44,32 +51,13 @@ When you encounter a task that matches one of the specialized subagents below, *
 
 ## FilmGallery Domain Subagents
 
-Project-specific subagents in `.opencode/agents/`. Delegate via the Task tool when a task matches.
-
-### `api-designer` — Full-Stack API (DeepSeek V4 Pro)
-- **When**: Designing/implementing API endpoints, ensuring server route + client module + React Query hook consistency.
-- **Triggers**: "new API endpoint", "add a route for X", "wire up the client for X"
-- **Permissions**: read, edit, bash (test/build/git), no task
-
-### `codebase-explorer` — Read-Only Architecture (DeepSeek V4 Flash)
-- **When**: FilmGallery-domain architecture questions, tracing data flows end-to-end. Read-only. (Built-in `explore` is the generic equivalent; this one carries monorepo domain knowledge.)
-- **Triggers**: "how does API_BASE flow", "trace the render pipeline", "where is X implemented"
-- **Permissions**: read-only
-
-### `devops` — Docker & Release (DeepSeek V4 Pro)
-- **When**: Docker builds, NAS deployment, multi-platform builds, release packaging, SERVER_MODE config.
-- **Triggers**: "build the docker image", "NAS setup", "release package", "SERVER_MODE"
-- **Permissions**: read, edit, bash (docker/npm/git)
-
-### `mobile-dev` — React Native Mobile (DeepSeek V4 Pro)
-- **When**: Mobile screens (TypeScript), Expo config, navigation, styling, vision camera, API client integration.
-- **Triggers**: "new mobile screen", "mobile navigation", "StyleSheet", "ApiContext"
-- **Permissions**: read, edit, bash (mobile npm/expo/git)
+Most domain implementation work now flows through `@coder` (GLM-5.2) with the matching skill auto-loaded — no per-domain agent needed. One specialist is retained where the domain is constrained enough to warrant a dedicated implementer.
 
 ### `rendering-expert` — Render Pipeline (DeepSeek V4 Pro)
 - **When**: Film rendering pipeline, image processing, color science, GLSL shaders, Float32, CPU/GPU consistency.
 - **Triggers**: "rendering bug", "color shift", "Float32 pipeline", "shader mismatch"
 - **Permissions**: read, edit, bash (npm test/git)
+- **Why kept**: The Float32 pipeline has immutable stage ordering and strict CPU/GPU parity constraints — a dedicated agent enforces them. Use `@coder` for routine rendering edits; escalate here for pipeline-level bugs.
 
 ## Domain Skills
 
@@ -94,10 +82,10 @@ Reusable workflows in `.opencode/commands/`. Invoke as `/command <args>`.
 
 | Command | Routes to | Does |
 |---------|-----------|------|
-| `/new-api-endpoint` | `api-designer` | Full-stack endpoint: route + service + client module + React Query hook |
+| `/new-api-endpoint` | `coder` | Full-stack endpoint: route + service + client module + React Query hook |
 | `/new-component` | primary | New desktop React component (HeroUI + Tailwind + React Query) |
 | `/new-migration` | primary | New SQLite schema migration (idempotent, indexed, snake_case) |
-| `/new-mobile-screen` | `mobile-dev` | New React Native TypeScript screen (StyleSheet + Paper + navigation) |
+| `/new-mobile-screen` | `coder` | New React Native TypeScript screen (StyleSheet + Paper + navigation) |
 | `/fix-rendering` | `rendering-expert` | Diagnose/fix render pipeline issues (Float32, shaders, consistency) |
 
 ## Custom Tools
@@ -117,14 +105,12 @@ Task fits
 ├── "look at this image / screenshot / poster"          → @vision
 ├── "generate / create / draw an image / poster / icon" → @imagine
 ├── "review this code / diff / PR for bugs"             → @review
+├── "implement feature / fix bug / refactor / tests"    → @coder
 ├── "rename X / run one command / summarize file / commit message" → @quick
-├── "explore codebase / find how X works"               → @explore (or @codebase-explorer for FG-domain)
+├── "explore codebase / find how X works"               → @explore
 ├── "look up upstream library source"                   → @scout
-├── "new API endpoint / full-stack route + client"      → @api-designer  (or `/new-api-endpoint`)
-├── "docker / NAS / release package / SERVER_MODE"      → @devops
-├── "new mobile screen / Expo / TypeScript screen"     → @mobile-dev    (or `/new-mobile-screen`)
 ├── "rendering bug / Float32 / shader / color shift"    → @rendering-expert (or `/fix-rendering`)
-├── "implement feature / debug complex issue / refactor" → @general (or handle yourself)
+├── complex multi-step task not fitting above           → @general (or handle yourself)
 ```
 
 Domain conventions for the area you're editing are auto-loaded via the skills above — no need to memorize them.

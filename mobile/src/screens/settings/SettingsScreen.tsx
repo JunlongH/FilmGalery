@@ -1,9 +1,10 @@
-import React, { useContext, useState, useRef, useCallback } from 'react';
+import React, { useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { View, StyleSheet, Alert, ActivityIndicator, ScrollView, Animated } from 'react-native';
-import { TextInput, Button, Text, Switch, useTheme, Chip, SegmentedButtons } from 'react-native-paper';
+import { TextInput, Button, Text, Switch, useTheme, Chip, SegmentedButtons, Card } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiContext } from '../../context/ApiContext';
+import { api } from '../../api/client';
 import { useT, getLanguage, setLanguage as saveLanguage } from '../../i18n';
 import { Icon } from '../../components/ui';
 import { 
@@ -31,6 +32,33 @@ export default function SettingsScreen({ navigation }: any) {
   const [discoveryStatus, setDiscoveryStatus] = useState('');
   const [localMapProvider, setLocalMapProvider] = useState(mapProvider || 'osm');
   const [localAmapKey, setLocalAmapKey] = useState(amapKey || '');
+  const [digitalEnabled, setDigitalEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!baseUrl) {
+      setDigitalEnabled(false);
+      return;
+    }
+    let cancelled = false;
+    api.http.get('/api/discover')
+      .then((data: any) => {
+        if (cancelled) return;
+        setDigitalEnabled(!!data?.capabilities?.digital);
+      })
+      .catch(() => {
+        if (!cancelled) setDigitalEnabled(false);
+      });
+    return () => { cancelled = true; };
+  }, [baseUrl]);
+
+  const goToDigitalLibrary = async () => {
+    if (baseUrl) {
+      try {
+        await AsyncStorage.setItem(`library_mode@${baseUrl}`, 'digital');
+      } catch { /* best-effort */ }
+    }
+    navigation.navigate('Main', { screen: 'Library' });
+  };
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -170,6 +198,39 @@ export default function SettingsScreen({ navigation }: any) {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      {digitalEnabled && (
+        <Card
+          mode="elevated"
+          style={[styles.digitalCard, { backgroundColor: theme.colors.primaryContainer }]}
+        >
+          <Card.Title
+            title={t('digital.enabledTitle')}
+            titleStyle={[styles.digitalCardTitle, { color: theme.colors.onPrimaryContainer }]}
+            titleNumberOfLines={2}
+            left={() => (
+              <View style={[styles.digitalCardIcon, { backgroundColor: theme.colors.primary }]}>
+                <Icon name="camera" size={20} color={theme.colors.onPrimary} />
+              </View>
+            )}
+          />
+          <Card.Content>
+            <Text style={[styles.digitalCardBody, { color: theme.colors.onPrimaryContainer }]}>
+              {t('digital.enabledBody')}
+            </Text>
+          </Card.Content>
+          <Card.Actions>
+            <Button
+              mode="contained"
+              onPress={goToDigitalLibrary}
+              icon="arrow-right"
+              contentStyle={{ flexDirection: 'row-reverse' }}
+            >
+              {t('digital.goToDigital')}
+            </Button>
+          </Card.Actions>
+        </Card>
+      )}
+
       {/* Auto Discovery Section */}
       <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>🔍 {t('settings.autoDiscovery')}</Text>
       <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
@@ -449,5 +510,25 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 20,
+  },
+  digitalCard: {
+    marginBottom: 16,
+    marginTop: 4,
+    borderRadius: 16,
+  },
+  digitalCardTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+  },
+  digitalCardBody: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  digitalCardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

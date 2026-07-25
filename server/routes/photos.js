@@ -102,7 +102,7 @@ function buildCurveLUT(points) {
 
 // Get all photos with optional filtering
 router.get('/', async (req, res, next) => {
-  const { camera, lens, photographer, location_id, film, year, month, ym, q, favorite, mode, album_id, session_id, include_deleted } = req.query;
+  const { camera, lens, photographer, location_id, film, year, month, ym, q, favorite, mode, album_id, session_id, include_deleted, sort, order } = req.query;
 
   const toArray = (v) => {
     if (v === undefined || v === null) return [];
@@ -314,7 +314,7 @@ router.get('/', async (req, res, next) => {
       if (years.length) { parts.push(`strftime('%Y', p.date_taken) IN (${years.map(()=>'?').join(',')})`); params.push(...years); }
       if (months.length) { parts.push(`strftime('%m', p.date_taken) IN (${months.map(()=>'?').join(',')})`); params.push(...months); }
     }
-    if (parts.length) sql += ` AND (${parts.join(' OR ')})`;
+    if (parts.length) sql += ` AND (${parts.join(' AND ')})`;
   }
 
   // Favorites filter
@@ -322,7 +322,11 @@ router.get('/', async (req, res, next) => {
     sql += ` AND IFNULL(CAST(p.rating AS INTEGER), 0) <> 0`;
   }
 
-  sql += ` ORDER BY p.date_taken DESC, p.id DESC`;
+  const SORT_COLUMNS = { date_taken: 'p.date_taken', rating: 'p.rating', id: 'p.id' };
+  const sortColumn = SORT_COLUMNS[sort] || SORT_COLUMNS.date_taken;
+  const sortOrder = String(order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+  const nullsLast = sortColumn === 'p.date_taken' ? ' NULLS LAST' : '';
+  sql += ` ORDER BY ${sortColumn} ${sortOrder}${nullsLast}, p.id DESC`;
 
   // Y.1 (P0-3): opt-in pagination. When `?page=N` is provided, return
   // { data, total, page, pageSize, hasMore } and apply LIMIT/OFFSET.
@@ -351,9 +355,106 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+router.get('/facets', async (req, res, next) => {
+  try {
+    const { mode } = req.query;
+    let where = 'p.deleted_at IS NULL';
+    const params = [];
+    if (mode && mode !== 'all') {
+      const { clause, params: modeParams } = buildSourceTypeClause(mode);
+      if (clause) {
+        where += ` AND ${clause}`;
+        params.push(...modeParams);
+      }
+    }
+
+    const ymRows = await allAsync(
+      `SELECT strftime('%Y', p.date_taken) AS year, strftime('%m', p.date_taken) AS month, COUNT(*) AS count
+       FROM photos p
+       WHERE ${where} AND p.date_taken IS NOT NULL
+       GROUP BY year, month
+       ORDER BY year DESC, month DESC`,
+      params
+    );
+
+    const cameraRows = await allAsync(
+      `SELECT value, COUNT(DISTINCT pid) AS count FROM (
+         SELECT p.id AS pid, p.camera AS value FROM photos p
+           WHERE ${where} AND p.camera IS NOT NULL AND p.camera != ''
+         UNION ALL
+         SELECT p.id AS pid, cam.name AS value FROM photos p
+           JOIN equip_cameras cam ON p.camera_equip_id = cam.id
+           WHERE ${where}
+         UNION ALL
+         SELECT p.id AS pid, rcam.name AS value FROM photos p
+           JOIN rolls r ON p.roll_id = r.id
+           JOIN equip_cameras rcam ON r.camera_equip_id = rcam.id
+           WHERE ${where}
+       )
+       GROUP BY value
+       ORDER BY count DESC, value ASC`,
+      [...params, ...params, ...params]
+    );
+
+    const lensRows = await allAsync(
+      `SELECT value, COUNT(DISTINCT pid) AS count FROM (
+         SELECT p.id AS pid, p.lens AS value FROM photos p
+           WHERE ${where} AND p.lens IS NOT NULL AND p.lens != ''
+         UNION ALL
+         SELECT p.id AS pid, lens.name AS value FROM photos p
+           JOIN equip_lenses lens ON p.lens_equip_id = lens.id
+           WHERE ${where}
+         UNION ALL
+         SELECT p.id AS pid, rlens.name AS value FROM photos p
+           JOIN rolls r ON p.roll_id = r.id
+           JOIN equip_lenses rlens ON r.lens_equip_id = rlens.id
+           WHERE ${where}
+       )
+       GROUP BY value
+       ORDER BY count DESC, value ASC`,
+      [...params, ...params, ...params]
+    );
+
+    const yearsMap = new Map();
+    for (const row of ymRows) {
+      if (!row.year) continue;
+      let bucket = yearsMap.get(row.year);
+      if (!bucket) {
+        bucket = { year: row.year, count: 0, months: [] };
+        yearsMap.set(row.year, bucket);
+      }
+      bucket.count += row.count;
+      if (row.month) bucket.months.push({ month: row.month, count: row.count });
+    }
+
+    res.json({
+      years: [...yearsMap.values()],
+      cameras: cameraRows,
+      lenses: lensRows,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Get random photos for hero section
+// Supports optional `mode` query param (film / digital / all) to filter by
+// source_type, mirroring the main GET / list endpoint behavior.
 router.get('/random', async (req, res, next) => {
   const limit = parseInt(req.query.limit) || 10;
+  const mode = req.query.mode || 'all';
+
+  // Build source_type clause (same helper used by GET /)
+  let modeClause = '';
+  const params = [];
+  if (mode && mode !== 'all') {
+    const { clause, params: modeParams } = buildSourceTypeClause(mode);
+    if (clause) {
+      modeClause = `AND ${clause}`;
+      params.push(...modeParams);
+    }
+  }
+
   const sql = `
     SELECT p.*, 
            r.title as roll_title,
@@ -362,24 +463,27 @@ router.get('/random', async (req, res, next) => {
            r.iso AS roll_iso,
            f.iso AS film_iso,
            COALESCE(
-             (SELECT brand || ' ' || model FROM equip_cameras WHERE id = p.camera_equip_id),
-             p.camera
+              (SELECT brand || ' ' || model FROM equip_cameras WHERE id = p.camera_equip_id),
+              p.camera
            ) as camera_name,
            COALESCE(
-             (SELECT name FROM equip_lenses WHERE id = p.lens_equip_id),
-             p.lens
+              (SELECT name FROM equip_lenses WHERE id = p.lens_equip_id),
+              p.lens
            ) as lens_name,
            COALESCE(loc.city_name, p.city) as city
     FROM photos p
     LEFT JOIN rolls r ON p.roll_id = r.id
     LEFT JOIN films f ON f.id = r.filmId
     LEFT JOIN locations loc ON loc.id = p.location_id
-    WHERE p.full_rel_path IS NOT NULL OR p.positive_rel_path IS NOT NULL
+    WHERE (p.full_rel_path IS NOT NULL OR p.positive_rel_path IS NOT NULL)
+      AND p.deleted_at IS NULL
+      ${modeClause}
     ORDER BY RANDOM() 
     LIMIT ?
   `;
+  params.push(limit);
   try {
-    const rows = await allAsync(sql, [limit]);
+    const rows = await allAsync(sql, params);
     res.json(rows);
   } catch (err) {
     next(err);
@@ -410,18 +514,30 @@ router.get('/single/:id', async (req, res, next) => {
 });
 
 // Get liked photos
+// Supports optional `mode` query param (film / digital / all) to filter by
+// source_type, mirroring the main GET / list endpoint behavior.
 router.get('/favorites', async (req, res, next) => {
   console.log('[GET] /api/photos/favorites');
-  const sql = `
+  const { mode } = req.query;
+  let sql = `
     SELECT p.*, COALESCE(f.name, r.film_type) AS film_name, r.title AS roll_title
     FROM photos p
     LEFT JOIN rolls r ON r.id = p.roll_id
     LEFT JOIN films f ON f.id = r.filmId
     WHERE IFNULL(CAST(p.rating AS INTEGER), 0) <> 0
-    ORDER BY p.id DESC
+      AND p.deleted_at IS NULL
   `;
+  const params = [];
+  if (mode && mode !== 'all') {
+    const { clause, params: modeParams } = buildSourceTypeClause(mode);
+    if (clause) {
+      sql += ` AND ${clause}`;
+      params.push(...modeParams);
+    }
+  }
+  sql += ` ORDER BY p.id DESC`;
   try {
-    const pageResult = await paginateQuery(sql, [], req.query);
+    const pageResult = await paginateQuery(sql, params, req.query);
     const rows = pageResult.rows || (pageResult.payload && pageResult.payload.data) || [];
     console.log(`[GET] Favorites found: ${rows.length}`);
     const withTags = await attachTagsToPhotos(rows);
@@ -1131,10 +1247,24 @@ router.post('/:id/render-positive', async (req, res, next) => {
   }
 });
 
-// delete photo (enhanced to remove file from disk if in rolls folder)
+// delete photo — soft by default (sets deleted_at, files kept);
+// ?hard=true performs the legacy hard delete (files + DB row removed)
 router.delete('/:id', async (req, res, next) => {
   const id = req.params.id;
+  const hard = req.query.hard === 'true';
   try {
+    if (!hard) {
+      const row = await getAsync('SELECT id, deleted_at FROM photos WHERE id = ?', [id]);
+      if (!row || row.deleted_at) {
+        return res.status(404).json({ error: 'Photo not found' });
+      }
+      const result = await runAsync('UPDATE photos SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL', [id]);
+      if (!result?.changes) {
+        return res.status(404).json({ error: 'Photo not found' });
+      }
+      return res.json({ deleted: result.changes, soft: true });
+    }
+
     const row = await getAsync('SELECT roll_id, filename, full_rel_path, thumb_rel_path, original_rel_path, negative_rel_path, positive_rel_path, positive_thumb_rel_path, negative_thumb_rel_path FROM photos WHERE id = ?', [id]);
     
     if (row) {
@@ -1165,6 +1295,8 @@ router.delete('/:id', async (req, res, next) => {
     }
 
     // Delete DB row
+    await runAsync('DELETE FROM photo_tags WHERE photo_id = ?', [id]);
+    await runAsync('DELETE FROM album_photos WHERE photo_id = ?', [id]);
     const result = await runAsync('DELETE FROM photos WHERE id = ?', [id]);
     
     // NOTE: We intentionally do NOT resequence frame_numbers after deletion.
@@ -1182,6 +1314,21 @@ router.delete('/:id', async (req, res, next) => {
     }
 
     res.json({ deleted: result?.changes || 0 });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// restore a soft-deleted photo (clears deleted_at)
+router.post('/:id/restore', async (req, res, next) => {
+  const id = req.params.id;
+  try {
+    const row = await getAsync('SELECT id, deleted_at FROM photos WHERE id = ?', [id]);
+    if (!row || !row.deleted_at) {
+      return res.status(404).json({ error: 'Photo not found' });
+    }
+    await runAsync('UPDATE photos SET deleted_at = NULL WHERE id = ?', [id]);
+    res.json({ restored: true, id: Number(id) });
   } catch (err) {
     next(err);
   }
@@ -1506,10 +1653,11 @@ router.post('/:id/download-with-exif', async (req, res, next) => {
  *   - date_start: "YYYY-MM-DD" - filter by start date
  *   - date_end: "YYYY-MM-DD" - filter by end date
  *   - limit: number - max photos to return (default: 2000)
+ *   - mode: "film" | "digital" | "all" - filter by source_type
  */
 router.get('/geo', async (req, res, next) => {
   try {
-    const { bounds, roll_id, date_start, date_end, limit = 2000 } = req.query;
+    const { bounds, roll_id, date_start, date_end, limit = 2000, mode } = req.query;
     
     let sql = `
       SELECT 
@@ -1534,14 +1682,26 @@ router.get('/geo', async (req, res, next) => {
         r.title AS roll_name
       FROM photos p
       LEFT JOIN rolls r ON r.id = p.roll_id
-      WHERE p.latitude IS NOT NULL 
+      WHERE p.latitude IS NOT NULL
         AND p.longitude IS NOT NULL
         AND p.latitude != 0
         AND p.longitude != 0
+        AND p.deleted_at IS NULL
     `;
     
     const params = [];
-    
+
+    // Mode filter (source_type): film / digital / all
+    let modeClause = '';
+    if (mode && mode !== 'all') {
+      const { clause, params: modeParams } = buildSourceTypeClause(mode);
+      if (clause) {
+        modeClause = clause;
+        sql += ` AND ${clause}`;
+        params.push(...modeParams);
+      }
+    }
+
     // Filter by roll ID
     if (roll_id) {
       sql += ` AND p.roll_id = ?`;
@@ -1577,15 +1737,18 @@ router.get('/geo', async (req, res, next) => {
     
     const photos = await allAsync(sql, params);
     
-    // Get total count of geo-tagged photos (without limit)
-    const countResult = await getAsync(`
-      SELECT COUNT(*) as total 
-      FROM photos 
-      WHERE latitude IS NOT NULL 
-        AND longitude IS NOT NULL
-        AND latitude != 0
-        AND longitude != 0
-    `);
+    // Get total count of geo-tagged photos (without limit, same mode filter)
+    let countSql = `
+      SELECT COUNT(*) as total
+      FROM photos p
+      WHERE p.latitude IS NOT NULL
+        AND p.longitude IS NOT NULL
+        AND p.latitude != 0
+        AND p.longitude != 0
+        AND p.deleted_at IS NULL
+    `;
+    if (modeClause) countSql += ` AND ${modeClause}`;
+    const countResult = await getAsync(countSql);
     
     res.json({
       photos: photos || [],

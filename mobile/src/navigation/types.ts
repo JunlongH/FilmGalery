@@ -9,7 +9,7 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 export type RootStackParamList = {
   Main: undefined;
   RollDetail: { rollId?: number | string; rollName?: string } | undefined;
-  TagDetail: { tagId?: number | string; tagName?: string } | undefined;
+  TagDetail: { tagId?: number | string; tagName?: string; mode?: 'film' | 'digital' } | undefined;
   FilmRolls: { filmId?: number | string; filmName?: string } | undefined;
   PhotoView: {
     photo?: any;
@@ -25,14 +25,16 @@ export type RootStackParamList = {
   EquipmentRolls: { type?: string; id?: number | string; name?: string } | undefined;
   LocationDiagnostic: undefined;
   LocationPicker: { initial?: import('@filmgallery/types').LocationPickerValue | null } | undefined;
-  Favorites: undefined;
-  Collections: undefined;
+  Favorites: { mode?: 'film' | 'digital' } | undefined;
+  Collections: { mode?: 'film' | 'digital' } | undefined;
   Films: undefined;
   Negatives: undefined;
   Equipment: undefined;
   Inventory: undefined;
-  Stats: undefined;
+  Stats: { mode?: 'film' | 'digital' } | undefined;
   AISettings: undefined;
+  DigitalAlbumList: undefined;
+  DigitalAlbumDetail: { id: number; title?: string };
 };
 
 export type RootTabParamList = {

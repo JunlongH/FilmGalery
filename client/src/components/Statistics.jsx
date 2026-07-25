@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
@@ -9,9 +9,8 @@ import WordCloud from './WordCloud';
 import { API_BASE as API } from '../api';
 import { getCacheStrategy } from '../lib';
 import { StatCard, ChartCard, StatsModeToggle } from './Statistics/';
-import FilterChips from './digital/FilterChips';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Image, DollarSign, TrendingUp, Package, Wallet, AlertTriangle, Store } from 'lucide-react';
+import { Camera, Image, DollarSign, TrendingUp, Package, Wallet, AlertTriangle, Store, Aperture, Tag } from 'lucide-react';
 
 const formatStat = (val) => {
   const num = Number(val);
@@ -22,24 +21,46 @@ const formatStat = (val) => {
 // 统计数据缓存策略
 const statsCache = getCacheStrategy('stats');
 
+/**
+ * Statistics - 统计仪表盘
+ *
+ * mode 取值：
+ *   - 'stats'（默认）/ 'spending'：胶片工作区的统计 / 开销视图（历史行为）
+ *   - 'film' / 'digital'：工作区统计视图，所有查询附带 ?mode= 保持工作区纯净
+ */
 export default function Statistics({ mode = 'stats' }) {
-  const [sourceMode, setSourceMode] = useState(() => localStorage.getItem('fg-stats-source') || 'all');
-  const srcParam = `?mode=${sourceMode}`;
-  const { data: summary } = useQuery({ queryKey: ['stats-summary', sourceMode], queryFn: () => fetch(`${API}/api/stats/summary${srcParam}`).then(r => r.json()), ...statsCache });
-  const { data: gear } = useQuery({ queryKey: ['stats-gear', sourceMode], queryFn: () => fetch(`${API}/api/stats/gear${srcParam}`).then(r => r.json()), ...statsCache });
-  const { data: activity } = useQuery({ queryKey: ['stats-activity', sourceMode], queryFn: () => fetch(`${API}/api/stats/activity${srcParam}`).then(r => r.json()), ...statsCache });
+  const isSpending = mode === 'spending';
+  const workspace = mode === 'digital' ? 'digital' : 'film';
+  const isDigital = workspace === 'digital';
+  const modeQs = `?mode=${workspace}`;
+
+  const { data: summary } = useQuery({ queryKey: ['stats-summary', workspace], queryFn: () => fetch(`${API}/api/stats/summary${modeQs}`).then(r => r.json()), ...statsCache });
+  const { data: gear } = useQuery({ queryKey: ['stats-gear', workspace], queryFn: () => fetch(`${API}/api/stats/gear${modeQs}`).then(r => r.json()), ...statsCache });
+  // 胶片：按胶卷统计的拍摄活动；数码：按月统计的照片数量（同构 [{month, count}]）
+  const { data: activity } = useQuery({
+    queryKey: ['stats-activity', workspace],
+    queryFn: () => fetch(isDigital ? `${API}/api/stats/digital/monthly` : `${API}/api/stats/activity?mode=film`).then(r => r.json()),
+    ...statsCache
+  });
   const { data: costs } = useQuery({ queryKey: ['stats-costs'], queryFn: () => fetch(`${API}/api/stats/costs`).then(r => r.json()), enabled: mode === 'spending', ...statsCache });
-  const { data: locations } = useQuery({ queryKey: ['stats-locations'], queryFn: () => fetch(`${API}/api/stats/locations`).then(r => r.json()).catch(() => []), ...statsCache });
-  const { data: themes } = useQuery({ queryKey: ['stats-themes'], queryFn: () => fetch(`${API}/api/stats/themes`).then(r => r.json()), ...statsCache });
-  const { data: inventory } = useQuery({ queryKey: ['stats-inventory'], queryFn: () => fetch(`${API}/api/stats/inventory`).then(r => r.json()), ...statsCache });
+  const { data: locations } = useQuery({ queryKey: ['stats-locations', workspace], queryFn: () => fetch(`${API}/api/stats/locations${modeQs}`).then(r => r.json()).catch(() => []), ...statsCache });
+  const { data: themes } = useQuery({ queryKey: ['stats-themes', workspace], queryFn: () => fetch(`${API}/api/stats/themes${modeQs}`).then(r => r.json()), ...statsCache });
+  const { data: inventory } = useQuery({ queryKey: ['stats-inventory'], queryFn: () => fetch(`${API}/api/stats/inventory`).then(r => r.json()), enabled: !isDigital, ...statsCache });
+  // 数码专属：相机分布
+  const { data: digitalCameras } = useQuery({
+    queryKey: ['stats-digital-cameras'],
+    queryFn: () => fetch(`${API}/api/stats/digital/cameras`).then(r => r.json()),
+    enabled: isDigital,
+    ...statsCache
+  });
 
   // Ensure locations is always an array
   const locationsArray = Array.isArray(locations) ? locations : [];
 
-  const isSpending = mode === 'spending';
-
   const filmShare = (gear?.films || []).map(f => ({ name: f.name, value: f.count }));
   const cameraShare = (gear?.cameras || []).map(c => ({ name: c.name, value: c.count }));
+  const digitalCamerasShare = (Array.isArray(digitalCameras) ? digitalCameras : [])
+    .map(c => ({ name: c.camera_name, value: c.count }));
   
   const lensData = gear?.lenses || [];
   const totalLensUsage = lensData.reduce((sum, l) => sum + l.count, 0);
@@ -94,11 +115,6 @@ export default function Statistics({ mode = 'stats' }) {
   const navigate = useNavigate();
   const handleModeChange = (mode) => navigate(mode === 'spending' ? '/spending' : '/stats');
 
-  const handleSourceChange = (v) => {
-    setSourceMode(v);
-    localStorage.setItem('fg-stats-source', v);
-  };
-
   return (
     <div className="w-full min-h-full bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-6 lg:p-8 space-y-8 animate-fade-in pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-700 pb-6">
@@ -107,37 +123,47 @@ export default function Statistics({ mode = 'stats' }) {
             {isSpending ? 'Spending Analysis' : 'Statistics Dashboard'}
           </h2>
           <p className="text-zinc-500 dark:text-zinc-400 mt-1">
-             {isSpending ? 'Track your film photography expenses and investment' : 'Comprehensive overview of your photography journey'}
+             {isSpending ? 'Track your film photography expenses and investment' : isDigital ? '数码照片库总览' : 'Comprehensive overview of your photography journey'}
           </p>
         </div>
-        <StatsModeToggle mode={isSpending ? 'spending' : 'stats'} onModeChange={handleModeChange} />
-        {!isSpending && <FilterChips value={sourceMode} onChange={handleSourceChange} />}
+        {!isDigital && <StatsModeToggle mode={isSpending ? 'spending' : 'stats'} onModeChange={handleModeChange} />}
       </div>
 
       {!isSpending ? (
         <div className="space-y-8 w-full">
           {/* Key Metrics Cards - use inline grid for reliable alignment */}
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(4, 1fr)', 
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
             gap: '16px',
             width: '100%'
           }}>
-            <StatCard title="Total Rolls" value={summary?.total_rolls || 0} icon={Camera} color="info" />
-            <StatCard title="Total Photos" value={summary?.total_photos || 0} icon={Image} color="success" />
-            <StatCard title="Total Spending" value={summary?.total_cost || 0} prefix="¥" sub="Est. Value" icon={DollarSign} color="warning" />
-            <StatCard 
-              title="Avg Cost/Roll" 
-              value={summary?.total_rolls ? (summary?.total_cost || 0) / summary.total_rolls : 0}
-              prefix="¥"
-              sub="Per roll investment"
-              icon={TrendingUp}
-              color="indigo"
-            />
+            {isDigital ? (
+              <>
+                <StatCard title="照片总数" value={summary?.total_digital_photos || 0} icon={Image} color="success" />
+                <StatCard title="相机" value={cameraShare.length} sub="Distinct models" icon={Camera} color="info" />
+                <StatCard title="镜头" value={lensData.length} sub="Distinct lenses" icon={Aperture} color="indigo" />
+                <StatCard title="主题" value={(themes || []).length} sub="Themes in use" icon={Tag} color="warning" />
+              </>
+            ) : (
+              <>
+                <StatCard title="Total Rolls" value={summary?.total_rolls || 0} icon={Camera} color="info" />
+                <StatCard title="Total Photos" value={summary?.total_photos || 0} icon={Image} color="success" />
+                <StatCard title="Total Spending" value={summary?.total_cost || 0} prefix="¥" sub="Est. Value" icon={DollarSign} color="warning" />
+                <StatCard
+                  title="Avg Cost/Roll"
+                  value={summary?.total_rolls ? (summary?.total_cost || 0) / summary.total_rolls : 0}
+                  prefix="¥"
+                  sub="Per roll investment"
+                  icon={TrendingUp}
+                  color="indigo"
+                />
+              </>
+            )}
           </div>
 
           {/* Activity Chart - Full width */}
-          <ChartCard title="Shooting Activity" subtitle="Rolls shot over time" height={280}>
+          <ChartCard title={isDigital ? '拍摄活动' : 'Shooting Activity'} subtitle={isDigital ? '按月统计照片数量' : 'Rolls shot over time'} height={280}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={activity || []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <defs>
@@ -155,23 +181,25 @@ export default function Statistics({ mode = 'stats' }) {
             </ResponsiveContainer>
           </ChartCard>
 
-          {/* Inventory Section */}
-          <div className="space-y-4">
-            <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 px-1 flex items-center gap-2">
-              <Package className="w-5 h-5 text-primary" /> Inventory Status
-            </h3>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-              gap: '16px',
-              width: '100%'
-            }}>
-               <StatCard title="In Stock" value={inventory?.value?.total_count || 0} sub="Rolls ready to shoot" icon={Package} color="teal" />
-               <StatCard title="Inventory Value" value={inventory?.value?.total_value || 0} prefix="¥" sub="Total asset value" icon={Wallet} color="info" />
-               <StatCard title="Expiring Soon" value={inventory?.expiring?.length || 0} sub="Within 180 days" trend={inventory?.expiring?.length > 0 ? -10 : 0} icon={AlertTriangle} color="danger" />
-               <StatCard title="Top Channel" value={inventory?.channels?.[0]?.purchase_channel || '-'} sub={inventory?.channels?.[0] ? `${formatStat(inventory.channels[0].count)} rolls` : ''} icon={Store} color="secondary" />
+          {/* Inventory Section (film-only) */}
+          {!isDigital && (
+            <div className="space-y-4">
+              <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 px-1 flex items-center gap-2">
+                <Package className="w-5 h-5 text-primary" /> Inventory Status
+              </h3>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gap: '16px',
+                width: '100%'
+              }}>
+                 <StatCard title="In Stock" value={inventory?.value?.total_count || 0} sub="Rolls ready to shoot" icon={Package} color="teal" />
+                 <StatCard title="Inventory Value" value={inventory?.value?.total_value || 0} prefix="¥" sub="Total asset value" icon={Wallet} color="info" />
+                 <StatCard title="Expiring Soon" value={inventory?.expiring?.length || 0} sub="Within 180 days" trend={inventory?.expiring?.length > 0 ? -10 : 0} icon={AlertTriangle} color="danger" />
+                 <StatCard title="Top Channel" value={inventory?.channels?.[0]?.purchase_channel || '-'} sub={inventory?.channels?.[0] ? `${formatStat(inventory.channels[0].count)} rolls` : ''} icon={Store} color="secondary" />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Equipment & Themes Grid - 2x2 layout */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '1.5rem', width: '100%' }}>
@@ -187,29 +215,46 @@ export default function Statistics({ mode = 'stats' }) {
                 </ResponsiveContainer>
             </ChartCard>
 
-            <ChartCard title="Camera Usage" subtitle="By photo count" height={280}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={cameraShare.slice(0, 6)} dataKey="value" nameKey="name" cx="35%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3}>
-                      {cameraShare.slice(0, 6).map((entry, index) => <Cell key={`cell-c-${index}`} fill={palette[index % palette.length]} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: 'var(--heroui-content1)', borderColor: 'var(--heroui-divider)' }} />
-                    <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" wrapperStyle={{ fontSize: 12, paddingLeft: 10 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-            </ChartCard>
+            {isDigital ? (
+              /* 数码专属面板：相机分布 */
+              <ChartCard title="相机分布" subtitle="按照片数量统计" height={280}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={digitalCamerasShare.slice(0, 6)} dataKey="value" nameKey="name" cx="35%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3}>
+                        {digitalCamerasShare.slice(0, 6).map((entry, index) => <Cell key={`cell-dc-${index}`} fill={palette[index % palette.length]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={{ background: 'var(--heroui-content1)', borderColor: 'var(--heroui-divider)' }} />
+                      <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" wrapperStyle={{ fontSize: 12, paddingLeft: 10 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+              </ChartCard>
+            ) : (
+              <ChartCard title="Camera Usage" subtitle="By photo count" height={280}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={cameraShare.slice(0, 6)} dataKey="value" nameKey="name" cx="35%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3}>
+                        {cameraShare.slice(0, 6).map((entry, index) => <Cell key={`cell-c-${index}`} fill={palette[index % palette.length]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={{ background: 'var(--heroui-content1)', borderColor: 'var(--heroui-divider)' }} />
+                      <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" wrapperStyle={{ fontSize: 12, paddingLeft: 10 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+              </ChartCard>
+            )}
 
-            <ChartCard title="Film Type" subtitle="By photo count" height={280}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={filmShare.slice(0, 6)} dataKey="value" nameKey="name" cx="35%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3}>
-                      {filmShare.slice(0, 6).map((entry, index) => <Cell key={`cell-f-${index}`} fill={palette[index % palette.length]} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: 'var(--heroui-content1)', borderColor: 'var(--heroui-divider)' }} />
-                    <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" wrapperStyle={{ fontSize: 12, paddingLeft: 10 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-            </ChartCard>
+            {!isDigital && (
+              <ChartCard title="Film Type" subtitle="By photo count" height={280}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={filmShare.slice(0, 6)} dataKey="value" nameKey="name" cx="35%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3}>
+                        {filmShare.slice(0, 6).map((entry, index) => <Cell key={`cell-f-${index}`} fill={palette[index % palette.length]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={{ background: 'var(--heroui-content1)', borderColor: 'var(--heroui-divider)' }} />
+                      <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" wrapperStyle={{ fontSize: 12, paddingLeft: 10 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+              </ChartCard>
+            )}
 
             <ChartCard title="Popular Themes" subtitle="Classification" height={280}>
                 <ResponsiveContainer width="100%" height="100%">

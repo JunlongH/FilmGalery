@@ -47,6 +47,27 @@ export function useApiQuery<T>(
     };
   }, [key, ttl]);
 
+  const data = key ? getQueryData<T>(key) : undefined;
+  const error = key ? getQueryError(key) : undefined;
+
+  // Refetch when data is missing without an error — covers the post-invalidation
+  // case where invalidateQueries() wiped the cached entry. fetchQuery dedupes
+  // via its in-flight promise cache, so this never doubles up with the mount
+  // effect above.
+  // Note: `data !== undefined` deliberately treats `null` as "loaded" — callers
+  // that explicitly `setQueryData(key, null)` (e.g. to signal an empty result)
+  // will NOT trigger a refetch, and `loading` stays false.
+  useEffect(() => {
+    if (!key || data !== undefined || error) return;
+    let cancelled = false;
+    fetchQuery(key, () => fetcherRef.current(), ttl).catch(() => {
+      if (!cancelled) forceRender((n) => n + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key, data, error, ttl]);
+
   const refresh = useCallback(() => {
     if (!key) return;
     setRefreshing(true);
@@ -54,9 +75,6 @@ export function useApiQuery<T>(
       .catch(() => {})
       .finally(() => setRefreshing(false));
   }, [key]);
-
-  const data = key ? getQueryData<T>(key) : undefined;
-  const error = key ? getQueryError(key) : undefined;
 
   return {
     data,

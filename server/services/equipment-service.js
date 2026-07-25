@@ -46,7 +46,8 @@ const EQUIPMENT_CONFIG = {
       'elements', 'groups', 'blade_count',
       'is_macro', 'magnification_ratio', 'image_stabilization',
       'production_year_start', 'production_year_end',
-      'serial_number', 'purchase_date', 'purchase_price', 'condition', 'notes', 'image_path', 'status'
+      'serial_number', 'purchase_date', 'purchase_price', 'condition', 'notes', 'image_path', 'status',
+      'is_digital'
     ],
     booleanFields: ['is_macro', 'image_stabilization'],
     requiredFields: ['name'],
@@ -333,9 +334,10 @@ async function getEquipmentSuggestions() {
 /**
  * Get compatible lenses for a camera
  */
-async function getCompatibleLenses(cameraId) {
+async function getCompatibleLenses(cameraId, mode = null) {
   const camera = await getAsync(`
-    SELECT id, brand, model, mount, has_fixed_lens, fixed_lens_focal_length, fixed_lens_max_aperture 
+    SELECT id, brand, model, mount, has_fixed_lens, fixed_lens_focal_length, fixed_lens_max_aperture,
+           is_digital
     FROM equip_cameras WHERE id = ?
   `, [cameraId]);
 
@@ -364,7 +366,7 @@ async function getCompatibleLenses(cameraId) {
     // Native lenses: exact mount match or Universal
     nativeLenses = await allAsync(`
       SELECT id, name, brand, model, mount, focal_length_min, focal_length_max, 
-             max_aperture, focus_type, image_path
+             max_aperture, focus_type, image_path, is_digital
       FROM equip_lenses 
       WHERE deleted_at IS NULL AND (mount = ? OR mount = 'Universal')
       ORDER BY brand, focal_length_min, name
@@ -373,7 +375,7 @@ async function getCompatibleLenses(cameraId) {
     // Adapted lenses: different mount
     adaptedLenses = await allAsync(`
       SELECT id, name, brand, model, mount, focal_length_min, focal_length_max, 
-             max_aperture, focus_type, image_path
+             max_aperture, focus_type, image_path, is_digital
       FROM equip_lenses 
       WHERE deleted_at IS NULL AND mount != ? AND mount != 'Universal'
       ORDER BY mount, brand, focal_length_min, name
@@ -381,17 +383,35 @@ async function getCompatibleLenses(cameraId) {
   } else {
     nativeLenses = await allAsync(`
       SELECT id, name, brand, model, mount, focal_length_min, focal_length_max, 
-             max_aperture, focus_type, image_path
+             max_aperture, focus_type, image_path, is_digital
       FROM equip_lenses 
       WHERE deleted_at IS NULL
       ORDER BY brand, focal_length_min, name
     `);
   }
 
+  // Apply three-state is_digital mode filter when requested. If mode is not
+  // specified, infer from the camera's own is_digital flag so that a digital
+  // camera defaults to showing digital+universal lenses, and a film camera
+  // defaults to film+universal.
+  const effectiveMode = mode || (camera.is_digital === 1 ? 'digital' : 'film');
+  const filterByMode = (lensList) => {
+    if (effectiveMode === 'digital') {
+      return lensList.filter(l => l.is_digital === 1 || l.is_digital === null || l.is_digital === undefined);
+    }
+    if (effectiveMode === 'film') {
+      return lensList.filter(l => l.is_digital === 0 || l.is_digital === null || l.is_digital === undefined);
+    }
+    return lensList;
+  };
+  nativeLenses = filterByMode(nativeLenses);
+  adaptedLenses = filterByMode(adaptedLenses);
+
   return {
     fixed_lens: false,
     camera_name: cameraName,
     camera_mount: camera.mount,
+    camera_is_digital: camera.is_digital,
     lenses: nativeLenses,
     adapted_lenses: adaptedLenses
   };

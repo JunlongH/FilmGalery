@@ -3,11 +3,12 @@ import { ScrollView, StyleSheet, View, Dimensions, Animated } from 'react-native
 import { ActivityIndicator, Card, Text, useTheme } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { BarChart, PieChart } from 'react-native-chart-kit';
-import { getStatsActivity, getStatsInventory, getStatsOverview, getStatsCosts, getStatsGear } from '../../api/stats';
 import { spacing, radius } from '../../theme';
 import { Icon } from '../../components/ui';
 import { ApiContext } from '../../context/ApiContext';
+import { api } from '../../api/client';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useLibraryMode } from '../../hooks/useLibraryMode';
 import { useT } from '../../i18n';
 
 const screenWidth = Dimensions.get('window').width;
@@ -38,16 +39,17 @@ export default function StatsScreen({ navigation }: any) {
   const theme = useTheme();
   const t = useT();
   const { baseUrl } = useContext(ApiContext);
+  const mode = useLibraryMode();
 
   const { data, error: queryError, loading, refresh } = useApiQuery<StatsData>(
-    baseUrl ? `stats@${baseUrl}` : null,
+    baseUrl ? `stats@${baseUrl}#${mode}` : null,
     async () => {
       const [overview, inventory, activity, costs, gear] = await Promise.all([
-        getStatsOverview(),
-        getStatsInventory(),
-        getStatsActivity(),
-        getStatsCosts(),
-        getStatsGear(),
+        api.http.get('/api/stats/summary', { mode }),
+        api.http.get('/api/stats/inventory', { mode }),
+        api.http.get('/api/stats/activity', { mode }),
+        api.http.get('/api/stats/costs', { mode }),
+        api.http.get('/api/stats/gear', { mode }),
       ]);
       return { overview, inventory, activity, costs, gear };
     },

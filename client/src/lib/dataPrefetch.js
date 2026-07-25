@@ -152,10 +152,10 @@ export function prefetchCommonData() {
       options: { staleTime: CACHE_STRATEGIES.STATIC.staleTime },
     });
 
-    // 标签列表
+    // 标签列表（消费方 key 为 ['tags', mode]，默认工作区是 film，与之对齐）
     prefetchManager.add({
-      queryKey: ['tags'],
-      queryFn: getTags,
+      queryKey: ['tags', 'film'],
+      queryFn: () => getTags('film'),
       priority: 6,
       options: { staleTime: CACHE_STRATEGIES.SEMI_STATIC.staleTime },
     });

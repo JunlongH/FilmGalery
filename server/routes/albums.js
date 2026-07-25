@@ -1,7 +1,7 @@
 /**
  * Albums Route — CRUD, nested hierarchy, M2M photos.
  *
- * GET    /api/albums                         — list (optional ?parent_id=)
+ * GET    /api/albums                         — list (optional ?parent_id=, ?photo_id=, ?include_deleted=)
  * GET    /api/albums/:id                     — single
  * GET    /api/albums/:id/photos              — photos in album
  * POST   /api/albums                         — create
@@ -19,7 +19,7 @@
 const express = require('express');
 const router = express.Router();
 const PreparedStmt = require('../utils/prepared-statements');
-const { runAsync, getAsync } = require('../utils/db-helpers');
+const { runAsync, getAsync, allAsync } = require('../utils/db-helpers');
 
 // ── Cycle detection ─────────────────────────────────────────────────────────
 
@@ -56,6 +56,25 @@ router.get('/', async (req, res, next) => {
       }
     }
     const includeDeleted = req.query.include_deleted === 'true';
+    if (req.query.photo_id !== undefined) {
+      const photoId = Number(req.query.photo_id);
+      if (!Number.isFinite(photoId)) {
+        return res.status(400).json({ error: 'photo_id must be a number' });
+      }
+      const rows = await allAsync(
+        `SELECT a.*,
+                (SELECT thumb_rel_path FROM photos WHERE id = a.cover_photo_id) AS cover_thumb,
+                (SELECT COUNT(*) FROM album_photos apc
+                 JOIN photos pc ON pc.id = apc.photo_id AND pc.deleted_at IS NULL
+                 WHERE apc.album_id = a.id) AS photo_count
+         FROM albums a
+         JOIN album_photos ap ON ap.album_id = a.id AND ap.photo_id = ?
+         WHERE (? = 1 OR a.deleted_at IS NULL) AND (? IS NULL OR a.parent_id = ?)
+         ORDER BY a.sort_order, a.updated_at DESC`,
+        [photoId, includeDeleted ? 1 : 0, parentId, parentId]
+      );
+      return res.json(rows);
+    }
     const rows = await PreparedStmt.allAsync('albums.list', [includeDeleted ? 1 : 0, parentId, parentId]);
     res.json(rows);
   } catch (err) {

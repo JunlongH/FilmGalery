@@ -14,7 +14,7 @@ import { getApiBase } from '../../api';
 import { resolveFullUrl } from '../../utils/thumbResolver';
 
 
-export default function HeroCarousel({ onPhotoClick }) {
+export default function HeroCarousel({ onPhotoClick, mode }) {
   const [photos, setPhotos] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -24,7 +24,8 @@ export default function HeroCarousel({ onPhotoClick }) {
     try {
       setIsRefreshing(true);
       const apiBase = getApiBase();
-      const r = await fetch(`${apiBase}/api/photos/random?limit=8`);
+      const modeParam = mode ? `&mode=${mode}` : '';
+      const r = await fetch(`${apiBase}/api/photos/random?limit=8${modeParam}`);
       const data = await r.json();
       if (Array.isArray(data)) {
         // Filter out photos with no path
@@ -38,7 +39,7 @@ export default function HeroCarousel({ onPhotoClick }) {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
     loadRandom();
@@ -138,7 +139,7 @@ export default function HeroCarousel({ onPhotoClick }) {
             style={{ opacity: 1 }}
           >
             <h2 className="text-white text-3xl md:text-4xl font-bold mb-3 tracking-tight drop-shadow-lg">
-              {current.roll_title || 'Untitled'}
+              {current.roll_title || current.caption || (current.original_filename && current.original_filename.replace(/\.[^.]+$/, '')) || 'Untitled'}
             </h2>
             
             {/* Photo Details - Simple inline text */}

@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Progress } from '@heroui/react';
-import { Upload, Check, AlertCircle, FileImage, X, FolderPlus } from 'lucide-react';
+import { Button, Progress, Input } from '@heroui/react';
+import { Upload, Check, AlertCircle, FileImage, X, FolderPlus, MapPin } from 'lucide-react';
 import {
   digitalPreviewImport, digitalExecuteImport, getDigitalImportProgress, cancelDigitalImport,
   getAlbums,
@@ -21,9 +21,12 @@ export default function DigitalImportWizard() {
   const [previewResult, setPreviewResult] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [albumId, setAlbumId] = useState(null);
+  const [sessionTitle, setSessionTitle] = useState('');
   const [jobId, setJobId] = useState(null);
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState(null);
+  const albumIdRef = useRef(albumId);
+  useEffect(() => { albumIdRef.current = albumId; }, [albumId]);
 
   const { data: albums = [] } = useQuery({
     queryKey: ['albums'],
@@ -60,8 +63,10 @@ export default function DigitalImportWizard() {
     setUploading(true);
     setError(null);
     try {
+      const items = (previewResult.items || []).filter(i => !i.duplicate);
       const res = await digitalExecuteImport({
-        files: previewResult.files,
+        items,
+        session_title: sessionTitle || undefined,
         album_id: albumId,
       });
       setJobId(res.jobId);
@@ -86,7 +91,7 @@ export default function DigitalImportWizard() {
         if (p.status === 'completed') {
           queryClient.invalidateQueries({ queryKey: ['albums'] });
           queryClient.invalidateQueries({ queryKey: ['library-photos'] });
-          setTimeout(() => navigate(albumId ? `/albums/${albumId}` : '/library'), 1500);
+          setTimeout(() => navigate(albumIdRef.current ? `/albums/${albumIdRef.current}` : '/library'), 1500);
           return;
         }
         if (p.status === 'failed') {
@@ -114,6 +119,7 @@ export default function DigitalImportWizard() {
     setPreviewResult(null);
     setStep(0);
     setError(null);
+    setSessionTitle('');
   }
 
   return (
@@ -178,7 +184,16 @@ export default function DigitalImportWizard() {
           ) : previewResult ? (
             <>
               <PreviewTable result={previewResult} />
-              <div className="mt-6 flex items-center gap-4">
+              <div className="mt-6 flex flex-wrap items-center gap-4">
+                <Input
+                  className="max-w-xs"
+                  size="sm"
+                  variant="bordered"
+                  label="Session title (optional)"
+                  placeholder="e.g. 2026 Qingdao trip"
+                  value={sessionTitle}
+                  onValueChange={setSessionTitle}
+                />
                 <select
                   className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
                   value={albumId ?? ''}
@@ -195,9 +210,9 @@ export default function DigitalImportWizard() {
                 <Button
                   color="primary"
                   onPress={handleExecute}
-                  isDisabled={previewResult.files.length === 0}
+                  isDisabled={(previewResult.items || []).filter(i => !i.duplicate).length === 0}
                 >
-                  <FolderPlus className="w-4 h-4" /> Import {previewResult.files.filter(f => !f.duplicate).length} Photos
+                  <FolderPlus className="w-4 h-4" /> Import {(previewResult.items || []).filter(i => !i.duplicate).length} photos
                 </Button>
               </div>
             </>
@@ -212,12 +227,12 @@ export default function DigitalImportWizard() {
             <>
               <div className="w-full max-w-md mb-6">
                 <Progress
-                  value={progress.processed / Math.max(progress.total, 1) * 100}
+                  value={(progress.done || 0) / Math.max(progress.total, 1) * 100}
                   color={progress.status === 'failed' ? 'danger' : 'primary'}
                   size="lg"
                 />
                 <div className="flex justify-between mt-2 text-sm text-zinc-500">
-                  <span>{progress.processed} / {progress.total}</span>
+                  <span>{progress.done || 0} / {progress.total}</span>
                   <span>{progress.status}</span>
                 </div>
               </div>
@@ -240,17 +255,38 @@ export default function DigitalImportWizard() {
 }
 
 function PreviewTable({ result }) {
-  const files = result.files || [];
-  const dupes = files.filter(f => f.duplicate).length;
-  const raws = files.filter(f => f.is_raw).length;
+  const items = result.items || [];
+  const total = result.total ?? items.length;
+  const dupes = result.duplicates ?? items.filter(i => i.duplicate).length;
+  const raws = result.raws ?? items.filter(i => i.isRaw).length;
+  const summary = result.exif_summary;
 
   return (
     <div>
       <div className="grid grid-cols-3 gap-4 mb-4">
-        <StatBox label="Total" value={files.length} />
+        <StatBox label="Total" value={total} />
         <StatBox label="RAW" value={raws} icon={<FileImage className="w-4 h-4" />} />
         <StatBox label="Duplicates" value={dupes} warning={dupes > 0} />
       </div>
+      {summary && (
+        <div className="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 p-3 text-sm">
+          {summary.dateRange && (
+            <p className="text-zinc-600 dark:text-zinc-300">
+              Date taken: {summary.dateRange.start?.slice(0, 10)} → {summary.dateRange.end?.slice(0, 10)}
+            </p>
+          )}
+          {summary.cameras?.length > 0 && (
+            <p className="text-zinc-600 dark:text-zinc-300 mt-1">
+              Cameras: {summary.cameras.map(c => `${c.name} × ${c.count}`).join(', ')}
+            </p>
+          )}
+          {summary.hasGps && (
+            <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 text-xs">
+              <MapPin className="w-3 h-3" /> Has GPS
+            </span>
+          )}
+        </div>
+      )}
       <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden max-h-80 overflow-y-auto">
         <table className="w-full text-sm">
           <thead className="bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400">
@@ -262,15 +298,17 @@ function PreviewTable({ result }) {
             </tr>
           </thead>
           <tbody>
-            {files.map((f, i) => (
+            {items.map((item, i) => (
               <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
-                <td className="p-2 truncate max-w-48">{f.original_filename || f.filename}</td>
-                <td className="p-2 hidden sm:table-cell text-zinc-500">{f.source_model || '—'}</td>
-                <td className="p-2 hidden md:table-cell text-zinc-500">{f.date_taken?.slice(0, 10) || '—'}</td>
+                <td className="p-2 truncate max-w-48">{item.file?.originalname || '—'}</td>
+                <td className="p-2 hidden sm:table-cell text-zinc-500">
+                  {[item.exif?.make, item.exif?.model].filter(Boolean).join(' ') || '—'}
+                </td>
+                <td className="p-2 hidden md:table-cell text-zinc-500">{item.exif?.dateTimeOriginal?.slice(0, 10) || '—'}</td>
                 <td className="p-2">
-                  {f.duplicate ? (
+                  {item.duplicate ? (
                     <span className="text-xs text-amber-500">Duplicate</span>
-                  ) : f.is_raw ? (
+                  ) : item.isRaw ? (
                     <span className="text-xs text-blue-500">RAW</span>
                   ) : (
                     <span className="text-xs text-green-500">OK</span>

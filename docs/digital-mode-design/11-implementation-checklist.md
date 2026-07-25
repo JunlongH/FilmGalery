@@ -11,7 +11,10 @@
 | **Part 2** | PreparedStmt 扩展 + 数据完整性脚本 | T3, T4 | **✅ 已完成** |
 | Part 3 | 后端路由 5 个 + 服务 4 个 | T5, T6 | **✅ 已完成** |
 | Part 4 | 现有路由改造 + AI 过滤 + api-client | T7, T8, T9 | **✅ 已完成** |
-| **Part 5** | 前端层 | T10-T18 | **✅ 已完成** |
+| **Part 5** | 前端层(filter-chips 方案) | T10-T18 | **✅ 已完成**(已被 Part 6 取代) |
+| **Part 6** | 工作区切换重构(用户改方案) | — | **✅ 已完成** |
+| **Part 7** | 设备统一管理 + 数码 Overview 首页 | — | **✅ 已完成** |
+| **Part 8** | 测试 + 对抗式审查 + 服务器运行审查 | — | **✅ 已完成** |
 
 **Part 1 详情**(2026-07-24):
 - T0 ✅ 迁移脚本 `digital-mode-migration.js` + 注册到 `run-all-migrations.js`
@@ -140,6 +143,70 @@
   - [N7] DigitalImportWizard timer 变量提前声明(消除 use-before-define)
   - 复测:lint 0 errors、check-join-rolls PASS、integrity 7/7 PASS
   - 注:Vite build 因 Node 18 环境(Node 20+ required by Vite 8/rolldown)无法在本地验证,需在 CI 环境测试
+
+**Part 6 详情**(2026-07-25 — 用户改方案,filter-chips → 工作区切换):
+- 用户需求:"之前的纯胶片 Film 的前端界面保持不变,只是左侧边栏增加一个切换按钮,从胶片切换到数码或相反。切换后整体前端界面就切换到一套新的界面"
+- 改造点:
+  - `App.jsx` 重写:`mode` 状态(localStorage `fg-workspace-mode`)+ 条件路由 `FilmRoutes` / `DigitalRoutes` + `toggleMode` 跳 `/`
+    - FilmRoutes:14 路由完全等同 main 分支(Overview/Calendar/Map/Stats/Spending/Rolls/Rolls/new/Rolls/:id/Films/Favorites/Themes/Themes/:tagId/Equipment/LUTs/Settings)
+    - DigitalRoutes:`/library`、`/albums`、`/albums/:id`、`/digital-import`、`/equipment`、`/settings`、`*`→Overview
+  - `Sidebar.jsx` 重写:模式感知。顶部切换按钮(film 琥珀色 / digital 天蓝色);Film 模式恢复 main 的 3 分组(Main/Browse/Tools);Digital 模式新分组(Library/Organize[Albums+Import]/Tools[Equipment+Settings])
+  - `FILM_SHORTCUTS` / `DIGITAL_SHORTCUTS` 两套独立快捷键
+  - `Statistics.jsx` 从 main 恢复(移除 FilterChips 嵌入)
+  - `LibraryView.jsx` 简化为数码专属(移除 FilterChips,工作区内固定只显数码)
+  - `FilterChips.jsx` + `OnboardingModal.jsx` 删除(toggle 取代 onboarding)
+  - 向后兼容保留:`ImageViewer.jsx`(数码分流)、`PhotoDetailsSidebar.jsx`(数码分组)、`EquipmentEditModal.jsx`(数码字段)、`queryClient.js`(数码缓存)
+- E2E 验证:Puppeteer 双模式切换无 page error,Film/Digital 两个工作区渲染截然不同的内容
+- Vite build PASS(Node 20,2.79s,5223 modules)
+
+**Part 7 详情**(2026-07-25 — 用户两项需求):
+- **需求 1:数码工作区需要独立 Overview 首页**
+  - 新建 `client/src/components/digital/DigitalOverview.jsx`(~180 行):HeroCarousel(mode=digital) → 4 stat cards(Photos/Albums/Favorites/Imports)→ Recent Albums 网格(最多 6 个 AlbumCard)+ 空状态 CTA → Import CTA
+  - `HeroCarousel.jsx` 加 `mode` prop:`loadRandom` 拼 `&mode=${mode}` 到 `/api/photos/random`;标题 fallback 链 `roll_title → caption → original_filename → 'Untitled'`
+  - `App.jsx` DigitalRoutes 首路由改为 `<Route path="/" element={<DigitalOverview />} />`
+  - `Sidebar.jsx` DIGITAL_SHORTCUTS 更新(Overview=⌘1, Library=⌘2, Albums=⌘3, Import=⌘4, Equipment=⌘5)
+  - 新建 `client/src/components/digital/albums/AlbumCard.jsx`(抽取自 AlbumLibrary.jsx 的私有函数,40 行)
+
+- **需求 2:设备统一管理但需补数码相机相关词条**
+  - 设计:**分层设备模型** — `equip_cameras.is_digital` 严格二态(0/1)、`equip_lenses.is_digital` 三态(0/1/NULL=通用)、`equip_flashes` 无 flag(通用)
+  - 迁移:`server/utils/digital-mode-migration.js` 增 `lensColumns = [{col:'is_digital', type:'INTEGER'}]`(nullable,NULL=universal)
+  - 常量三处同步(`packages/shared/constants/equipment.js` + `server/utils/equipment-migration.js` + `EquipmentEditModal.jsx`):
+    - 拆分 `FILM_CAMERA_TYPES`(9:SLR/Rangefinder/P&S/TLR/Medium Format/Large Format/Instant/Half Frame/Other)+ `DIGITAL_CAMERA_TYPES`(8:DSLR/Mirrorless/Compact/Phone/Action Camera/Cinema Camera/Digital Medium Format/Other)
+    - `LENS_MOUNTS` += Canon RF / Nikon Z / L Mount / Fuji GF / Hasselblad X
+    - 新增 `SENSOR_SIZES`(7) + `SENSOR_TECHNOLOGIES`(5,重命名避免与 scanner 的 SENSOR_TYPES 混淆)
+  - 后端:
+    - `equipment-service.js` lenses.fields += is_digital;`getCompatibleLenses(cameraId, mode)` 加三态过滤
+    - `equipment.js` 路由:GET /constants 返回新形状(filmCameraTypes/digitalCameraTypes/sensorSizes/sensorTechnologies);cameras/lenses listFilter 支持 ?mode=film|digital
+    - `photos.js` GET /random 加 `mode` 参数(C1 修复)
+  - 前端:
+    - `EquipmentSelector.jsx` 加 `mode` prop,传递给 fetchAll + getCompatibleLenses
+    - `EquipmentEditModal.jsx`:机身类型按 is_digital 动态显示(FILM/DIGITAL)、Phone 联动(自动 has_fixed_lens=1 + 禁用 mount)、Film Format 字段数码隐藏、Sensor Size 用 SENSOR_SIZES 常量、Lens 加工作流兼容性三态选择(Universal/Film-only/Digital-only)
+    - `EquipmentManager.jsx`:Cameras/Lenses 标签下加 All/Film/Digital 子筛选芯片
+    - 7 个胶片工作流文件传 `mode="film"` 给 EquipmentSelector(FilmItemEditModal/RollEditDrawer/NewRollForm/RollDetail/FilmActionModals/PhotoDetailsSidebar[动态])
+
+**Part 8 详情**(2026-07-25 — 测试 + 对抗式审查 + 服务器运行审查):
+- **测试套件**(全 PASS):
+  - ESLint(`eslint server packages tools`):0 errors,206 pre-existing warnings
+  - check-join-rolls:PASS
+  - Vite build(Node 20):PASS(2.76s,5223 modules)
+  - Jest(`npm test`):**1020/1020**(修了 2 处 stale assertion:迁移数 3→4)
+  - Digital integrity check:7/7 PASS
+  - Digital smoke test:54 pass(4 个"fail"是误报,对比旧 DB snapshot 把 4 个新表当"新增"标记)
+- **对抗式审查**(DeepSeek V4 Pro via `review` subagent,2165 行 diff):**0 Critical / 7 Warning / 4 Nit**
+  - [W1] `OverviewView.jsx` 没给 HeroCarousel 传 `mode="film"` → 胶片首页会混显数码照片。**已修**
+  - [W2] `DigitalOverview.jsx` 冗余 import(getApiBase+getAlbums 拆两行、未用的 resolveFullUrl)。**已修**
+  - [W4] `EquipmentEditModal.jsx` 切换 is_digital 没重置 type/sensor 字段 → 可能存出"DSLR 配 is_digital=0"的脏数据。**已修**(加 is_digital 分支清理逻辑)
+  - W3/W5 误报(raw fetch 符合 QuickStats 既有约定 / app_config ALTER 在 CREATE 之后);W6/W7/N1-N4 cosmetic,跳过
+- **服务器运行审查**(backend :4001,DATA_ROOT=/tmp/filmgallery-test-data,0 个 500 错误):
+  - `equipment/constants` 新形状:filmCameraTypes(9)+ digitalCameraTypes(8)+ sensorSizes(7)+ sensorTechnologies(5)+ legacy cameraTypes(16)+ 新镜头卡口(Canon RF/Nikon Z/L Mount/Fuji GF/Hasselblad X)✓
+  - 三态 NULL 过滤验证:lenses?mode=film → Leica(0)+Universal(NULL);lenses?mode=digital → Sony(1)+Universal(NULL) ✓
+  - `photos/random?mode=digital` 只返回 source_type='digital'(C1 修复验证)✓
+  - `getCompatibleLenses?mode=digital` 只返回对应 workflow 镜头 ✓
+  - `app-config` 返回全部 10 字段 ✓
+  - 迁移幂等:重跑 0 executed / 4 skipped ✓
+- **Puppeteer E2E 最终验证**(0 page errors,仅 favicon 404):
+  - FILM 模式:nav=[Calendar,Map,Favorites,Themes,Statistics,Equipment],显示 "Browse Your Collection"
+  - DIGITAL 模式:nav=[Overview,Library,Albums,Import,Equipment,Settings]+ 顶部切换按钮,显示 "Recent Albums / 旅行精选 / Import New Photos"
 
 ## 11.1 依赖图
 

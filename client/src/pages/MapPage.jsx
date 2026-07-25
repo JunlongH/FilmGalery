@@ -13,10 +13,12 @@ import '../styles/map.css';
 
 /**
  * MapPage Component
- * 
+ *
  * Container for the photo map view. Orchestrates filters and map display.
+ * mode: 'film' | 'digital' — forwarded to the geo photos query so each
+ * workspace's map stays pure.
  */
-export default function MapPage() {
+export default function MapPage({ mode }) {
   // Filter state
   const [filters, setFilters] = useState({
     dateRange: null, // { start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' }
@@ -76,6 +78,7 @@ export default function MapPage() {
         onClear={handleClearFilters}
         isOpen={showFilters}
         onClose={() => setShowFilters(false)}
+        mode={mode}
       />
 
       {/* Map Container */}
@@ -84,6 +87,7 @@ export default function MapPage() {
           filters={filters}
           onPhotoClick={handlePhotoClick}
           selectedPhoto={selectedPhoto}
+          mode={mode}
         />
       </div>
 

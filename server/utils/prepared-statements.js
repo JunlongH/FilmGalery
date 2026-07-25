@@ -22,18 +22,18 @@ const STATEMENTS = {
   'rolls.getByFilmItemId': 'SELECT * FROM rolls WHERE film_item_id = ?',
   'rolls.listAll': 'SELECT * FROM rolls ORDER BY display_seq DESC, start_date DESC LIMIT ? OFFSET ?',
   'rolls.updateCover': 'UPDATE rolls SET cover_photo = ? WHERE id = ?',
-  'rolls.countPhotos': 'SELECT COUNT(*) AS cnt FROM photos WHERE roll_id = ?',
+  'rolls.countPhotos': 'SELECT COUNT(*) AS cnt FROM photos WHERE roll_id = ? AND deleted_at IS NULL',
   'rolls.maxFrameNumber': 'SELECT MAX(CAST(frame_number AS INTEGER)) AS max_frame FROM photos WHERE roll_id = ?',
   
   // Photos
   'photos.getById': 'SELECT * FROM photos WHERE id = ?',
   'photos.getByIdWithPaths': 'SELECT id, roll_id, filename, original_rel_path, positive_rel_path, full_rel_path, negative_rel_path, thumb_rel_path, positive_thumb_rel_path, negative_thumb_rel_path FROM photos WHERE id = ?',
-  'photos.listByRoll': 'SELECT p.*, COALESCE(l.country_name, p.country) AS country_name, COALESCE(l.city_name, p.city) AS city_name, l.country_code, l.city_lat AS location_lat, l.city_lng AS location_lng FROM photos p LEFT JOIN locations l ON p.location_id = l.id WHERE p.roll_id = ? ORDER BY p.frame_number',
+  'photos.listByRoll': 'SELECT p.*, COALESCE(l.country_name, p.country) AS country_name, COALESCE(l.city_name, p.city) AS city_name, l.country_code, l.city_lat AS location_lat, l.city_lng AS location_lng FROM photos p LEFT JOIN locations l ON p.location_id = l.id WHERE p.roll_id = ? AND p.deleted_at IS NULL ORDER BY p.frame_number',
   'photos.getByRollSimple': 'SELECT id, roll_id, frame_number, full_rel_path, thumb_rel_path, positive_rel_path, positive_thumb_rel_path FROM photos WHERE id = ?',
   'photos.updateRating': 'UPDATE photos SET rating = ? WHERE id = ?',
   'photos.delete': 'UPDATE photos SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?',
   'photos.hardDelete': 'DELETE FROM photos WHERE id = ?', // Caller MUST delete photo_tags first (no FK cascade)
-  'photos.checkHash': 'SELECT id, source_type FROM photos WHERE content_hash = ?',
+  'photos.checkHash': 'SELECT id, source_type FROM photos WHERE content_hash = ? AND deleted_at IS NULL',
   
   // Tags
   'tags.getAll': 'SELECT * FROM tags ORDER BY name',
@@ -83,9 +83,15 @@ const STATEMENTS = {
   // Params: [includeDeleted(0|1), parentId, parentId]
   'albums.list': `
     SELECT a.*,
-           (SELECT thumb_rel_path FROM photos WHERE id = a.cover_photo_id) AS cover_thumb
+           (SELECT thumb_rel_path FROM photos WHERE id = a.cover_photo_id) AS cover_thumb,
+           COUNT(p.id) AS photo_count,
+           MIN(p.date_taken) AS date_range_start,
+           MAX(p.date_taken) AS date_range_end
     FROM albums a
+    LEFT JOIN album_photos ap ON ap.album_id = a.id
+    LEFT JOIN photos p ON p.id = ap.photo_id AND p.deleted_at IS NULL
     WHERE (? = 1 OR a.deleted_at IS NULL) AND (? IS NULL OR a.parent_id = ?)
+    GROUP BY a.id
     ORDER BY a.sort_order, a.updated_at DESC`,
 
   'albums.getById': `

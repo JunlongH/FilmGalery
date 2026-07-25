@@ -168,6 +168,14 @@ function runDigitalModeMigration(dbPathOverride) {
         { col: 'sensor_format', type: 'TEXT' },
       ];
 
+      // equip_lenses.is_digital — three-state:
+      //   0 = film-only, 1 = digital-only, NULL = universal (default)
+      // NULL default preserves backward compatibility: existing lenses remain
+      // visible in both workflows until the user explicitly classifies them.
+      const lensColumns = [
+        { col: 'is_digital', type: 'INTEGER' },
+      ];
+
       for (const { col, type } of photoColumns) {
         const err = await run(`ALTER TABLE photos ADD COLUMN ${col} ${type}`);
         if (err && !/duplicate column/i.test(err.message)) {
@@ -181,7 +189,31 @@ function runDigitalModeMigration(dbPathOverride) {
           throw new Error(`Failed adding equip_cameras.${col}: ${err.message}`);
         }
       }
-      log('Columns ensured: photos (+12), equip_cameras (+7).');
+
+      for (const { col, type } of lensColumns) {
+        const err = await run(`ALTER TABLE equip_lenses ADD COLUMN ${col} ${type}`);
+        if (err && !/duplicate column/i.test(err.message)) {
+          throw new Error(`Failed adding equip_lenses.${col}: ${err.message}`);
+        }
+      }
+
+      // app_config — columns added after initial release (frontend expects these
+      // for onboarding + sidebar section visibility). photography_mode is kept
+      // for backward compat; default_source_filter is the frontend-canonical field.
+      const appConfigColumns = [
+        { col: 'onboarding_completed', type: 'INTEGER NOT NULL DEFAULT 0' },
+        { col: 'default_source_filter', type: "TEXT NOT NULL DEFAULT 'all'" },
+        { col: 'show_film_section', type: 'INTEGER NOT NULL DEFAULT 1' },
+        { col: 'show_digital_section', type: 'INTEGER NOT NULL DEFAULT 1' },
+        { col: 'digital_enabled', type: 'INTEGER NOT NULL DEFAULT 1' },
+      ];
+      for (const { col, type } of appConfigColumns) {
+        const err = await run(`ALTER TABLE app_config ADD COLUMN ${col} ${type}`);
+        if (err && !/duplicate column/i.test(err.message)) {
+          throw new Error(`Failed adding app_config.${col}: ${err.message}`);
+        }
+      }
+      log('Columns ensured: photos (+12), equip_cameras (+7), equip_lenses (+1), app_config (+5).');
 
       // ================================================================
       // 3. Indexes

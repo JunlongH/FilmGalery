@@ -73,11 +73,11 @@ describe('runAllMigrations — fresh DB integration', () => {
     cleanupBackups(dbPath);
   });
 
-  test('first run executes all 3 migrations and records them', async () => {
+  test('first run executes all 4 migrations and records them', async () => {
     const { runAllMigrations } = loadRunWithDb(dbPath);
     const result = await runAllMigrations();
-    expect(result.total).toBe(3);
-    expect(result.executed).toBe(3);
+    expect(result.total).toBe(4);
+    expect(result.executed).toBe(4);
     expect(result.skipped).toBe(0);
     expect(result.failed).toBe(0);
 
@@ -88,6 +88,7 @@ describe('runAllMigrations — fresh DB integration', () => {
         '20240101_core_schema',
         '20241001_equipment_tables',
         '20241101_film_structure',
+        '20260701_digital_mode',
       ]);
       expect(rows.every(r => r.success === 1)).toBe(true);
     } finally {
@@ -167,7 +168,7 @@ describe('runAllMigrations — fresh DB integration', () => {
     }
   });
 
-  test('second run is idempotent (all 3 skipped, no new _migrations rows)', async () => {
+  test('second run is idempotent (all 4 skipped, no new _migrations rows)', async () => {
     const first = loadRunWithDb(dbPath);
     await first.runAllMigrations();
 
@@ -176,13 +177,13 @@ describe('runAllMigrations — fresh DB integration', () => {
     const result = await second.runAllMigrations();
 
     expect(result.executed).toBe(0);
-    expect(result.skipped).toBe(3);
+    expect(result.skipped).toBe(4);
     expect(result.failed).toBe(0);
 
     const db = openReadOnly(dbPath);
     try {
       const rows = await queryAll(db, "SELECT COUNT(*) AS n FROM _migrations WHERE success = 1");
-      expect(rows[0].n).toBe(3);
+      expect(rows[0].n).toBe(4);
     } finally {
       await new Promise(r => db.close(r));
     }

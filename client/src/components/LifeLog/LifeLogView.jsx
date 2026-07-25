@@ -143,9 +143,9 @@ function LifeLogContent() {
   );
 }
 
-export default function LifeLogView() {
+export default function LifeLogView({ mode }) {
   return (
-    <LifeLogProvider>
+    <LifeLogProvider mode={mode}>
       <div className="h-full p-6">
         <LifeLogContent />
       </div>

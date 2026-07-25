@@ -29,19 +29,22 @@ async function fetchRolls() {
  * @param {Function} props.onClear - Clear all filters handler
  * @param {boolean} props.isOpen - Whether panel is visible (mobile)
  * @param {Function} props.onClose - Close panel handler (mobile)
+ * @param {string} [props.mode] - 'film' | 'digital'; digital hides the roll filter (rolls are film-only)
  */
-export default function MapFilterPanel({ 
-  filters, 
-  onChange, 
-  onClear, 
-  isOpen, 
-  onClose 
+export default function MapFilterPanel({
+  filters,
+  onChange,
+  onClear,
+  isOpen,
+  onClose,
+  mode
 }) {
-  // Fetch rolls for dropdown
+  // Fetch rolls for dropdown (film-only; skipped in digital workspace)
   const { data: rolls = [] } = useQuery({
     queryKey: ['rolls'],
     queryFn: fetchRolls,
     staleTime: 1000 * 60 * 5, // 5 minutes
+    enabled: mode !== 'digital',
   });
 
   /**
@@ -111,22 +114,24 @@ export default function MapFilterPanel({
         </div>
       </div>
 
-      {/* Roll selector */}
-      <div className="map-filter-section">
-        <label className="map-filter-label">Roll</label>
-        <select 
-          className="map-filter-select"
-          value={filters.rollId || ''}
-          onChange={handleRollChange}
-        >
-          <option value="">All Rolls</option>
-          {rolls.map(roll => (
-            <option key={roll.id} value={roll.id}>
-              {roll.title || roll.name || `Roll #${roll.id}`}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Roll selector (rolls are film-only) */}
+      {mode !== 'digital' && (
+        <div className="map-filter-section">
+          <label className="map-filter-label">Roll</label>
+          <select
+            className="map-filter-select"
+            value={filters.rollId || ''}
+            onChange={handleRollChange}
+          >
+            <option value="">All Rolls</option>
+            {rolls.map(roll => (
+              <option key={roll.id} value={roll.id}>
+                {roll.title || roll.name || `Roll #${roll.id}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Clear filters button */}
       {hasActiveFilters && (

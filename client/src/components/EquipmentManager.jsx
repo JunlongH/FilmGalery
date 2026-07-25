@@ -29,19 +29,29 @@ const TABS = [
 ];
 
 // 各 tab 的数据获取函数（模块级，保持 queryFn 引用稳定）
+// cameras/lenses 接受 mode 过滤；其他类型忽略
 const EQUIPMENT_FETCHERS = {
-  cameras: () => getCameras({}),
-  lenses: () => getLenses({}),
+  cameras: (mode) => getCameras(mode && mode !== 'all' ? { mode } : {}),
+  lenses: (mode) => getLenses(mode && mode !== 'all' ? { mode } : {}),
   flashes: () => getFlashes({}),
   'film-backs': () => getFilmBacks({}),
   scanners: () => getScanners({}),
   films: () => getFilms(),
 };
 
+// 需要 All/Film/Digital 子筛选的 tab
+const FILTERABLE_TABS = new Set(['cameras', 'lenses']);
+const SOURCE_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'film', label: 'Film' },
+  { key: 'digital', label: 'Digital' },
+];
+
 export default function EquipmentManager() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('cameras');
+  const [sourceFilter, setSourceFilter] = useState('all');
   const [selectedId, setSelectedId] = useState(null);
   const [editItem, setEditItem] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -51,9 +61,10 @@ export default function EquipmentManager() {
   const [loadingRolls, setLoadingRolls] = useState(false);
 
   // 设备数据统一走 React Query（STATIC 策略：设备库极少变化）
+  const effectiveFilter = FILTERABLE_TABS.has(activeTab) ? sourceFilter : 'all';
   const { data: itemsData, isLoading: loading } = useQuery({
-    queryKey: ['equipment', activeTab],
-    queryFn: EQUIPMENT_FETCHERS[activeTab],
+    queryKey: ['equipment', activeTab, effectiveFilter],
+    queryFn: () => EQUIPMENT_FETCHERS[activeTab](effectiveFilter),
     ...getCacheStrategy('equipment'),
     placeholderData: keepPreviousData,
   });
@@ -61,15 +72,16 @@ export default function EquipmentManager() {
 
   // CRUD / 上传后刷新当前 tab 缓存
   const invalidateItems = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: ['equipment', activeTab] }),
-    [queryClient, activeTab]
+    () => queryClient.invalidateQueries({ queryKey: ['equipment', activeTab, effectiveFilter] }),
+    [queryClient, activeTab, effectiveFilter]
   );
 
-  // Tab 切换时重置选择/搜索（数据加载由 useQuery 自动处理）
+  // Tab 切换时重置选择/搜索/子筛选（数据加载由 useQuery 自动处理）
   useEffect(() => {
     setSelectedId(null);
     setEditItem(null);
     setSearchQuery('');
+    setSourceFilter('all');
   }, [activeTab]);
 
   // Filter items by search query
@@ -254,6 +266,33 @@ export default function EquipmentManager() {
             );
           })}
         </div>
+
+        {/* All/Film/Digital 子筛选（仅 cameras/lenses） */}
+        {FILTERABLE_TABS.has(activeTab) && (
+          <div className="flex items-center gap-2 mb-4 flex-shrink-0">
+            <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mr-1">
+              {activeTab === 'cameras' ? 'Body' : 'Workflow'}
+            </span>
+            {SOURCE_FILTERS.map(f => {
+              const isActive = sourceFilter === f.key;
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setSourceFilter(f.key)}
+                  className={`
+                    px-3 py-1 rounded-full text-xs font-medium transition-all border
+                    ${isActive
+                      ? 'bg-primary text-white border-primary shadow-sm'
+                      : 'bg-transparent text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 hover:border-zinc-300 dark:hover:border-zinc-600'
+                    }
+                  `}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex gap-6 flex-1 min-h-0">
           {/* List Panel - Fixed 320px width */}

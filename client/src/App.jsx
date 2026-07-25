@@ -1,25 +1,22 @@
 // src/App.js
 import React, { useCallback, useEffect, useState, useMemo, lazy, Suspense } from 'react';
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { QueryClientProvider, useQueryClient, useQuery } from '@tanstack/react-query';
 import { queryClient, prefetchCommonData, getCacheStrategy } from './lib';
 import TitleBar from './components/TitleBar';
 import ConflictBanner from './components/ConflictBanner';
-import { getTags, bustImageCache, getAppConfig } from './api';
+import { getTags, bustImageCache } from './api';
 import FloatingRefreshButton from './components/FloatingRefreshButton';
 import PageLoading from './components/common/PageLoading';
-// HeroUI Provider for modern UI components
 import { HeroUIProvider } from './providers';
-// Modern Sidebar
 import { Sidebar, SidebarProvider } from './components/Sidebar';
-// AI Panel（Provider 同步加载，面板主体首次打开时才加载 chunk）
 import { AIPanelProvider, useAIPanel } from './components/AIPanel/AIPanelContext';
+import Onboarding, { WORKSPACE_EVENT } from './components/Onboarding';
 
 // ============================================================================
-// 路由级代码分割 —— 所有页面组件按需加载
-// 重型依赖（three/leaflet/recharts/markdown/exifr）随路由 chunk 隔离，
-// 不再进入主 bundle
+// 路由级代码分割
 // ============================================================================
+// 胶片页面
 const Overview = lazy(() => import('./components/Overview'));
 const CalendarView = lazy(() => import('./components/CalendarView'));
 const MapPage = lazy(() => import('./pages/MapPage'));
@@ -35,33 +32,133 @@ const LutLibrary = lazy(() => import('./components/Settings/LutLibrary'));
 const Settings = lazy(() => import('./components/Settings'));
 const AIPanel = lazy(() => import('./components/AIPanel/AIPanel'));
 
-// Digital mode — lazy-loaded routes
+// 数码页面
+const DigitalOverview = lazy(() => import('./components/digital/DigitalOverview'));
 const LibraryView = lazy(() => import('./components/digital/LibraryView'));
 const AlbumLibrary = lazy(() => import('./components/digital/albums/AlbumLibrary'));
 const AlbumDetail = lazy(() => import('./components/digital/albums/AlbumDetail'));
 const DigitalImportWizard = lazy(() => import('./components/digital/DigitalImportWizard'));
-const OnboardingModal = lazy(() => import('./components/digital/OnboardingModal'));
 
-function LayoutInner({ tags, handleHardRefresh, appConfig, onOpenOnboarding }) {
+const MODE_KEY = 'fg-workspace-mode';
+const ROUTE_KEYS = { film: 'fg-last-route-film', digital: 'fg-last-route-digital' };
+
+function getRememberedRoute(m) {
+  try { return localStorage.getItem(ROUTE_KEYS[m]) || '/'; } catch { return '/'; }
+}
+
+function isTypingTarget(el) {
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+}
+
+function FilmRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<Overview />} />
+      <Route path="/calendar" element={<CalendarView mode="film" />} />
+      <Route path="/map" element={<MapPage mode="film" />} />
+      <Route path="/stats" element={<Statistics mode="film" />} />
+      <Route path="/spending" element={<Statistics mode="spending" />} />
+      <Route path="/rolls" element={<RollLibrary />} />
+      <Route path="/rolls/new" element={<NewRollForm />} />
+      <Route path="/rolls/:id" element={<RollDetail />} />
+      <Route path="/films" element={<FilmLibrary />} />
+      <Route path="/favorites" element={<Favorites mode="film" />} />
+      <Route path="/themes" element={<TagGallery mode="film" />} />
+      <Route path="/themes/:tagId" element={<TagGallery mode="film" />} />
+      <Route path="/equipment" element={<EquipmentManager />} />
+      <Route path="/luts" element={<LutLibrary />} />
+      <Route path="/settings" element={<Settings />} />
+      <Route path="*" element={<Overview />} />
+    </Routes>
+  );
+}
+
+function DigitalRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<DigitalOverview />} />
+      <Route path="/library" element={<LibraryView />} />
+      <Route path="/albums" element={<AlbumLibrary />} />
+      <Route path="/albums/:id" element={<AlbumDetail />} />
+      <Route path="/digital-import" element={<DigitalImportWizard />} />
+      <Route path="/calendar" element={<CalendarView mode="digital" />} />
+      <Route path="/map" element={<MapPage mode="digital" />} />
+      <Route path="/favorites" element={<Favorites mode="digital" />} />
+      <Route path="/themes" element={<TagGallery mode="digital" />} />
+      <Route path="/themes/:tagId" element={<TagGallery mode="digital" />} />
+      <Route path="/stats" element={<Statistics mode="digital" />} />
+      <Route path="/equipment" element={<EquipmentManager />} />
+      <Route path="/settings" element={<Settings />} />
+      {/* 数码模式下的兜底路由 → 跳转到 Overview */}
+      <Route path="*" element={<DigitalOverview />} />
+    </Routes>
+  );
+}
+
+function LayoutInner({ handleHardRefresh }) {
   const { togglePanel, isOpen: isAIPanelOpen } = useAIPanel();
-  // AIPanel 首次打开后才挂载（并从此保持挂载以保留会话状态与关闭动画），
-  // 以此延迟其数据请求与 react-markdown 依赖链的加载
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [mode, setMode] = useState(() => localStorage.getItem(MODE_KEY) || 'film');
   const [aiPanelMounted, setAiPanelMounted] = useState(false);
+
+  // 标签列表跟随工作区模式（胶片/数码各自独立计数）
+  const { data: tagsData } = useQuery({
+    queryKey: ['tags', mode],
+    queryFn: () => getTags(mode),
+    ...getCacheStrategy('tags'),
+  });
+  const tags = useMemo(
+    () => (Array.isArray(tagsData) ? tagsData : []).filter(tag => tag.photos_count > 0),
+    [tagsData]
+  );
+
   useEffect(() => {
     if (isAIPanelOpen) setAiPanelMounted(true);
   }, [isAIPanelOpen]);
 
-  // Ctrl+Shift+A 打开/关闭 AI 面板
+  // 路由记忆：每种工作区模式记住各自最后访问的路径
+  useEffect(() => {
+    try { localStorage.setItem(ROUTE_KEYS[mode] || ROUTE_KEYS.film, location.pathname); } catch { /* ignore */ }
+  }, [mode, location.pathname]);
+
+  const toggleMode = useCallback(() => {
+    setMode((prev) => {
+      const next = prev === 'film' ? 'digital' : 'film';
+      localStorage.setItem(MODE_KEY, next);
+      navigate(getRememberedRoute(next));
+      return next;
+    });
+  }, [navigate]);
+
+  // Onboarding / 设置页切换工作区时同步 App 状态
   useEffect(() => {
     const handler = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
+      const next = e.detail === 'digital' ? 'digital' : 'film';
+      setMode(next);
+    };
+    window.addEventListener(WORKSPACE_EVENT, handler);
+    return () => window.removeEventListener(WORKSPACE_EVENT, handler);
+  }, []);
+
+  // Ctrl+Shift+A 打开/关闭 AI 面板；Ctrl+Shift+M 切换胶片/数码工作区
+  useEffect(() => {
+    const handler = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey) return;
+      const key = e.key.toLowerCase();
+      if (key === 'a') {
         e.preventDefault();
         togglePanel();
+      } else if (key === 'm' && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        toggleMode();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [togglePanel]);
+  }, [togglePanel, toggleMode]);
 
   return (
     <HeroUIProvider>
@@ -70,38 +167,14 @@ function LayoutInner({ tags, handleHardRefresh, appConfig, onOpenOnboarding }) {
         <div className="app-shell bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 transition-colors duration-300">
           <TitleBar />
           <div className="app-body">
-            {/* Modern Sidebar */}
-            <Sidebar tags={tags} appConfig={appConfig} />
+            <Sidebar tags={tags} mode={mode} onToggleMode={toggleMode} />
 
-            {/* Main Content */}
             <main className="main flex-1 min-w-0 min-h-0 overflow-auto bg-transparent">
               <Suspense fallback={<PageLoading />}>
-                <Routes>
-                  <Route path="/" element={<Overview />} />
-                  <Route path="/calendar" element={<CalendarView />} />
-                  <Route path="/map" element={<MapPage />} />
-                  <Route path="/stats" element={<Statistics />} />
-                  <Route path="/spending" element={<Statistics mode="spending" />} />
-                  <Route path="/rolls" element={<RollLibrary />} />
-                  <Route path="/rolls/new" element={<NewRollForm />} />
-                  <Route path="/rolls/:id" element={<RollDetail />} />
-                  <Route path="/films" element={<FilmLibrary />} />
-                  <Route path="/favorites" element={<Favorites />} />
-                  <Route path="/themes" element={<TagGallery />} />
-                  <Route path="/themes/:tagId" element={<TagGallery />} />
-                  <Route path="/equipment" element={<EquipmentManager />} />
-                  <Route path="/luts" element={<LutLibrary />} />
-                  <Route path="/settings" element={<Settings />} />
-                  {/* Digital mode routes */}
-                  <Route path="/library" element={<LibraryView />} />
-                  <Route path="/albums" element={<AlbumLibrary />} />
-                  <Route path="/albums/:id" element={<AlbumDetail />} />
-                  <Route path="/digital-import" element={<DigitalImportWizard />} />
-                </Routes>
+                {mode === 'film' ? <FilmRoutes /> : <DigitalRoutes />}
               </Suspense>
             </main>
 
-            {/* AI Panel — right side（首次打开时才加载） */}
             {aiPanelMounted && (
               <Suspense fallback={null}>
                 <AIPanel />
@@ -110,13 +183,7 @@ function LayoutInner({ tags, handleHardRefresh, appConfig, onOpenOnboarding }) {
           </div>
         </div>
         <FloatingRefreshButton onRefresh={handleHardRefresh} />
-
-        {/* Onboarding modal — shown when onboarding_completed is falsy */}
-        {appConfig && !appConfig.onboarding_completed && (
-          <Suspense fallback={null}>
-            <OnboardingModal appConfig={appConfig} />
-          </Suspense>
-        )}
+        <Onboarding />
       </SidebarProvider>
     </HeroUIProvider>
   );
@@ -125,31 +192,11 @@ function LayoutInner({ tags, handleHardRefresh, appConfig, onOpenOnboarding }) {
 function Layout() {
   const queryClient = useQueryClient();
 
-  // 侧边栏 tags 统一走 React Query（['tags'] key 与 RollDetail/TagGallery 的
-  // invalidate 对齐；'refresh-tags' 事件转为 invalidate 触发重取）
-  const { data: tagsData } = useQuery({
-    queryKey: ['tags'],
-    queryFn: getTags,
-    ...getCacheStrategy('tags'),
-  });
-
-  // App config (photography mode + onboarding state)
-  const { data: appConfig } = useQuery({
-    queryKey: ['app-config'],
-    queryFn: getAppConfig,
-    ...getCacheStrategy('appConfig'),
-  });
-  const tags = useMemo(
-    () => (Array.isArray(tagsData) ? tagsData : []).filter(tag => tag.photos_count > 0),
-    [tagsData]
-  );
-
   const refreshTags = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['tags'] });
   }, [queryClient]);
 
   useEffect(() => {
-    // 启动时预取常用数据
     prefetchCommonData();
     const handler = () => refreshTags();
     window.addEventListener('refresh-tags', handler);
@@ -159,20 +206,9 @@ function Layout() {
   const handleHardRefresh = useCallback(() => {
     console.log('[App] Hard refresh: busting image cache + clearing query cache');
     try {
-      // 1. Increment global cache-buster → all subsequent buildUploadUrl calls
-      //    will produce new URLs that bypass the browser's HTTP disk cache
-      //    (even for resources served with max-age=1y, immutable)
       bustImageCache();
-
-      // 2. Clear all React Query caches and re-fetch everything
       queryClient.clear();
-
-      // 3. Refresh tags (sidebar)
       refreshTags();
-
-      // 4. Invalidate all queries so active components re-fetch fresh data
-      //    (queryClient.clear() removes cache, but invalidateQueries triggers
-      //    refetch for any mounted observers)
       queryClient.invalidateQueries();
     } catch (e) {
       console.warn('Failed during hard refresh, falling back to page reload', e);
@@ -182,7 +218,7 @@ function Layout() {
 
   return (
     <AIPanelProvider>
-      <LayoutInner tags={tags} handleHardRefresh={handleHardRefresh} appConfig={appConfig} />
+      <LayoutInner handleHardRefresh={handleHardRefresh} />
     </AIPanelProvider>
   );
 }

@@ -432,6 +432,7 @@ export default function NewRollForm({ onCreated }) {
             <label className="fg-label">Camera</label>
             <EquipmentSelector 
               type="camera" 
+              mode="film"
               value={cameraEquipId} 
               onChange={(id, item) => {
                 setCameraEquipId(id);
@@ -454,6 +455,7 @@ export default function NewRollForm({ onCreated }) {
             ) : (
               <EquipmentSelector 
                 type="lens" 
+                mode="film"
                 value={lensEquipId} 
                 cameraId={cameraEquipId}
                 onChange={(id) => setLensEquipId(id)}

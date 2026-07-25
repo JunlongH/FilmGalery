@@ -10,6 +10,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { getPhotoUrl } from '../../utils/urls';
 import { Icon } from '../../components/ui';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useLibraryMode } from '../../hooks/useLibraryMode';
 import { useT } from '../../i18n';
 
 const numColumns = 3;
@@ -22,11 +23,12 @@ export default function FavoritesScreen({ navigation }: any) {
   const theme = useTheme();
   const t = useT();
   const { baseUrl } = useContext(ApiContext);
+  const mode = useLibraryMode();
 
-  const photosKey = baseUrl ? `favorites@${baseUrl}` : null;
+  const photosKey = baseUrl ? `favorites@${baseUrl}#${mode}` : null;
   const { data, loading, refresh } = useApiQuery<any[]>(
     photosKey,
-    () => api.http.get('/api/photos/favorites'),
+    () => api.http.get('/api/photos/favorites', { mode }),
   );
   const photos = useMemo(() => data ?? [], [data]);
 

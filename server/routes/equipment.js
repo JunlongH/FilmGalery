@@ -13,8 +13,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { uploadsDir } = require('../config/paths');
-const { CAMERA_TYPES, LENS_MOUNTS, SCANNER_TYPES, FILM_BACK_SUB_FORMATS, FILM_BACK_MOUNTS, FILM_FORMATS } = require('../utils/equipment-migration');
-const { FOCUS_TYPES, CONDITIONS, STATUSES, METER_TYPES, SHUTTER_TYPES } = require('../../packages/shared/constants/equipment');
+const { CAMERA_TYPES, FILM_CAMERA_TYPES, DIGITAL_CAMERA_TYPES, LENS_MOUNTS, SCANNER_TYPES, FILM_BACK_SUB_FORMATS, FILM_BACK_MOUNTS, FILM_FORMATS } = require('../utils/equipment-migration');
+const { FOCUS_TYPES, CONDITIONS, STATUSES, METER_TYPES, SHUTTER_TYPES, SENSOR_SIZES, SENSOR_TECHNOLOGIES } = require('../../packages/shared/constants/equipment');
 const { asyncHandler } = require('../utils/async-handler');
 
 // Service layer
@@ -44,6 +44,8 @@ const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 router.get('/constants', (req, res) => {
   res.json({
     cameraTypes: CAMERA_TYPES,
+    filmCameraTypes: FILM_CAMERA_TYPES,
+    digitalCameraTypes: DIGITAL_CAMERA_TYPES,
     lensMounts: LENS_MOUNTS,
     scannerTypes: SCANNER_TYPES,
     filmFormats: FILM_FORMATS,
@@ -53,7 +55,11 @@ router.get('/constants', (req, res) => {
     meterTypes: METER_TYPES,
     shutterTypes: SHUTTER_TYPES,
     magnificationRatios: ['1:1', '1:2', '1:3', '1:4', '1:5', '1:10'],
-    sensorTypes: ['CCD', 'CMOS', 'PMT'],
+    sensorSizes: SENSOR_SIZES,
+    sensorTechnologies: SENSOR_TECHNOLOGIES,
+    // Backward-compat alias for older clients that read `sensorTypes` (scanner
+    // tech: CCD/CMOS/PMT). New clients should use `sensorTechnologies`.
+    sensorTypes: SENSOR_TECHNOLOGIES,
     bitDepths: [8, 12, 14, 16, 24, 48],
     filmBackSubFormats: FILM_BACK_SUB_FORMATS,
     filmBackMounts: FILM_BACK_MOUNTS
@@ -139,24 +145,37 @@ function createCrudRoutes(type, extraRoutes = {}) {
 // Film Formats (simple CRUD)
 createCrudRoutes('formats');
 
-// Cameras (with digital mode filter)
+// Cameras (with film/digital mode filter)
 createCrudRoutes('cameras', {
   listFilter: async (req, items) => {
     if (req.query.type) {
       items = items.filter(c => c.type === req.query.type);
     }
+    // Mode filter: 'film' → is_digital === 0; 'digital' → is_digital === 1;
+    // omitted or 'all' → no filter.
     if (req.query.mode === 'digital') {
       items = items.filter(c => c.is_digital === 1);
+    } else if (req.query.mode === 'film') {
+      items = items.filter(c => c.is_digital === 0);
     }
     return items;
   }
 });
 
-// Lenses (with camera compatibility filtering)
+// Lenses (with camera compatibility + film/digital mode filter)
 createCrudRoutes('lenses', {
   listFilter: async (req, items) => {
     if (req.query.camera_id) {
-      return equipmentService.getLensesByCamera(req.query.camera_id, items);
+      items = await equipmentService.getLensesByCamera(req.query.camera_id, items);
+    }
+    // Mode filter for lenses (three-state is_digital):
+    //   'film'    → is_digital IN (0, NULL)  (film-only + universal)
+    //   'digital' → is_digital IN (1, NULL)  (digital-only + universal)
+    //   omitted/'all' → no filter
+    if (req.query.mode === 'film') {
+      items = items.filter(l => l.is_digital === 0 || l.is_digital === null || l.is_digital === undefined);
+    } else if (req.query.mode === 'digital') {
+      items = items.filter(l => l.is_digital === 1 || l.is_digital === null || l.is_digital === undefined);
     }
     return items;
   }
@@ -183,7 +202,7 @@ router.get('/suggestions', asyncHandler(async (req, res) => {
 
 // Compatible lenses for a camera
 router.get('/compatible-lenses/:cameraId', asyncHandler(async (req, res) => {
-  const result = await equipmentService.getCompatibleLenses(req.params.cameraId);
+  const result = await equipmentService.getCompatibleLenses(req.params.cameraId, req.query.mode || null);
   if (!result) {
     return res.status(404).json({ error: 'Camera not found' });
   }

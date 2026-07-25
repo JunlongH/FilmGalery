@@ -1,6 +1,6 @@
 ---
 description: "Create a new full-stack API endpoint with server route, service, client API module, and React Query integration"
-agent: "api-designer"
+agent: "coder"
 argument-hint: "Describe the resource and operations needed, e.g. 'CRUD for film presets with name, settings JSON, and film_id foreign key'"
 ---
 Create a new full-stack API endpoint for FilmGallery. Implement all 4 layers:

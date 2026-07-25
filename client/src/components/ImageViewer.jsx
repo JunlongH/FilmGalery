@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, lazy, Suspense } from 'react';
-import { buildUploadUrl, updatePositiveFromNegative, getSingleDownloadUrl } from '../api';
+import { useQueryClient } from '@tanstack/react-query';
+import { Heart, BookMarked, Trash2 } from 'lucide-react';
+import { buildUploadUrl, updatePositiveFromNegative, getSingleDownloadUrl, updatePhoto, deletePhoto, getAlbums, addAlbumPhotos } from '../api';
 import { addCacheKey } from '../utils/imageOptimization';
 import FilmLab from './FilmLab/FilmLab';
 import ErrorBoundary from './ErrorBoundary';
@@ -21,6 +23,17 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
   const containerRef = useRef();
   const [showDetails, setShowDetails] = useState(false);
   const { isOpen: isAIPanelOpen, panelWidth: aiPanelWidth, pushOverlayContext, popOverlayContext, updateOverlayContext } = useAIPanel();
+  const queryClient = useQueryClient();
+
+  // Digital-only action state
+  const [showAlbumPicker, setShowAlbumPicker] = useState(false);
+  const [albumOptions, setAlbumOptions] = useState(null);
+  const [albumMsg, setAlbumMsg] = useState('');
+  const [favOverride, setFavOverride] = useState(null);
+  const imgRef = useRef(null);
+  const favToggleRef = useRef(() => {});
+  const deletePhotoRef = useRef(() => {});
+  const uiBusyRef = useRef(false);
   
   // FilmLab源图像类型选择
   const [showSourceSelector, setShowSourceSelector] = useState(false);
@@ -28,6 +41,14 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
 
   // Image Context
   const img = (images && images.length > i) ? images[i] : null;
+  const isDigital = img?.source_type === 'digital';
+  const currentRating = favOverride && favOverride.id === img?.id ? favOverride.rating : (Number(img?.rating) || 0);
+  const isFavorite = currentRating !== 0;
+
+  imgRef.current = img;
+  favToggleRef.current = toggleDigitalFavorite;
+  deletePhotoRef.current = handleDeleteDigitalPhoto;
+  uiBusyRef.current = showDetails || showAlbumPicker || dialog.isOpen || showDigitalDevelop || showSourceSelector;
 
   // 检查各源类型是否可用 (wrapped in useMemo to avoid dependency issues)
   const availableSources = useMemo(() => {
@@ -46,12 +67,22 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
   }, [index, images]);
 
   useEffect(() => {
+    setFavOverride(null);
+  }, [img?.id]);
+
+  useEffect(() => {
     function onKey(e) {
-      if (e.key === 'Escape') onClose();
+      const t = e.target;
+      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+      if (e.key === 'Escape') { if (!typing && !uiBusyRef.current) onClose(); return; }
       if (e.key === '+' || e.key === '=') setScale(s => Math.min(4, +(s + 0.25).toFixed(2)));
       if (e.key === '-') setScale(s => Math.max(0.25, +(s - 0.25).toFixed(2)));
       if (e.key === 'ArrowLeft') setI(k => Math.max(0, k - 1));
       if (e.key === 'ArrowRight') setI(k => Math.min(images.length - 1, k + 1));
+      if (!typing && !uiBusyRef.current && !e.ctrlKey && !e.metaKey && !e.altKey && imgRef.current?.source_type === 'digital') {
+        if (e.key === 'f' || e.key === 'F') { e.preventDefault(); favToggleRef.current(); }
+        if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deletePhotoRef.current(); }
+      }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -176,6 +207,7 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
   };
 
   if (!images || images.length === 0) return null;
+  if (!img) return null;
 
   /**
    * 严格源路径选择 - 不允许跨类型回退
@@ -392,6 +424,66 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
     );
   }
 
+  async function toggleDigitalFavorite() {
+    if (!img || img.source_type !== 'digital') return;
+    const next = isFavorite ? 0 : 1;
+    try {
+      await updatePhoto(img.id, { rating: next });
+      setFavOverride({ id: img.id, rating: next });
+      queryClient.invalidateQueries({ queryKey: ['photos'] });
+      queryClient.invalidateQueries({ queryKey: ['favorites'] });
+      if (onPhotoUpdate) onPhotoUpdate();
+    } catch (e) {
+      showAlert('错误', '收藏失败: ' + (e.message || e));
+    }
+  }
+
+  async function openAlbumPicker() {
+    if (!isDigital) return;
+    setShowAlbumPicker(true);
+    setAlbumMsg('');
+    try {
+      const rows = await getAlbums();
+      setAlbumOptions(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      setAlbumOptions([]);
+    }
+  }
+
+  async function handleAddToAlbum(album) {
+    if (!img) return;
+    try {
+      await addAlbumPhotos(album.id, [img.id]);
+      setAlbumMsg(`已加入「${album.title}」`);
+      queryClient.invalidateQueries({ queryKey: ['albums'] });
+      queryClient.invalidateQueries({ queryKey: ['album', album.id] });
+      queryClient.invalidateQueries({ queryKey: ['album-photos', album.id] });
+    } catch (e) {
+      setAlbumMsg('加入失败: ' + (e.message || e));
+    }
+  }
+
+  function handleDeleteDigitalPhoto() {
+    if (!img || img.source_type !== 'digital') return;
+    showConfirm('删除照片', '将从图库中移除该照片（磁盘文件保留）。确定删除吗？', async () => {
+      try {
+        await deletePhoto(img.id);
+        queryClient.invalidateQueries({ queryKey: ['photos'] });
+        queryClient.invalidateQueries({ queryKey: ['favorites'] });
+        queryClient.invalidateQueries({ queryKey: ['albums'] });
+        if (images.length > 1) {
+          setI(i < images.length - 1 ? i + 1 : i - 1);
+          if (onPhotoUpdate) onPhotoUpdate();
+        } else {
+          if (onPhotoUpdate) onPhotoUpdate();
+          onClose();
+        }
+      } catch (e) {
+        showAlert('错误', '删除失败: ' + (e.message || e));
+      }
+    });
+  }
+
   const handleDownload = async () => {
     console.log('[DOWNLOAD] Starting download for photo ID:', img.id);
     
@@ -461,6 +553,19 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
       <div className="iv-topbar">
         <div className="iv-title">{img.caption || img.frame_number || `Image ${i+1} / ${images.length}`}</div>
         <div className="iv-controls">
+          {isDigital && (
+            <>
+              <button className="iv-btn" onClick={toggleDigitalFavorite} title={isFavorite ? '取消收藏 (F)' : '收藏 (F)'} style={{ display: 'inline-flex', alignItems: 'center', color: isFavorite ? '#f87171' : '#fff' }}>
+                <Heart size={15} fill={isFavorite ? 'currentColor' : 'none'} />
+              </button>
+              <button className="iv-btn" onClick={openAlbumPicker} title="加入相册" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                <BookMarked size={15} />
+              </button>
+              <button className="iv-btn" onClick={handleDeleteDigitalPhoto} title="删除照片 (Delete)" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                <Trash2 size={15} />
+              </button>
+            </>
+          )}
           <button className="iv-btn" onClick={() => setShowDetails(true)} title="Edit Meta">Edit Meta</button>
           <button className="iv-btn" onClick={handleFilmLabClick} title={img?.source_type === 'digital' ? 'Develop' : 'Film Lab (Invert/Color)'}>{img?.source_type === 'digital' ? 'Develop' : 'Film Lab'}</button>
           <button className="iv-btn" onClick={handleDownload} title="Save to Disk">Download</button>
@@ -555,6 +660,58 @@ export default function ImageViewer({ images = [], index = 0, onClose, onPhotoUp
               style={{ marginTop: 16, width: '100%', padding: '10px', background: '#444' }}
             >
               取消
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 相册选择器弹窗（数码） */}
+      {showAlbumPicker && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1100
+        }} onClick={() => setShowAlbumPicker(false)}>
+          <div style={{
+            backgroundColor: '#2a2a2a',
+            borderRadius: 12,
+            padding: '24px 32px',
+            minWidth: 320,
+            maxWidth: 420,
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 16px', color: '#fff', fontSize: 18, fontWeight: 600 }}>加入相册</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+              {albumOptions === null && (
+                <div style={{ color: '#999', fontSize: 13 }}>加载中…</div>
+              )}
+              {albumOptions !== null && albumOptions.length === 0 && (
+                <div style={{ color: '#999', fontSize: 13 }}>暂无相册，请先在相册页面创建</div>
+              )}
+              {(albumOptions || []).map(a => (
+                <button
+                  key={a.id}
+                  className="iv-btn"
+                  onClick={() => handleAddToAlbum(a)}
+                  style={{ padding: '10px 14px', textAlign: 'left', background: '#333', color: '#fff', fontSize: 14 }}
+                >
+                  {a.title}{a.photo_count != null ? `（${a.photo_count}）` : ''}
+                </button>
+              ))}
+            </div>
+            {albumMsg && (
+              <div style={{ marginTop: 12, color: '#4ade80', fontSize: 13 }}>{albumMsg}</div>
+            )}
+            <button
+              className="iv-btn"
+              onClick={() => setShowAlbumPicker(false)}
+              style={{ marginTop: 16, width: '100%', padding: '10px', background: '#444' }}
+            >
+              关闭
             </button>
           </div>
         </div>

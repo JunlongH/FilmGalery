@@ -23,7 +23,7 @@ import {
   Animated,
   FlatList,
 } from 'react-native';
-import { useTheme } from 'react-native-paper';
+import { useTheme, SegmentedButtons } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { api } from '../../api/client';
 import { Icon, Badge } from '../../components/ui';
@@ -36,6 +36,8 @@ import { useApiQuery } from '../../hooks/useApiQuery';
 import { useT } from '../../i18n';
 
 const { width, height } = Dimensions.get('window');
+
+type MapMode = 'film' | 'digital' | 'all';
 
 // Initial region (centered on a default location)
 const INITIAL_REGION = {
@@ -55,12 +57,15 @@ export default function MapScreen() {
   const [mapRegion, setMapRegion] = useState(INITIAL_REGION);
   const [selectedPhoto, setSelectedPhoto] = useState<any>(null);
   const [showList, setShowList] = useState(false);
+  const [mapMode, setMapMode] = useState<MapMode>('all');
 
-  const photosKey = baseUrl ? `geoPhotos@${baseUrl}` : null;
+  const photosKey = baseUrl ? `geoPhotos@${baseUrl}#${mapMode}` : null;
   const { data: rawPhotos, loading, refresh } = useApiQuery<any[]>(
     photosKey,
     async () => {
-      const data = await api.http.get('/api/photos/geo');
+      const data = mapMode === 'all'
+        ? await api.http.get('/api/photos/geo')
+        : await api.http.get('/api/photos/geo', { mode: mapMode });
       if (Array.isArray(data)) return data;
       if (data?.photos && Array.isArray(data.photos)) return data.photos;
       return [];
@@ -221,11 +226,32 @@ export default function MapScreen() {
   }, [photos, mapRegion?.latitudeDelta]);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
+
+  const modeBarEl = (
+    <View style={styles.modeBar}>
+      <SegmentedButtons
+        value={mapMode}
+        onValueChange={(v) => {
+          if (v === 'film' || v === 'digital' || v === 'all') setMapMode(v);
+        }}
+        buttons={[
+          { value: 'film', label: t('digital.modeFilm'), icon: 'movie' },
+          { value: 'digital', label: t('digital.modeDigital'), icon: 'camera-burst' },
+          { value: 'all', label: t('digital.modeAll') },
+        ]}
+        density="small"
+      />
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={styles.loadingText}>{t('map.loading')}</Text>
+        {modeBarEl}
+        <View style={styles.loadingBody}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>{t('map.loading')}</Text>
+        </View>
       </View>
     );
   }
@@ -233,10 +259,13 @@ export default function MapScreen() {
   if (photos.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Icon name="map-pin-off" size={64} color={theme.colors.onSurfaceVariant} />
-        <Text style={styles.emptyText}>
-          {t('map.empty')}
-        </Text>
+        {modeBarEl}
+        <View style={styles.emptyBody}>
+          <Icon name="map-pin-off" size={64} color={theme.colors.onSurfaceVariant} />
+          <Text style={styles.emptyText}>
+            {t('map.empty')}
+          </Text>
+        </View>
       </View>
     );
   }
@@ -248,6 +277,8 @@ export default function MapScreen() {
         region={mapRegion}
         onMarkerPress={handleMarkerPress}
       />
+
+      {modeBarEl}
 
       {/* Stats overlay */}
       <View style={styles.statsContainer}>
@@ -414,9 +445,12 @@ container: {
     },
     loadingContainer: {
       flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    loadingBody: {
+      flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: theme.colors.background,
     },
     loadingText: {
       marginTop: 12,
@@ -571,9 +605,12 @@ container: {
     },
     emptyContainer: {
       flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    emptyBody: {
+      flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: theme.colors.background,
       padding: 24,
     },
     emptyText: {
@@ -584,7 +621,7 @@ container: {
     },
     statsContainer: {
       position: 'absolute',
-      top: 16,
+      top: 72,
       left: 16,
       right: 16,
       backgroundColor: theme.colors.surface + 'E6',
@@ -606,11 +643,18 @@ container: {
       color: theme.colors.onSurfaceVariant,
       marginTop: 2,
     },
+    // Mode segmented control
+    modeBar: {
+      position: 'absolute',
+      top: 16,
+      left: 16,
+      right: 16,
+    },
     // Control buttons
     controlsContainer: {
       position: 'absolute',
       right: 16,
-      top: 80,
+      top: 150,
       gap: 8,
     },
     controlButton: {

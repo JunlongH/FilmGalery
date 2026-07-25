@@ -29,6 +29,7 @@ const sharp = require('sharp');
 
 const { runAsync, getAsync } = require('../utils/db-helpers');
 const PreparedStmt = require('../utils/prepared-statements');
+const { localTmpDir } = require('../config/paths');
 const rawDecoder = require('./raw-decoder');
 const digitalFileService = require('./digital-file-service');
 
@@ -143,6 +144,33 @@ function summarizeExif(items) {
 
 // ── Preview ─────────────────────────────────────────────────────────────────
 
+const TMP_MAX_AGE_MS = 60 * 60 * 1000;
+
+/**
+ * Best-effort sweep of stale multer tmp uploads (older than 1 hour).
+ * Preview uploads persist if the user never executes; this reclaims them.
+ * @returns {Promise<void>}
+ */
+async function sweepStaleTmpFiles() {
+  try {
+    const entries = await fsp.readdir(localTmpDir);
+    const cutoff = Date.now() - TMP_MAX_AGE_MS;
+    for (const name of entries) {
+      try {
+        const abs = path.join(localTmpDir, name);
+        const st = await fsp.stat(abs);
+        if (st.isFile() && st.mtimeMs < cutoff) {
+          await fsp.unlink(abs);
+        }
+      } catch (_) {
+        // best-effort per-file
+      }
+    }
+  } catch (e) {
+    console.warn('[DigitalImport] tmp sweep failed:', e.message);
+  }
+}
+
 /**
  * Preview a batch of uploaded files: hash, dedup, EXIF, RAW probe.
  * Does NOT write any files.
@@ -151,6 +179,9 @@ function summarizeExif(items) {
  * @returns {Promise<Object>}
  */
 async function preview(files) {
+  // Fire-and-forget: reclaim tmp uploads abandoned by previous previews
+  sweepStaleTmpFiles().catch((e) => console.warn('[DigitalImport] tmp sweep failed:', e.message));
+
   const items = [];
   const decoderAvailable = await rawDecoder.isAvailable();
 

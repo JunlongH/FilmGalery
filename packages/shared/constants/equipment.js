@@ -9,8 +9,15 @@
 
 /**
  * Camera types enum - Display-friendly names
+ *
+ * Split into film and digital to support the layered equipment model:
+ *   - equip_cameras.is_digital = 0 → use FILM_CAMERA_TYPES
+ *   - equip_cameras.is_digital = 1 → use DIGITAL_CAMERA_TYPES
+ *
+ * Existing rows store type as a free-text string, so legacy values like
+ * 'SLR'/'P&S' remain valid; the lists below drive UI dropdowns only.
  */
-const CAMERA_TYPES = [
+const FILM_CAMERA_TYPES = [
   'SLR',           // Single Lens Reflex (单反)
   'Rangefinder',   // Rangefinder (旁轴)
   'P&S',           // Point & Shoot / PS机/傻瓜机
@@ -21,6 +28,23 @@ const CAMERA_TYPES = [
   'Half Frame',    // Half Frame (半格)
   'Other'
 ];
+
+const DIGITAL_CAMERA_TYPES = [
+  'DSLR',                  // Digital SLR
+  'Mirrorless',            // 无反
+  'Compact',               // 数码卡片机/便携机
+  'Phone',                 // 手机
+  'Action Camera',         // 运动相机 (GoPro etc.)
+  'Cinema Camera',         // 电影机
+  'Digital Medium Format', // 数码中画幅 (GFX/Hasselblad X1D)
+  'Other'
+];
+
+/**
+ * Legacy alias: full list (film + digital + Other dedup).
+ * Kept for any consumer that still wants a single combined dropdown.
+ */
+const CAMERA_TYPES = [...FILM_CAMERA_TYPES, ...DIGITAL_CAMERA_TYPES.filter(t => t !== 'Other')];
 
 /**
  * Film formats enum
@@ -40,13 +64,20 @@ const FILM_FORMATS = [
 
 /**
  * Common lens mounts
+ *
+ * Includes both legacy film mounts and modern digital mounts. Digital-only
+ * mounts (Canon RF, Nikon Z, L Mount, Fuji GF, Hasselblad X) appended for
+ * digital workflow completeness.
  */
 const LENS_MOUNTS = [
+  // Legacy / film-era mounts
   'M42', 'Pentax K', 'Nikon F', 'Canon FD', 'Canon EF', 
   'Minolta MD', 'Minolta A', 'Leica M', 'Leica R', 'Leica L',
   'Contax/Yashica', 'Olympus OM', 'Sony A', 'Sony E',
   'Micro Four Thirds', 'Fuji X', 'Hasselblad V', 'Mamiya 645',
-  'Mamiya RB/RZ', 'Pentax 645', 'Pentax 67', 'Fixed'
+  'Mamiya RB/RZ', 'Pentax 645', 'Pentax 67', 'Fixed',
+  // Modern digital mounts
+  'Canon RF', 'Nikon Z', 'L Mount', 'Fuji GF', 'Hasselblad X'
 ];
 
 /**
@@ -184,8 +215,33 @@ const SHUTTER_TYPES = [
   { value: 'hybrid', label: 'Hybrid' }
 ];
 
+/**
+ * Digital camera sensor size categories (physical dimension classes).
+ * Used by the digital-camera sensor size dropdown. Distinct from
+ * SENSOR_TECHNOLOGIES (CCD/CMOS) which describes the sensor technology.
+ */
+const SENSOR_SIZES = [
+  'Full Frame',
+  'APS-C',
+  'APS-H',
+  'Micro 4/3',
+  '1-inch',
+  'Medium Format',
+  'Other'
+];
+
+/**
+ * Sensor technology types (CCD/CMOS/etc).
+ * Renamed from the previous inline `sensorTypes: ['CCD','CMOS','PMT']` which
+ * was scanner-oriented and conflated with sensor *size*. PMT (photomultiplier
+ * tube) is kept for drum-scanner use cases.
+ */
+const SENSOR_TECHNOLOGIES = ['CCD', 'CMOS', 'BSI-CMOS', 'Foveon X3', 'PMT'];
+
 module.exports = {
   CAMERA_TYPES,
+  FILM_CAMERA_TYPES,
+  DIGITAL_CAMERA_TYPES,
   FILM_FORMATS,
   LENS_MOUNTS,
   SCANNER_TYPES,
@@ -198,5 +254,7 @@ module.exports = {
   CONDITIONS,
   STATUSES,
   METER_TYPES,
-  SHUTTER_TYPES
+  SHUTTER_TYPES,
+  SENSOR_SIZES,
+  SENSOR_TECHNOLOGIES
 };

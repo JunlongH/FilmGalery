@@ -89,6 +89,7 @@ export const DATA_CACHE_MAP = {
   favorites: CACHE_STRATEGIES.DYNAMIC,
   digitalPhotos: CACHE_STRATEGIES.DYNAMIC,
   digitalSessions: CACHE_STRATEGIES.DYNAMIC,
+  photoAlbums: CACHE_STRATEGIES.DYNAMIC,
   
   // 实时数据
   uploadProgress: CACHE_STRATEGIES.REALTIME,

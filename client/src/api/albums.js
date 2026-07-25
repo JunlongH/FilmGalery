@@ -18,6 +18,10 @@ export async function getAlbumPhotos(id, params = {}) {
   return jsonFetch(`/api/albums/${id}/photos${qs}`);
 }
 
+export async function getAlbumsForPhoto(photoId) {
+  return getAlbums({ photo_id: photoId });
+}
+
 export async function createAlbum(data) {
   return postJson('/api/albums', data);
 }

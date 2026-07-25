@@ -575,6 +575,7 @@ export default function RollDetail() {
                   <label className="fg-label">Camera</label>
                   <EquipmentSelector 
                     type="camera" 
+                    mode="film"
                     value={editData.camera_equip_id} 
                     onChange={(id, item) => {
                       setSelectedCamera(item);
@@ -598,6 +599,7 @@ export default function RollDetail() {
                   ) : (
                     <EquipmentSelector 
                       type="lens" 
+                      mode="film"
                       value={editData.lens_equip_id} 
                       cameraId={editData.camera_equip_id}
                       onChange={(id) => setEditData(d => ({ ...d, lens_equip_id: id }))}

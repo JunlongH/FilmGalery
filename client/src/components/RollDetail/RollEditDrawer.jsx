@@ -296,6 +296,7 @@ export default function RollEditDrawer({
                     <FormField label="Camera">
                       <EquipmentSelector
                         type="camera"
+                        mode="film"
                         value={editData.camera_equip_id}
                         onChange={handleCameraChange}
                         placeholder="Select camera..."
@@ -310,6 +311,7 @@ export default function RollEditDrawer({
                       ) : (
                         <EquipmentSelector
                           type="lens"
+                          mode="film"
                           value={editData.lens_equip_id}
                           cameraId={editData.camera_equip_id}
                           onChange={(id) => updateField('lens_equip_id', id)}

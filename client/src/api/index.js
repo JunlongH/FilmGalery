@@ -20,6 +20,7 @@ export {
   bustImageCache,
   jsonFetch,
   postJson,
+  postForBlob,
   putJson,
   deleteRequest,
   uploadTmpFiles,
@@ -51,6 +52,8 @@ export {
   updatePhoto,
   deletePhoto,
   getFavoritePhotos,
+  getPhotoFacets,
+  getDigitalSessions,
   uploadPhotoToRoll,
   uploadPhotosToRoll,
   updatePositiveFromNegative,
@@ -221,7 +224,7 @@ export async function cleanupExportHistory(keepCount = 100) {
 // ─── Digital mode APIs ───
 
 export {
-  getAlbums, getAlbum, getAlbumPhotos,
+  getAlbums, getAlbum, getAlbumPhotos, getAlbumsForPhoto,
   createAlbum, updateAlbum, deleteAlbum, restoreAlbum,
   setAlbumCover, addAlbumPhotos, removeAlbumPhoto, sortAlbumPhotos,
 } from './albums';

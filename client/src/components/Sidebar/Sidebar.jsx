@@ -1,27 +1,25 @@
 /**
- * Sidebar 主组件
- * 
- * 现代化侧边栏导航，支持：
- * - 折叠/展开动画
- * - 主题切换
- * - 活跃状态追踪
- * - 响应式设计
+ * Sidebar 主组件 — 工作区切换模式
+ *
+ * 胶片模式：main 分支原样导航（Overview/Rolls/Films + Browse + Tools）
+ * 数码模式：数码专属导航（Library/Albums/Import + 浏览 + Tools）
+ * 顶部切换按钮在两种模式间切换
  */
 
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@heroui/react';
-import { 
-  Home, 
-  Camera, 
-  Film, 
-  Calendar, 
-  Map, 
-  Heart, 
-  Tag, 
-  BarChart2, 
-  Aperture, 
+import {
+  Home,
+  Camera,
+  Film,
+  Calendar,
+  Map,
+  Heart,
+  Tag,
+  BarChart2,
+  Aperture,
   Settings,
   Images,
   BookMarked,
@@ -31,6 +29,7 @@ import {
   Sun,
   Moon,
   Bot,
+  Repeat,
 } from 'lucide-react';
 
 import { SidebarItem, SidebarSubItem } from './SidebarItem';
@@ -39,61 +38,62 @@ import { useSidebar } from './SidebarContext';
 import { useTheme } from '../../providers';
 import { useAIPanel } from '../AIPanel/AIPanelContext';
 
-// 侧边栏宽度配置
 const SIDEBAR_WIDTH = 240;
 const SIDEBAR_COLLAPSED_WIDTH = 72;
 
-// 快捷键映射
-const SHORTCUTS = {
-  '1': '/library',
+const FILM_SHORTCUTS = {
+  '1': '/',
   '2': '/rolls',
   '3': '/films',
-  '4': '/albums',
-  '5': '/digital-import',
-  '6': '/calendar',
-  '7': '/map',
-  '8': '/favorites',
-  '9': '/themes',
-  '0': '/stats',
+  '4': '/calendar',
+  '5': '/map',
+  '6': '/favorites',
+  '7': '/themes',
+  '8': '/stats',
+  '9': '/equipment',
   ',': '/settings',
 };
 
-/**
- * Sidebar 组件
- * 
- * @param {Object} props
- * @param {Array} [props.tags] - 主题标签列表
- */
-export function Sidebar({ tags = [], appConfig }) {
+const DIGITAL_SHORTCUTS = {
+  '1': '/',
+  '2': '/library',
+  '3': '/albums',
+  '4': '/digital-import',
+  '5': '/calendar',
+  '6': '/map',
+  '7': '/favorites',
+  '8': '/themes',
+  '9': '/stats',
+  '0': '/equipment',
+  ',': '/settings',
+};
+
+export function Sidebar({ tags = [], mode = 'film', onToggleMode }) {
   const { isCollapsed, toggleCollapsed } = useSidebar();
   const { theme, toggleTheme } = useTheme();
   const { isOpen: aiPanelOpen, togglePanel: toggleAIPanel } = useAIPanel();
   const navigate = useNavigate();
 
-  // 全局快捷键监听
+  const shortcuts = mode === 'film' ? FILM_SHORTCUTS : DIGITAL_SHORTCUTS;
+
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // 检查是否按下 Cmd (Mac) 或 Ctrl (Windows)
       const isMod = e.metaKey || e.ctrlKey;
       if (!isMod) return;
-
-      // 检查是否在输入框中
       const target = e.target;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
       }
-
       const key = e.key;
-      if (SHORTCUTS[key]) {
+      if (shortcuts[key]) {
         e.preventDefault();
-        navigate(SHORTCUTS[key]);
+        navigate(shortcuts[key]);
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate]);
-  
+  }, [navigate, shortcuts]);
+
   return (
     <motion.nav
       className={`
@@ -103,139 +103,101 @@ export function Sidebar({ tags = [], appConfig }) {
         overflow-hidden
       `}
       initial={false}
-      animate={{
-        width: isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
-      }}
-      transition={{
-        duration: 0.3,
-        ease: [0.4, 0, 0.2, 1],
-      }}
+      animate={{ width: isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH }}
+      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
     >
-      {/* Navigation - 直接开始，不需要 Header */}
-      <div className="flex-1 overflow-y-auto pt-2 pb-4 px-3 space-y-6 custom-scrollbar">
-        {/* Library — 全库浏览(胶片+数码混合) */}
-        <SidebarSection>
-          <SidebarItem
-            to="/library"
-            icon={<Images className="w-5 h-5" />}
-            label="Library"
-            shortcut="⌘1"
-          />
-        </SidebarSection>
-
-        {/* 胶片 — 仅在 show_film_section 启用时显示 */}
-        {(!appConfig || appConfig.show_film_section !== 0) && (
-        <SidebarSection title="Film">
-          <SidebarItem
-            to="/rolls"
-            icon={<Camera className="w-5 h-5" />}
-            label="Rolls"
-            shortcut="⌘2"
-          />
-          <SidebarItem
-            to="/films"
-            icon={<Film className="w-5 h-5" />}
-            label="Films"
-            shortcut="⌘3"
-          />
-        </SidebarSection>
-        )}
-
-        {/* 数码 — 仅在 digital_enabled + show_digital_section 启用时显示 */}
-        {appConfig && appConfig.digital_enabled !== 0 && appConfig.show_digital_section !== 0 && (
-        <SidebarSection title="Digital" divider>
-          <SidebarItem
-            to="/albums"
-            icon={<BookMarked className="w-5 h-5" />}
-            label="Albums"
-            shortcut="⌘4"
-          />
-          <SidebarItem
-            to="/digital-import"
-            icon={<FolderPlus className="w-5 h-5" />}
-            label="Import"
-            shortcut="⌘5"
-          />
-        </SidebarSection>
-        )}
-
-        {/* 浏览 */}
-        <SidebarSection title="Browse" divider>
-          <SidebarItem
-            to="/"
-            icon={<Home className="w-5 h-5" />}
-            label="Overview"
-            exact
-          />
-          <SidebarItem
-            to="/calendar"
-            icon={<Calendar className="w-5 h-5" />}
-            label="Calendar"
-            shortcut="⌘6"
-          />
-          <SidebarItem
-            to="/map"
-            icon={<Map className="w-5 h-5" />}
-            label="Map"
-            shortcut="⌘7"
-          />
-          <SidebarItem
-            to="/favorites"
-            icon={<Heart className="w-5 h-5" />}
-            label="Favorites"
-            shortcut="⌘8"
-          />
-          <SidebarItem
-            to="/themes"
-            icon={<Tag className="w-5 h-5" />}
-            label="Themes"
-            shortcut="⌘9"
-          >
-            {/* 子菜单：主题标签 */}
-            {tags.map((tag) => (
-              <SidebarSubItem
-                key={tag.id}
-                to={`/themes/${tag.id}`}
-                label={tag.name}
-              />
-            ))}
-          </SidebarItem>
-        </SidebarSection>
-        
-        {/* 工具 */}
-        <SidebarSection title="Tools" divider>
-          <SidebarItem
-            to="/stats"
-            icon={<BarChart2 className="w-5 h-5" />}
-            label="Statistics"
-            shortcut="⌘0"
-          />
-          <SidebarItem
-            to="/equipment"
-            icon={<Aperture className="w-5 h-5" />}
-            label="Equipment"
-          />
-          <SidebarItem
-            to="/luts"
-            icon={<Film className="w-5 h-5" />}
-            label="LUT Library"
-          />
-          <SidebarItem
-            to="/settings"
-            icon={<Settings className="w-5 h-5" />}
-            label="Settings"
-            shortcut="⌘,"
-          />
-        </SidebarSection>
+      {/* 模式切换按钮 */}
+      <div className="px-3 pt-3 pb-1">
+        <button
+          onClick={onToggleMode}
+          className={`
+            w-full flex items-center gap-2 px-3 py-2 rounded-lg
+            transition-colors text-sm font-medium
+            ${mode === 'film'
+              ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60'
+              : 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-950/60'
+            }
+          `}
+          title={mode === 'film' ? 'Switch to Digital mode' : 'Switch to Film mode'}
+        >
+          {mode === 'film' ? (
+            <Film className="w-4 h-4 flex-shrink-0" />
+          ) : (
+            <Images className="w-4 h-4 flex-shrink-0" />
+          )}
+          {!isCollapsed && (
+            <>
+              <span className="flex-1 text-left">
+                {mode === 'film' ? 'Film' : 'Digital'}
+              </span>
+              <Repeat className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
+            </>
+          )}
+        </button>
       </div>
-      
+
+      {/* 导航 */}
+      <div className="flex-1 overflow-y-auto pt-2 pb-4 px-3 space-y-6 custom-scrollbar">
+        {mode === 'film' ? (
+          <>
+            <SidebarSection>
+              <SidebarItem to="/" icon={<Home className="w-5 h-5" />} label="Overview" exact shortcut="⌘1" />
+              <SidebarItem to="/rolls" icon={<Camera className="w-5 h-5" />} label="Rolls" shortcut="⌘2" />
+              <SidebarItem to="/films" icon={<Film className="w-5 h-5" />} label="Films" shortcut="⌘3" />
+            </SidebarSection>
+
+            <SidebarSection title="Browse" divider>
+              <SidebarItem to="/calendar" icon={<Calendar className="w-5 h-5" />} label="Calendar" shortcut="⌘4" />
+              <SidebarItem to="/map" icon={<Map className="w-5 h-5" />} label="Map" shortcut="⌘5" />
+              <SidebarItem to="/favorites" icon={<Heart className="w-5 h-5" />} label="Favorites" shortcut="⌘6" />
+              <SidebarItem to="/themes" icon={<Tag className="w-5 h-5" />} label="Themes" shortcut="⌘7">
+                {tags.map((tag) => (
+                  <SidebarSubItem key={tag.id} to={`/themes/${tag.id}`} label={tag.name} />
+                ))}
+              </SidebarItem>
+            </SidebarSection>
+
+            <SidebarSection title="Tools" divider>
+              <SidebarItem to="/stats" icon={<BarChart2 className="w-5 h-5" />} label="Statistics" shortcut="⌘8" />
+              <SidebarItem to="/equipment" icon={<Aperture className="w-5 h-5" />} label="Equipment" shortcut="⌘9" />
+              <SidebarItem to="/luts" icon={<Film className="w-5 h-5" />} label="LUT Library" />
+              <SidebarItem to="/settings" icon={<Settings className="w-5 h-5" />} label="Settings" shortcut="⌘," />
+            </SidebarSection>
+          </>
+        ) : (
+          <>
+            <SidebarSection>
+              <SidebarItem to="/" icon={<Home className="w-5 h-5" />} label="Overview" exact shortcut="⌘1" />
+              <SidebarItem to="/library" icon={<Images className="w-5 h-5" />} label="Library" shortcut="⌘2" />
+            </SidebarSection>
+
+            <SidebarSection title="Organize" divider>
+              <SidebarItem to="/albums" icon={<BookMarked className="w-5 h-5" />} label="Albums" shortcut="⌘3" />
+              <SidebarItem to="/digital-import" icon={<FolderPlus className="w-5 h-5" />} label="Import" shortcut="⌘4" />
+            </SidebarSection>
+
+            <SidebarSection title="Browse" divider>
+              <SidebarItem to="/calendar" icon={<Calendar className="w-5 h-5" />} label="Calendar" shortcut="⌘5" />
+              <SidebarItem to="/map" icon={<Map className="w-5 h-5" />} label="Map" shortcut="⌘6" />
+              <SidebarItem to="/favorites" icon={<Heart className="w-5 h-5" />} label="Favorites" shortcut="⌘7" />
+              <SidebarItem to="/themes" icon={<Tag className="w-5 h-5" />} label="Themes" shortcut="⌘8">
+                {tags.map((tag) => (
+                  <SidebarSubItem key={tag.id} to={`/themes/${tag.id}`} label={tag.name} />
+                ))}
+              </SidebarItem>
+            </SidebarSection>
+
+            <SidebarSection title="Tools" divider>
+              <SidebarItem to="/stats" icon={<BarChart2 className="w-5 h-5" />} label="Statistics" shortcut="⌘9" />
+              <SidebarItem to="/equipment" icon={<Aperture className="w-5 h-5" />} label="Equipment" shortcut="⌘0" />
+              <SidebarItem to="/settings" icon={<Settings className="w-5 h-5" />} label="Settings" shortcut="⌘," />
+            </SidebarSection>
+          </>
+        )}
+      </div>
+
       {/* Footer */}
-      <div className={`
-        p-3
-        flex items-center gap-2
-        ${isCollapsed ? 'flex-col' : ''}
-      `}>
-        {/* AI 面板切换 */}
+      <div className={`p-3 flex items-center gap-2 ${isCollapsed ? 'flex-col' : ''}`}>
         <Button
           isIconOnly
           variant={aiPanelOpen ? 'solid' : 'light'}
@@ -244,12 +206,11 @@ export function Sidebar({ tags = [], appConfig }) {
           radius="lg"
           onPress={toggleAIPanel}
           className={aiPanelOpen ? '' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}
-          aria-label="AI 助手"
+          aria-label="AI Assistant"
         >
           <Bot className="w-4 h-4" />
         </Button>
 
-        {/* 主题切换 */}
         <Button
           isIconOnly
           variant="light"
@@ -257,33 +218,21 @@ export function Sidebar({ tags = [], appConfig }) {
           radius="lg"
           onPress={toggleTheme}
           className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-          aria-label={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         >
-          {theme === 'dark' ? (
-            <Sun className="w-4 h-4" />
-          ) : (
-            <Moon className="w-4 h-4" />
-          )}
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </Button>
-        
-        {/* 折叠按钮 */}
+
         <Button
           isIconOnly
           variant="light"
           size="sm"
           radius="lg"
           onPress={toggleCollapsed}
-          className={`
-            text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200
-            ${!isCollapsed ? 'ml-auto' : ''}
-          `}
-          aria-label={isCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+          className={`text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 ${!isCollapsed ? 'ml-auto' : ''}`}
+          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {isCollapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <ChevronLeft className="w-4 h-4" />
-          )}
+          {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </Button>
       </div>
     </motion.nav>

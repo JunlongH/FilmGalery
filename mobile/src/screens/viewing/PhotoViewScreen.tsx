@@ -1,5 +1,5 @@
-import React, { useContext, useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, Dimensions, ActivityIndicator, Platform, TouchableOpacity } from 'react-native';
+import React, { useContext, useState, useEffect, useMemo, useRef } from 'react';
+import { View, StyleSheet, Dimensions, ActivityIndicator, Platform, TouchableOpacity, Alert } from 'react-native';
 import { ApiContext } from '../../context/ApiContext';
 import { Chip, Text, Snackbar } from 'react-native-paper';
 import { Icon } from '../../components/ui';
@@ -9,6 +9,8 @@ import { Image as ExpoImage } from 'expo-image';
 import ImageView from 'react-native-image-viewing';
 import TagEditModal from '../../components/TagEditModal';
 import NoteEditModal from '../../components/NoteEditModal';
+import AlbumPickerSheet, { type AlbumPickerAlbum } from '../../components/digital/AlbumPickerSheet';
+import ExifSheet from '../../components/digital/ExifSheet';
 import { api } from '../../api/client';
 import { colors, spacing, radius } from '../../theme';
 import { getPhotoUrl } from '../../utils/urls';
@@ -30,6 +32,15 @@ export default function PhotoViewScreen({ route, navigation }: any) {
   const [noteModalVisible, setNoteModalVisible] = useState(false);
   const [snack, setSnack] = useState({ visible: false, msg: '' });
   const [downloading, setDownloading] = useState(false);
+  const [albumPickerVisible, setAlbumPickerVisible] = useState(false);
+  const [exifSheetVisible, setExifSheetVisible] = useState(false);
+  const [infoExpanded, setInfoExpanded] = useState(false);
+  const [albumsForPhoto, setAlbumsForPhoto] = useState<any[]>([]);
+  const [busy, setBusy] = useState(false);
+  const photoRef = useRef(photo);
+  useEffect(() => { photoRef.current = photo; }, [photo]);
+
+  const isDigital = photo?.source_type === 'digital';
 
   // Fetch photo data if only photoId was provided
   useEffect(() => {
@@ -132,6 +143,84 @@ export default function PhotoViewScreen({ route, navigation }: any) {
 
   const isLiked = photo?.rating === 1;
 
+  // Digital: load albums containing this photo for the "所属相册" chips.
+  useEffect(() => {
+    if (!isDigital || !photo?.id) {
+      setAlbumsForPhoto([]);
+      return;
+    }
+    let cancelled = false;
+    api.http.get('/api/albums', { photo_id: photo.id })
+      .then((res: any) => {
+        if (cancelled) return;
+        const list: any[] = Array.isArray(res) ? res : (res?.data ?? []);
+        setAlbumsForPhoto(list);
+      })
+      .catch(() => { /* best-effort */ });
+    return () => { cancelled = true; };
+  }, [isDigital, photo?.id]);
+
+  const handleAddToAlbum = () => setAlbumPickerVisible(true);
+
+  const handlePickerSelect = async (albumId: number, album: AlbumPickerAlbum) => {
+    const targetPhotoId = photo?.id;
+    if (!targetPhotoId) return;
+    setAlbumPickerVisible(false);
+    setBusy(true);
+    try {
+      await api.http.post(`/api/albums/${albumId}/photos`, { photo_ids: [targetPhotoId] });
+      invalidateQueries(`digitalAlbums@`);
+      invalidateQueries(`digitalAlbumPhotos@${baseUrl}.${albumId}`);
+      // Refresh chips so the newly-added album appears immediately — but only
+      // if the user is still on the same photo (they may have swiped during
+      // the POST).
+      try {
+        const res: any = await api.http.get('/api/albums', { photo_id: targetPhotoId });
+        if (photoRef.current?.id === targetPhotoId) {
+          const list: any[] = Array.isArray(res) ? res : (res?.data ?? []);
+          setAlbumsForPhoto(list);
+        }
+      } catch { /* best-effort */ }
+      setSnack({ visible: true, msg: t('digital.photoView.addedToAlbum', { name: album?.title ?? '' }) });
+    } catch {
+      /* surfaced via ApiErrorSnackbar */
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeletePhoto = () => {
+    if (!photo?.id) return;
+    Alert.alert(
+      t('digital.photoView.deleteConfirmTitle'),
+      t('digital.photoView.deleteConfirmBody'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            if (!photo?.id) return;
+            setBusy(true);
+            try {
+              await api.photos.delete(photo.id);
+              invalidateQueries(`digitalPhotos@`);
+              invalidateQueries(`digitalPhotosAggregate@`);
+              invalidateQueries(`digitalAlbumPhotos@`);
+              invalidateQueries(`digitalAlbums@`);
+              setSnack({ visible: true, msg: t('digital.photoView.movedToTrash') });
+              setTimeout(() => navigation.goBack(), 1200);
+            } catch {
+              /* surfaced via ApiErrorSnackbar */
+            } finally {
+              setBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const requestPermissionsIfNeeded = async () => {
     if (Platform.OS === 'android' || Platform.OS === 'ios') {
       const mediaPerm = await MediaLibrary.getPermissionsAsync();
@@ -189,12 +278,32 @@ export default function PhotoViewScreen({ route, navigation }: any) {
 
   const header = () => (
     <View style={styles.headerRow} pointerEvents="box-none">
-      {anyNegatives && (
+      {anyNegatives && !isDigital && (
         <TouchableOpacity
           style={styles.ctrlBtn}
           onPress={() => setViewMode((prev: any) => (prev === 'negative' ? 'positive' : 'negative'))}
         >
           <Icon name={viewMode === 'negative' ? 'palette' : 'contrast'} size={26} color="#fff" />
+        </TouchableOpacity>
+      )}
+      {isDigital && (
+        <TouchableOpacity
+          style={styles.ctrlBtn}
+          onPress={handleAddToAlbum}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel={t('digital.photoView.addToAlbum')}
+        >
+          <Icon name="folder-plus" size={26} color="#fff" />
+        </TouchableOpacity>
+      )}
+      {isDigital && (
+        <TouchableOpacity
+          style={styles.ctrlBtn}
+          onPress={handleDeletePhoto}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel={t('digital.photoView.deletePhoto')}
+        >
+          <Icon name="trash-2" size={26} color="#ff9e9e" />
         </TouchableOpacity>
       )}
       <TouchableOpacity style={styles.ctrlBtn} onPress={downloadPhoto}>
@@ -224,6 +333,30 @@ export default function PhotoViewScreen({ route, navigation }: any) {
     </View>
   );
 
+  const exifSummary = useMemo(() => {
+    if (!photo) return '';
+    const parts: string[] = [];
+    if (photo.camera) parts.push(photo.camera);
+    if (photo.lens) parts.push(photo.lens);
+    if (photo.focal_length != null && photo.focal_length !== '') parts.push(`${photo.focal_length}mm`);
+    if (photo.aperture != null && photo.aperture !== '') parts.push(`f/${photo.aperture}`);
+    if (photo.shutter_speed) parts.push(`${photo.shutter_speed}s`);
+    if (photo.iso != null && photo.iso !== '') parts.push(`ISO ${photo.iso}`);
+    return parts.join(' · ');
+  }, [photo]);
+
+  const dateTakenText = useMemo(() => {
+    if (!photo?.date_taken) return '';
+    const d = new Date(photo.date_taken);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString();
+  }, [photo?.date_taken]);
+
+  const gpsText = useMemo(() => {
+    if (photo?.latitude == null || photo?.longitude == null) return '';
+    return `${Number(photo.latitude).toFixed(6)}, ${Number(photo.longitude).toFixed(6)}`;
+  }, [photo?.latitude, photo?.longitude]);
+
   const footer = () => (
     <View style={styles.footerContainer} pointerEvents="box-none">
       {photo?.caption ? (
@@ -244,6 +377,68 @@ export default function PhotoViewScreen({ route, navigation }: any) {
           </View>
         </View>
       ) : null}
+      {isDigital && (
+        <View style={styles.digitalInfoBg}>
+          <TouchableOpacity
+            style={styles.digitalInfoToggle}
+            onPress={() => setInfoExpanded((v) => !v)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Icon name="info" size={16} color="#fff" />
+            <Text style={styles.digitalInfoToggleLabel} numberOfLines={1}>
+              {exifSummary || t('digital.exif.title')}
+            </Text>
+            <Icon name={infoExpanded ? 'chevron-down' : 'chevron-up'} size={18} color="#fff" />
+          </TouchableOpacity>
+          {infoExpanded && (
+            <View style={styles.digitalInfoBody}>
+              {exifSummary ? (
+                <Text style={styles.digitalInfoLine}>{exifSummary}</Text>
+              ) : null}
+              {dateTakenText ? (
+                <Text style={styles.digitalInfoLine}>{dateTakenText}</Text>
+              ) : null}
+              {gpsText ? (
+                <Text style={styles.digitalInfoLine}>📍 {gpsText}</Text>
+              ) : null}
+              <TouchableOpacity
+                style={styles.viewExifLink}
+                onPress={() => setExifSheetVisible(true)}
+                hitSlop={{ top: 6, bottom: 6, left: 0, right: 0 }}
+              >
+                <Text style={styles.viewExifLinkText}>
+                  {t('digital.photoView.viewExif')}
+                </Text>
+                <Icon name="chevron-right" size={14} color="#9bd6ff" />
+              </TouchableOpacity>
+              {albumsForPhoto.length > 0 && (
+                <View style={styles.albumChipsRow}>
+                  <Text style={styles.albumChipsTitle}>
+                    {t('digital.albumsInTitle')}
+                  </Text>
+                  <View style={styles.albumChipsInner}>
+                    {albumsForPhoto.map((album) => (
+                      <Chip
+                        key={album.id}
+                        style={styles.albumChip}
+                        textStyle={styles.albumChipText}
+                        onPress={() =>
+                          navigation.navigate('DigitalAlbumDetail', {
+                            id: album.id,
+                            title: album.title,
+                          })
+                        }
+                      >
+                        {album.title}
+                      </Chip>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 
@@ -255,6 +450,7 @@ export default function PhotoViewScreen({ route, navigation }: any) {
         visible={true}
         onRequestClose={() => navigation.goBack()}
         onImageIndexChange={(i) => {
+          if (busy) return;
           if (typeof i === 'number' && photos[i]) {
             setIndex(i);
             setPhoto(photos[i]);
@@ -280,11 +476,26 @@ export default function PhotoViewScreen({ route, navigation }: any) {
         onCancel={() => setNoteModalVisible(false)}
         onSave={(val) => { setNoteModalVisible(false); handleNoteSaved(val); }}
       />
+      <AlbumPickerSheet
+        visible={albumPickerVisible}
+        onDismiss={() => setAlbumPickerVisible(false)}
+        onSelect={handlePickerSelect}
+      />
+      <ExifSheet
+        visible={exifSheetVisible}
+        onDismiss={() => setExifSheetVisible(false)}
+        photo={photo}
+      />
       <Snackbar
         visible={snack.visible}
         onDismiss={() => setSnack({ visible: false, msg: '' })}
         duration={3000}
       >{snack.msg}</Snackbar>
+      {busy && (
+        <View style={styles.busyOverlay} pointerEvents="box-none">
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      )}
     </View>
   );
 }
@@ -352,5 +563,73 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
     textAlign: 'center',
+  },
+  digitalInfoBg: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: spacing.md,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  digitalInfoToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  digitalInfoToggleLabel: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  digitalInfoBody: {
+    paddingTop: 6,
+    paddingBottom: 4,
+    gap: 4,
+  },
+  digitalInfoLine: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  viewExifLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  viewExifLinkText: {
+    color: '#9bd6ff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  albumChipsRow: {
+    marginTop: 8,
+  },
+  albumChipsTitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  albumChipsInner: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  albumChip: {
+    margin: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  albumChipText: {
+    color: '#fff',
+    fontSize: 11,
+  },
+  busyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

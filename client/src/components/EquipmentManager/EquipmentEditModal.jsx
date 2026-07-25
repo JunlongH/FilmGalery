@@ -35,17 +35,33 @@ import {
 // ========================================
 // CONSTANTS
 // ========================================
-const CAMERA_TYPES = [
-  'SLR', 'Rangefinder', 'P&S', 'TLR', 'Medium Format', 
+const FILM_CAMERA_TYPES = [
+  'SLR', 'Rangefinder', 'P&S', 'TLR', 'Medium Format',
   'Large Format', 'Instant', 'Half Frame', 'Other'
 ];
 
+const DIGITAL_CAMERA_TYPES = [
+  'DSLR', 'Mirrorless', 'Compact', 'Phone',
+  'Action Camera', 'Cinema Camera', 'Digital Medium Format', 'Other'
+];
+
+// Legacy alias: combined list (kept for any downstream code that reads a
+// single CAMERA_TYPES export).
+const CAMERA_TYPES = [...FILM_CAMERA_TYPES, ...DIGITAL_CAMERA_TYPES.filter(t => t !== 'Other')];
+
 const LENS_MOUNTS = [
-  'M42', 'Pentax K', 'Nikon F', 'Canon FD', 'Canon EF', 
+  // Legacy / film-era mounts
+  'M42', 'Pentax K', 'Nikon F', 'Canon FD', 'Canon EF',
   'Minolta MD', 'Minolta A', 'Leica M', 'Leica R', 'Leica L',
   'Contax/Yashica', 'Olympus OM', 'Sony A', 'Sony E',
   'Micro Four Thirds', 'Fuji X', 'Hasselblad V', 'Mamiya 645',
-  'Mamiya RB/RZ', 'Pentax 645', 'Pentax 67', 'Fixed'
+  'Mamiya RB/RZ', 'Pentax 645', 'Pentax 67', 'Fixed',
+  // Modern digital mounts
+  'Canon RF', 'Nikon Z', 'L Mount', 'Fuji GF', 'Hasselblad X'
+];
+
+const SENSOR_SIZES = [
+  'Full Frame', 'APS-C', 'APS-H', 'Micro 4/3', '1-inch', 'Medium Format', 'Other'
 ];
 
 const FILM_FORMATS = [
@@ -103,7 +119,9 @@ const STATUSES = [
   { value: 'borrowed', label: 'Borrowed' },
   { value: 'lab', label: 'Lab' }
 ];
-const SENSOR_TYPES = ['CCD', 'CMOS', 'PMT'];
+// Scanner sensor technology types (CCD/CMOS/PMT). Distinct from digital-camera
+// SENSOR_SIZES (Full Frame/APS-C). Kept inline since this is scanner-only.
+const SCANNER_SENSOR_TECHNOLOGIES = ['CCD', 'CMOS', 'PMT'];
 const BIT_DEPTHS = [8, 12, 14, 16, 24, 48];
 
 const FILM_CATEGORIES = [
@@ -273,8 +291,35 @@ export default function EquipmentEditModal({
   const TypeIcon = typeInfo.icon;
 
   const handleChange = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm(prev => {
+      const next = { ...prev, [field]: value };
+      // Phone camera auto-enables fixed-lens mode (phones have non-removable
+      // lenses) and clears any mount since phones have no interchangeable mount.
+      if (field === 'type' && value === 'Phone') {
+        next.has_fixed_lens = 1;
+        next.mount = '';
+      }
+      // Toggling is_digital invalidates the camera type (film vs digital lists
+      // are disjoint) and, when reverting to film, the digital-only sensor
+      // fields. Reset them so the form never persists an inconsistent state.
+      if (field === 'is_digital') {
+        next.type = '';
+        if (value !== 1) {
+          next.sensor_type = '';
+          next.sensor_width_mm = null;
+          next.sensor_height_mm = null;
+          next.megapixels = null;
+          next.crop_factor = null;
+        }
+      }
+      return next;
+    });
   };
+
+  // Derived: which camera-type list to show based on the is_digital flag.
+  // is_digital === 1 → digital bodies (DSLR/Mirrorless/Phone/...).
+  // Otherwise (0 or undefined) → film bodies (SLR/Rangefinder/...).
+  const cameraTypeOptions = form.is_digital === 1 ? DIGITAL_CAMERA_TYPES : FILM_CAMERA_TYPES;
 
   const handleSubmit = async (e) => {
     if (e && typeof e.preventDefault === 'function') {
@@ -387,10 +432,12 @@ export default function EquipmentEditModal({
                     classNames={selectClassNames}
                     popoverProps={selectPopoverProps}
                   >
-                    {CAMERA_TYPES.map(t => <SelectItem key={t}>{t}</SelectItem>)}
+                    {cameraTypeOptions.map(t => <SelectItem key={t}>{t}</SelectItem>)}
                   </Select>
                 </Field>
                 
+                {/* Film Format is film-specific: hidden for digital cameras */}
+                {form.is_digital !== 1 && (
                 <Field label="Film Format">
                   <Select
                     placeholder="Select"
@@ -404,10 +451,13 @@ export default function EquipmentEditModal({
                     {FILM_FORMATS.map(f => <SelectItem key={f}>{f}</SelectItem>)}
                   </Select>
                 </Field>
+                )}
                 
+                {/* Lens Mount: disabled for Phone (fixed lens, no mount) */}
                 <Field label="Lens Mount">
                   <Select
                     placeholder="Select"
+                    isDisabled={form.type === 'Phone'}
                     selectedKeys={form.mount ? [form.mount] : []}
                     onSelectionChange={(keys) => handleChange('mount', Array.from(keys)[0])}
                     variant="bordered"
@@ -577,7 +627,7 @@ export default function EquipmentEditModal({
                       classNames={selectClassNames}
                       popoverProps={selectPopoverProps}
                     >
-                      {['Full Frame', 'APS-C', 'APS-H', 'Micro 4/3', '1-inch', 'Medium Format', 'Other'].map(s => <SelectItem key={s}>{s}</SelectItem>)}
+                      {SENSOR_SIZES.map(s => <SelectItem key={s}>{s}</SelectItem>)}
                     </Select>
                   </Field>
                   <Field label="Sensor Width (mm)">
@@ -827,6 +877,36 @@ export default function EquipmentEditModal({
                 >
                   Image Stabilization
                 </StyledCheckbox>
+              </div>
+
+              {/* Lens workflow classification — three-state is_digital:
+                  Universal (null) shows in both film & digital workflows,
+                  Film-only (0) and Digital-only (1) restrict visibility. */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--heroui-divider)' }}>
+                <Field label="Workflow Compatibility">
+                  <Select
+                    placeholder="Select"
+                    // null/undefined → Universal; 0 → Film-only; 1 → Digital-only
+                    selectedKeys={[(() => {
+                      const v = form.is_digital;
+                      if (v === 0) return 'film';
+                      if (v === 1) return 'digital';
+                      return 'universal';
+                    })()]}
+                    onSelectionChange={(keys) => {
+                      const sel = Array.from(keys)[0];
+                      handleChange('is_digital', sel === 'film' ? 0 : sel === 'digital' ? 1 : null);
+                    }}
+                    variant="bordered"
+                    size="sm"
+                    classNames={selectClassNames}
+                    popoverProps={selectPopoverProps}
+                  >
+                    <SelectItem key="universal">Universal (Film + Digital)</SelectItem>
+                    <SelectItem key="film">Film-only</SelectItem>
+                    <SelectItem key="digital">Digital-only</SelectItem>
+                  </Select>
+                </Field>
               </div>
             </GlassCard>
           </>
@@ -1082,7 +1162,7 @@ export default function EquipmentEditModal({
                     classNames={selectClassNames}
                     popoverProps={selectPopoverProps}
                   >
-                    {SENSOR_TYPES.map(t => <SelectItem key={t}>{t}</SelectItem>)}
+                    {SCANNER_SENSOR_TECHNOLOGIES.map(t => <SelectItem key={t}>{t}</SelectItem>)}
                   </Select>
                 </Field>
                 

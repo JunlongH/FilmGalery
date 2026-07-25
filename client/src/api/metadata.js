@@ -56,16 +56,21 @@ export async function createLocation(data) {
 
 /**
  * Get all tags
+ * @param {string} [mode] - 'film' | 'digital'; omitted = legacy unfiltered behavior
  */
-export async function getTags() {
-  return jsonFetch('/api/tags');
+export async function getTags(mode) {
+  const qs = buildQueryString({ mode });
+  return jsonFetch(`/api/tags${qs}`);
 }
 
 /**
  * Get photos by tag
+ * @param {number|string} tagId
+ * @param {string} [mode] - 'film' | 'digital'; omitted = legacy unfiltered behavior
  */
-export async function getTagPhotos(tagId) {
-  return jsonFetch(`/api/tags/${tagId}/photos`);
+export async function getTagPhotos(tagId, mode) {
+  const qs = buildQueryString({ mode });
+  return jsonFetch(`/api/tags/${tagId}/photos${qs}`);
 }
 
 // ========================================

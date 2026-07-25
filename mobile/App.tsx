@@ -31,6 +31,8 @@ import TagDetailScreen from './src/screens/library/TagDetailScreen';
 import FilmRollsScreen from './src/screens/library/FilmRollsScreen';
 import InventoryScreen from './src/screens/library/InventoryScreen';
 import FilmItemDetailScreen from './src/screens/library/FilmItemDetailScreen';
+import DigitalAlbumListScreen from './src/screens/library/DigitalAlbumListScreen';
+import DigitalAlbumDetailScreen from './src/screens/library/DigitalAlbumDetailScreen';
 import ShotLogScreen from './src/screens/shooting/ShotLogScreen';
 import StatsScreen from './src/screens/library/StatsScreen';
 import EquipmentScreen from './src/screens/library/EquipmentScreen';
@@ -165,6 +167,18 @@ function LibraryStackScreen() {
         name="Negatives"
         component={NegativeScreen}
         options={{ title: t('title.negatives') }}
+      />
+      <LibraryStack.Screen
+        name="DigitalAlbumList"
+        component={DigitalAlbumListScreen}
+        options={{ title: t('digital.albumsTitle') }}
+      />
+      <LibraryStack.Screen
+        name="DigitalAlbumDetail"
+        component={DigitalAlbumDetailScreen}
+        options={({ route }) => ({
+          title: (route.params as any)?.title || t('digital.albumDetailTitle'),
+        })}
       />
     </LibraryStack.Navigator>
   );

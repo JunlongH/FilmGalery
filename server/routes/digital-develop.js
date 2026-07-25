@@ -42,7 +42,7 @@ router.post('/export', async (req, res, next) => {
   try {
     const { photo_id, params_json } = req.body;
     if (!photo_id) return res.status(400).json({ error: 'photo_id required' });
-    const { buffer, width, height } = await digitalDevelopService.renderExport(photo_id, params_json);
+    const { buffer } = await digitalDevelopService.renderExport(photo_id, params_json);
     res.type('image/jpeg');
     res.setHeader('Content-Disposition', `attachment; filename="photo_${photo_id}_export.jpg"`);
     res.send(buffer);

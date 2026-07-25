@@ -12,7 +12,7 @@
  * - Statistics overview
  */
 
-import React, { useCallback, useRef, useContext, useMemo } from 'react';
+import React, { useCallback, useRef, useContext, useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ import {
 } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../../api/client';
 import { Icon } from '../../components/ui';
 import CachedImage from '../../components/CachedImage';
@@ -31,6 +32,8 @@ import { ApiContext } from '../../context/ApiContext';
 import { getPhotoUrl } from '../../utils/urls';
 import { useApiQuery } from '../../hooks/useApiQuery';
 import { useT } from '../../i18n';
+import LibraryModeToggle, { type LibraryMode } from '../../components/digital/LibraryModeToggle';
+import DigitalLibraryScreen from './DigitalLibraryScreen';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -46,24 +49,43 @@ export default function LibraryScreen() {
   const { baseUrl } = useContext(ApiContext);
   const t = useT();
 
-  const favoritesKey = baseUrl ? `favorites@${baseUrl}` : null;
-  const tagsKey = baseUrl ? `tags@${baseUrl}` : null;
-  const statsKey = baseUrl ? `libraryStats@${baseUrl}` : null;
+  const [mode, setMode] = useState<LibraryMode>('film');
+  const [modeLoaded, setModeLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!baseUrl) {
+      setModeLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    AsyncStorage.getItem(`library_mode@${baseUrl}`)
+      .then((saved) => {
+        if (cancelled) return;
+        setMode(saved === 'digital' ? 'digital' : 'film');
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setModeLoaded(true); });
+    return () => { cancelled = true; };
+  }, [baseUrl]);
+
+  const favoritesKey = baseUrl && mode === 'film' ? `favorites@${baseUrl}#film` : null;
+  const tagsKey = baseUrl && mode === 'film' ? `tags@${baseUrl}#film` : null;
+  const statsKey = baseUrl && mode === 'film' ? `libraryStats@${baseUrl}#film` : null;
 
   const favoritesQuery = useApiQuery<any[]>(
     favoritesKey,
-    () => api.http.get('/api/photos/favorites'),
+    () => api.http.get('/api/photos/favorites', { mode: 'film' }),
   );
   const tagsQuery = useApiQuery<any[]>(
     tagsKey,
-    () => api.http.get('/api/tags'),
+    () => api.http.get('/api/tags', { mode: 'film' }),
   );
   const statsQuery = useApiQuery<LibraryStats>(
     statsKey,
     async () => {
       const [gear, summary] = await Promise.all([
-        api.http.get('/api/stats/gear').catch(() => ({ cameras: [], lenses: [], films: [] })),
-        api.http.get('/api/stats/summary').catch(() => ({})),
+        api.http.get('/api/stats/gear', { mode: 'film' }).catch(() => ({ cameras: [], lenses: [], films: [] })),
+        api.http.get('/api/stats/summary', { mode: 'film' }).catch(() => ({})),
       ]);
       return { gear, summary };
     },
@@ -129,6 +151,15 @@ export default function LibraryScreen() {
     }, [])
   );
 
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) { didMountRef.current = true; return; }
+    if (mode === 'film') {
+      fadeAnim.setValue(1);
+      slideAnim.setValue(0);
+    }
+  }, [mode, fadeAnim, slideAnim]);
+
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   // Render empty state for a section
@@ -141,6 +172,14 @@ export default function LibraryScreen() {
 
   return (
     <View style={styles.container}>
+      {modeLoaded && (
+        <View style={styles.toggleBar}>
+          <LibraryModeToggle value={mode} onChange={setMode} />
+        </View>
+      )}
+      {mode === 'digital' ? (
+        <DigitalLibraryScreen />
+      ) : (
       <Animated.ScrollView
         style={[styles.scrollView, {
           opacity: fadeAnim,
@@ -164,7 +203,7 @@ export default function LibraryScreen() {
           <View style={styles.statsGrid}>
             <TouchableOpacity
               style={styles.statCard}
-              onPress={() => navigation.navigate('Stats')}
+              onPress={() => navigation.navigate('Stats', { mode: 'film' })}
             >
               <View style={styles.statIconContainer}>
                 <Icon name="film" size={22} color={theme.colors.primary} />
@@ -175,7 +214,7 @@ export default function LibraryScreen() {
 
             <TouchableOpacity
               style={styles.statCard}
-              onPress={() => navigation.navigate('Stats')}
+              onPress={() => navigation.navigate('Stats', { mode: 'film' })}
             >
               <View style={styles.statIconContainer}>
                 <Icon name="image" size={22} color={theme.colors.primary} />
@@ -186,7 +225,7 @@ export default function LibraryScreen() {
 
             <TouchableOpacity
               style={styles.statCard}
-              onPress={() => navigation.navigate('Favorites')}
+              onPress={() => navigation.navigate('Favorites', { mode: 'film' })}
             >
               <View style={[styles.statIconContainer, { backgroundColor: '#FFE4E4' }]}>
                 <Icon name="heart" size={22} color="#E53935" />
@@ -203,7 +242,7 @@ export default function LibraryScreen() {
             <Text style={styles.sectionTitle}>{t('library.recentFavorites')}</Text>
             <TouchableOpacity
               style={styles.seeAllButton}
-              onPress={() => navigation.navigate('Favorites')}
+              onPress={() => navigation.navigate('Favorites', { mode: 'film' })}
             >
               <Text style={styles.seeAllText}>{t('common.seeAll')}</Text>
               <Icon name="chevron-right" size={16} color={theme.colors.primary} />
@@ -261,7 +300,7 @@ export default function LibraryScreen() {
             <Text style={styles.sectionTitle}>{t('library.collections')}</Text>
             <TouchableOpacity
               style={styles.seeAllButton}
-              onPress={() => navigation.navigate('Collections')}
+              onPress={() => navigation.navigate('Collections', { mode: 'film' })}
             >
               <Text style={styles.seeAllText}>{t('common.seeAll')}</Text>
               <Icon name="chevron-right" size={16} color={theme.colors.primary} />
@@ -276,7 +315,8 @@ export default function LibraryScreen() {
                   style={styles.themeChip}
                   onPress={() => navigation.navigate('TagDetail', {
                     tagId: tag.id,
-                    tagName: tag.name
+                    tagName: tag.name,
+                    mode: 'film',
                   })}
                 >
                   <Icon
@@ -364,7 +404,7 @@ export default function LibraryScreen() {
 
             <TouchableOpacity
               style={styles.quickCard}
-              onPress={() => navigation.navigate('Stats')}
+              onPress={() => navigation.navigate('Stats', { mode: 'film' })}
             >
               <View style={[styles.quickCardImage, {
                 justifyContent: 'center',
@@ -415,6 +455,7 @@ export default function LibraryScreen() {
           </View>
         </View>
       </Animated.ScrollView>
+      )}
     </View>
   );
 }
@@ -424,6 +465,10 @@ const createStyles = (theme: any) =>
     container: {
       flex: 1,
       backgroundColor: theme.colors.background,
+    },
+    toggleBar: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
     },
     scrollView: {
       flex: 1,

@@ -134,6 +134,7 @@ export function LoadFilmModal({ item, isOpen, onClose, onLoaded }) {
               <label className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1.5">Camera (Optional)</label>
               <EquipmentSelector 
                 type="camera" 
+                mode="film"
                 value={cameraEquipId} 
                 onChange={(id, equipItem) => {
                   setCameraEquipId(id);

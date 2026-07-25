@@ -1,6 +1,6 @@
 ---
 description: "Create a new React Native screen for the mobile app with NativeWind styling, React Navigation integration, and API data fetching"
-agent: "mobile-dev"
+agent: "coder"
 argument-hint: "Describe the screen, e.g. 'Film stock detail screen showing properties, sample photos, and usage statistics'"
 ---
 Create a new React Native screen for the FilmGallery mobile app.

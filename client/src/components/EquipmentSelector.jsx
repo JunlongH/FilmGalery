@@ -63,6 +63,7 @@ export default function EquipmentSelector({
   cameraId = null,  // for lens: filter by camera's mount
   disabled = false,
   showQuickAdd = true,
+  mode = null,      // 'film' | 'digital' | null — filters cameras/lenses by is_digital
   className = '',
   style = {}
 }) {
@@ -89,7 +90,7 @@ export default function EquipmentSelector({
         
         // For lens, check camera compatibility
         if (type === 'lens' && cameraId) {
-          const result = await getCompatibleLenses(cameraId);
+          const result = await getCompatibleLenses(cameraId, mode);
           if (result.fixed_lens) {
             // Camera has fixed lens - show info instead of lens picker
             setFixedLensInfo({
@@ -105,15 +106,18 @@ export default function EquipmentSelector({
           setCameraMount(result.camera_mount || null);
           
           if (useAdapter) {
-            // Adapter mode: fetch ALL lenses regardless of mount
-            data = await config.fetchAll();
+            // Adapter mode: fetch ALL lenses regardless of mount (respect mode filter)
+            data = await config.fetchAll(mode ? { mode } : {});
           } else {
-            // Normal mode: only compatible lenses
+            // Normal mode: only compatible lenses (already mode-filtered server-side)
             data = result.lenses || [];
           }
           if (mounted) setItems(Array.isArray(data) ? data : []);
         } else {
-          data = await config.fetchAll();
+          // Pass mode to fetchAll for cameras/lenses so the server can filter.
+          // mode is ignored by flashes/scanners/film-backs (no is_digital column).
+          const fetchArgs = (type === 'camera' || type === 'lens') && mode ? { mode } : {};
+          data = await config.fetchAll(fetchArgs);
           if (mounted) {
             setItems(Array.isArray(data) ? data : []);
             setFixedLensInfo(null);
@@ -130,7 +134,7 @@ export default function EquipmentSelector({
     
     fetchItems();
     return () => { mounted = false; };
-  }, [type, cameraId, config, useAdapter]);
+  }, [type, cameraId, config, useAdapter, mode]);
 
   // Find selected item
   const selectedItem = useMemo(() => {

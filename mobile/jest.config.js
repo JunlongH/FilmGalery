@@ -22,4 +22,11 @@ module.exports = {
   // any require, so @babel/runtime is found regardless of where the requiring
   // file lives.
   modulePaths: ['<rootDir>/node_modules'],
+  // M2-C3: component tests under __tests__/digital/ pull in i18n which imports
+  // AsyncStorage. Map to the package's official jest mock so node-only test
+  // runs don't hit the native-module null check.
+  moduleNameMapper: {
+    '@react-native-async-storage/async-storage':
+      '<rootDir>/node_modules/@react-native-async-storage/async-storage/jest/async-storage-mock.js',
+  },
 };

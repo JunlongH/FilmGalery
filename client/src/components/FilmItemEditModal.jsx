@@ -281,6 +281,7 @@ export default function FilmItemEditModal({ item, isOpen, onClose, onUpdated }) 
               <label className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1.5">Loaded Camera</label>
               <EquipmentSelector 
                 type="camera"
+                mode="film"
                 value={formData.camera_equip_id}
                 onChange={(id, equipItem) => {
                   setFormData(prev => ({

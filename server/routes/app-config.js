@@ -17,6 +17,11 @@ const WRITABLE_FIELDS = [
   'default_import_dir',
   'auto_organize',
   'duplicate_detection',
+  'onboarding_completed',
+  'default_source_filter',
+  'show_film_section',
+  'show_digital_section',
+  'digital_enabled',
 ];
 
 // GET /api/app-config
@@ -57,7 +62,7 @@ router.put('/', async (req, res, next) => {
   }
 });
 
-// POST /api/app-config/onboarding  body: { choice: 'film'|'digital'|'both' }
+// POST /api/app-config/onboarding  body: { choice, default_source_filter, show_film_section, show_digital_section, digital_enabled }
 router.post('/onboarding', async (req, res, next) => {
   try {
     const { choice } = req.body;
@@ -66,10 +71,24 @@ router.post('/onboarding', async (req, res, next) => {
     if (!mode) {
       return res.status(400).json({ error: "choice must be 'film', 'digital', or 'both'" });
     }
-    await runAsync(
-      "UPDATE app_config SET photography_mode = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1",
-      [mode]
-    );
+    const sets = [
+      'photography_mode = ?',
+      'default_source_filter = ?',
+      'show_film_section = ?',
+      'show_digital_section = ?',
+      'digital_enabled = ?',
+      'onboarding_completed = 1',
+      'updated_at = CURRENT_TIMESTAMP',
+    ];
+    const params = [
+      mode,
+      req.body.default_source_filter ?? mode,
+      req.body.show_film_section ?? 1,
+      req.body.show_digital_section ?? 1,
+      req.body.digital_enabled ?? 1,
+    ];
+    params.push(1);
+    await runAsync(`UPDATE app_config SET ${sets.join(', ')} WHERE id = ?`, params);
     const row = await getAsync('SELECT * FROM app_config WHERE id = 1');
     res.json(row);
   } catch (err) {

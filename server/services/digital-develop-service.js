@@ -57,8 +57,34 @@ function getSourcePath(photo) {
 // ── Params normalization ────────────────────────────────────────────────────
 
 /**
+ * Convert a client LUT payload ({ size, data, intensity }) into the shape
+ * RenderCore._sampleLUT3DFloat expects. JSON transport turns data into a
+ * plain array — convert to Float32Array (mirrors routes/photos.js
+ * deserializeLut). Returns null for missing/invalid LUTs.
+ * @param {Object|null} lutData
+ * @returns {{size: number, data: Float32Array, intensity: number}|null}
+ */
+function deserializeLut(lutData) {
+  if (!lutData || !lutData.data || !lutData.size) return null;
+  const size = Number(lutData.size);
+  if (!Number.isFinite(size) || size <= 0) return null;
+  if (lutData.data.length < 3 * size * size * size) return null;
+  return {
+    size: lutData.size,
+    data: lutData.data instanceof Float32Array ? lutData.data : new Float32Array(lutData.data),
+    intensity: lutData.intensity ?? 1.0,
+  };
+}
+
+/**
  * Parse and normalize develop params for digital photos.
  * Forces inverted=false and filmCurveEnabled=false (digital-specific).
+ * Accepts the client's `crop` key as an alias for `cropRect` ({x,y,w,h}
+ * normalized) so both contract shapes render identically.
+ * Accepts `temperature` as an alias for RenderCore's `temp` (legacy digital
+ * slider key); an explicit `temp` always wins.
+ * curves / hslParams (or hsl) / splitToning (or splitTone) pass through to
+ * RenderCore unchanged; lut1/lut2 payloads are deserialized to Float32Array.
  * @param {string|Object} paramsJson
  * @returns {Object}
  */
@@ -66,10 +92,26 @@ function normalizeParams(paramsJson) {
   let params = {};
   if (paramsJson) {
     try {
-      params = typeof paramsJson === 'string' ? JSON.parse(paramsJson) : paramsJson;
+      params = typeof paramsJson === 'string' ? JSON.parse(paramsJson) : { ...paramsJson };
     } catch (_) {
       params = {};
     }
+  }
+  if (params.cropRect == null && params.crop && typeof params.crop === 'object') {
+    params.cropRect = params.crop;
+  }
+  delete params.crop;
+  if (params.temp == null && params.temperature != null) {
+    params.temp = params.temperature;
+  }
+  delete params.temperature;
+  if (params.lut1 != null) {
+    params.lut1 = deserializeLut(params.lut1);
+    if (params.lut1Intensity == null) params.lut1Intensity = params.lut1 ? params.lut1.intensity : 1.0;
+  }
+  if (params.lut2 != null) {
+    params.lut2 = deserializeLut(params.lut2);
+    if (params.lut2Intensity == null) params.lut2Intensity = params.lut2 ? params.lut2.intensity : 1.0;
   }
   params.inverted = false;
   params.filmCurveEnabled = false;
@@ -224,4 +266,5 @@ module.exports = {
   getDigitalPhotoRecord,
   getSourcePath,
   normalizeParams,
+  deserializeLut,
 };

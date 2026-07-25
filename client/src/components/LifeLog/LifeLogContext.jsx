@@ -13,7 +13,7 @@ import { resolveThumbUrl } from '../../utils/thumbResolver';
 
 const LifeLogContext = createContext(null);
 
-export function LifeLogProvider({ children }) {
+export function LifeLogProvider({ children, mode }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState('month'); // 'month' | 'year'
   const [selectedDay, setSelectedDay] = useState(null);
@@ -31,13 +31,16 @@ export function LifeLogProvider({ children }) {
   const month = format(currentDate, 'MM');
 
   // Fetch photos based on view mode
+  // mode ('film'|'digital') keeps each workspace's calendar pure; omitted
+  // means legacy unfiltered behavior.
   const { data: photos = [], isLoading, error } = useQuery({
-    queryKey: ['photos', year, viewMode === 'month' ? month : 'all'],
+    queryKey: ['photos', year, viewMode === 'month' ? month : 'all', mode || 'all'],
     queryFn: async () => {
       const apiBase = getApiBase();
-      const url = viewMode === 'month' 
-        ? `${apiBase}/api/photos?year=${year}&month=${month}`
-        : `${apiBase}/api/photos?year=${year}`;
+      const modeParam = mode ? `&mode=${mode}` : '';
+      const url = viewMode === 'month'
+        ? `${apiBase}/api/photos?year=${year}&month=${month}${modeParam}`
+        : `${apiBase}/api/photos?year=${year}${modeParam}`;
       const res = await fetch(url);
       const data = await res.json();
       return Array.isArray(data) ? data : [];

@@ -39,9 +39,27 @@ export async function deletePhoto(id) {
 
 /**
  * Get favorite photos
+ * @param {string} [mode] - 'film' | 'digital'; omitted = legacy unfiltered behavior
  */
-export async function getFavoritePhotos() {
-  return jsonFetch('/api/photos/favorites');
+export async function getFavoritePhotos(mode) {
+  const qs = buildQueryString({ mode });
+  return jsonFetch(`/api/photos/favorites${qs}`);
+}
+
+/**
+ * Facet counts (years/months/cameras/lenses) for the library filter rail
+ * @param {object} [params] - e.g. { mode: 'digital' }
+ */
+export async function getPhotoFacets(params = {}) {
+  const qs = buildQueryString(params);
+  return jsonFetch(`/api/photos/facets${qs}`);
+}
+
+/**
+ * List digital import sessions (latest first)
+ */
+export async function getDigitalSessions() {
+  return jsonFetch('/api/digital-sessions');
 }
 
 // ========================================

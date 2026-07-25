@@ -15,16 +15,16 @@ import { buildUploadUrl, getTagPhotos, getTags, updatePhoto } from '../api';
 import { getCacheStrategy } from '../lib';
 import { Heart, Tag, ArrowLeft, Trash2, ImageIcon } from 'lucide-react';
 
-export default function TagGallery() {
+export default function TagGallery({ mode }) {
   const navigate = useNavigate();
   const params = useParams();
   const queryClient = useQueryClient();
   const [viewerIndex, setViewerIndex] = useState(null);
 
   const { data: tags = [] } = useQuery({
-    queryKey: ['tags'],
+    queryKey: ['tags', mode || 'all'],
     queryFn: async () => {
-      const t = await getTags();
+      const t = await getTags(mode);
       return (Array.isArray(t) ? t : []).filter(tag => tag.photos_count > 0);
     },
     ...getCacheStrategy('tags'),
@@ -33,8 +33,8 @@ export default function TagGallery() {
   const selectedTag = params.tagId ? tags.find(t => String(t.id) === String(params.tagId)) : null;
 
   const { data: photos = [], isLoading: loadingPhotos } = useQuery({
-    queryKey: ['tagPhotos', params.tagId],
-    queryFn: () => getTagPhotos(params.tagId),
+    queryKey: ['tagPhotos', params.tagId, mode || 'all'],
+    queryFn: () => getTagPhotos(params.tagId, mode),
     enabled: !!params.tagId,
     ...getCacheStrategy('photos'),
   });
@@ -232,7 +232,7 @@ function TagPhotoCard({ photo, index, onOpenViewer, onToggleFavorite, onRemoveFr
 
   const subtitle = [
     photo.roll_title,
-    photo.film_name || 'Unknown Film'
+    photo.film_name || (photo.roll_id ? 'Unknown Film' : photo.camera)
   ].filter(Boolean).join(' • ');
 
   return (

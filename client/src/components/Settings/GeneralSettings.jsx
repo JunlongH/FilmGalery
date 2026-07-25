@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
-import { Card, CardBody, Button, Switch } from '@heroui/react';
-import { Database, Folder, Shield, Smartphone, HardDrive, Info, AlertTriangle } from 'lucide-react';
+import { Card, CardBody, Button, Switch, Select, SelectItem } from '@heroui/react';
+import { Database, Folder, Shield, Smartphone, HardDrive, Info, AlertTriangle, LayoutGrid } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getAppConfig, updateAppConfig } from '../../api';
+import { WORKSPACE_EVENT } from '../Onboarding';
+
+const MODE_KEY = 'fg-workspace-mode';
 
 export default function GeneralSettings({ 
   config, 
@@ -14,6 +19,28 @@ export default function GeneralSettings({
 }) {
   const [savingDir, setSavingDir] = useState(false);
   const [savingWrite, setSavingWrite] = useState(false);
+  const [savingWorkspace, setSavingWorkspace] = useState(false);
+  const queryClient = useQueryClient();
+
+  const { data: appConfig } = useQuery({
+    queryKey: ['app-config'],
+    queryFn: getAppConfig,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const workspace = appConfig?.default_source_filter === 'digital' ? 'digital' : 'film';
+
+  const handleWorkspaceChange = async (next) => {
+    if (!next || next === workspace) return;
+    setSavingWorkspace(true);
+    try {
+      await updateAppConfig({ default_source_filter: next, photography_mode: next });
+      queryClient.invalidateQueries({ queryKey: ['app-config'] });
+      try { localStorage.setItem(MODE_KEY, next); } catch { /* ignore */ }
+      window.dispatchEvent(new CustomEvent(WORKSPACE_EVENT, { detail: next }));
+    } catch { /* ignore */ }
+    setSavingWorkspace(false);
+  };
 
   // Wrap handlers to manage local loading state
   const handleChooseDataRoot = async () => {
@@ -61,7 +88,31 @@ export default function GeneralSettings({
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto animate-fade-in">
-      
+
+      {/* 默认工作区 */}
+      <Section title="Default workspace" icon={LayoutGrid}>
+        <div className="flex items-start justify-between gap-4 p-4 bg-zinc-100/50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-700">
+          <div className="flex-1">
+            <h4 className="font-medium text-foreground">Workspace on startup</h4>
+            <p className="text-sm text-default-500 mt-1">
+              Choose Film or Digital as the default workspace. You can switch anytime with Ctrl+Shift+M.
+            </p>
+          </div>
+          <Select
+            size="sm"
+            variant="bordered"
+            aria-label="Default workspace"
+            selectedKeys={[workspace]}
+            onSelectionChange={(keys) => handleWorkspaceChange(Array.from(keys)[0])}
+            isDisabled={savingWorkspace || !appConfig}
+            className="w-36"
+          >
+            <SelectItem key="film" textValue="Film">Film</SelectItem>
+            <SelectItem key="digital" textValue="Digital">Digital</SelectItem>
+          </Select>
+        </div>
+      </Section>
+
       {/* Mobile/Watch Connection Info (Electron Only) */}
       {isElectron && (
         <Section title="Mobile & Watch Connection" icon={Smartphone} variant="primary">

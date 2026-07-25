@@ -17,17 +17,22 @@ import { API_BASE } from '../api';
  * @param {Object} options.dateRange - Filter by date range
  * @param {Object} options.bounds - Map bounds for viewport filtering
  * @param {number} options.limit - Maximum photos to fetch
+ * @param {string} [options.mode] - 'film' | 'digital'; omitted = legacy unfiltered behavior
  */
-async function fetchGeoPhotos({ rollId, dateRange, limit = 2000 }) {
+async function fetchGeoPhotos({ rollId, dateRange, limit = 2000, mode }) {
   const apiBase = API_BASE;
   const params = new URLSearchParams();
-  
+
   if (limit) {
     params.append('limit', limit);
   }
-  
+
   if (rollId) {
     params.append('roll_id', rollId);
+  }
+
+  if (mode) {
+    params.append('mode', mode);
   }
   
   if (dateRange?.start) {
@@ -59,8 +64,8 @@ async function fetchGeoPhotos({ rollId, dateRange, limit = 2000 }) {
  * @returns {Object} - { photos, isLoading, error, total, refetch }
  */
 export default function useGeoPhotos(options = {}) {
-  const { rollId, dateRange, limit } = options;
-  
+  const { rollId, dateRange, limit, mode } = options;
+
   // 注意：bounds 不参与服务端过滤——地图采用"一次拉取 + 客户端筛选"策略，
   // 避免拖动视野时重复请求（bounds 变化不产生新 queryKey）。
   const queryKey = [
@@ -68,11 +73,12 @@ export default function useGeoPhotos(options = {}) {
     rollId || 'all',
     dateRange?.start || '',
     dateRange?.end || '',
+    mode || 'all',
   ];
-  
+
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchGeoPhotos({ rollId, dateRange, limit }),
+    queryFn: () => fetchGeoPhotos({ rollId, dateRange, limit, mode }),
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 30, // 30 minutes
     refetchOnWindowFocus: false,

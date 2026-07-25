@@ -119,7 +119,9 @@ router.get('/gear', async (req, res, next) => {
     const [cameras, lenses, films] = await Promise.all([
       allAsync(sqlCameras),
       allAsync(sqlLenses),
-      allAsync(sqlFilms)
+      // Digital photos have no roll → the INNER JOIN via r.filmId can never
+      // match; skip the query instead of relying on it returning nothing.
+      mode === 'digital' ? Promise.resolve([]) : allAsync(sqlFilms)
     ]);
 
     // Normalize lens name for deduplication
@@ -337,15 +339,20 @@ router.get('/ratings', async (req, res, next) => {
 });
 
 // GET /api/stats/locations
+// Optional `mode` query param (film / digital / all): counts only photos of
+// that source_type. Without it the response is identical to before.
 router.get('/locations', async (req, res, next) => {
   try {
+    const { buildSourceTypeClause } = require('../../packages/shared/photographyMode');
+    const { clause } = buildSourceTypeClause(req.query.mode);
+    const modeFilter = clause ? `AND ${clause}` : '';
     // Combine locations from both:
     // 1. photos linked to locations table (via location_id)
     // 2. photos with direct city/country fields
     const sql = `
       WITH combined_locations AS (
         -- Photos linked to locations table
-        SELECT 
+        SELECT
           l.city_name as city_name,
           l.country_name as country_name,
           p.id as photo_id,
@@ -353,19 +360,21 @@ router.get('/locations', async (req, res, next) => {
         FROM photos p
         JOIN locations l ON p.location_id = l.id
         WHERE p.location_id IS NOT NULL AND l.city_name IS NOT NULL AND l.city_name != ''
-        
+        ${modeFilter}
+
         UNION ALL
-        
+
         -- Photos with direct city field (not linked to locations table or different city)
-        SELECT 
+        SELECT
           p.city as city_name,
           p.country as country_name,
           p.id as photo_id,
           p.roll_id as roll_id
         FROM photos p
         WHERE p.city IS NOT NULL AND p.city != ''
+          ${modeFilter}
           AND (p.location_id IS NULL OR NOT EXISTS (
-            SELECT 1 FROM locations l 
+            SELECT 1 FROM locations l
             WHERE l.id = p.location_id AND l.city_name = p.city
           ))
       )
@@ -427,10 +436,25 @@ router.get('/temporal', async (req, res, next) => {
 });
 
 // GET /api/stats/themes
+// Optional `mode` query param (film / digital / all): counts only photos of
+// that source_type. Without it the response is identical to before.
 router.get('/themes', async (req, res, next) => {
   try {
-    const sql = `
-      SELECT 
+    const { buildSourceTypeClause } = require('../../packages/shared/photographyMode');
+    const { clause } = buildSourceTypeClause(req.query.mode);
+    const sql = clause ? `
+      SELECT
+        t.name,
+        COUNT(p.id) as photo_count
+      FROM tags t
+      LEFT JOIN photo_tags pt ON t.id = pt.tag_id
+      LEFT JOIN photos p ON p.id = pt.photo_id AND ${clause}
+      GROUP BY t.id
+      HAVING photo_count > 0
+      ORDER BY photo_count DESC
+      LIMIT 15
+    ` : `
+      SELECT
         t.name,
         COUNT(pt.photo_id) as photo_count
       FROM tags t
@@ -440,7 +464,7 @@ router.get('/themes', async (req, res, next) => {
       ORDER BY photo_count DESC
       LIMIT 15
     `;
-    
+
     const rows = await allAsync(sql);
     res.json(rows);
   } catch (err) {

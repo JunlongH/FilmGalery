@@ -23,8 +23,11 @@ function log(msg) {
 
 /**
  * Camera types enum - Display-friendly names
+ *
+ * Split into film and digital to support the layered equipment model.
+ * Legacy rows store type as free-text; these lists drive UI dropdowns only.
  */
-const CAMERA_TYPES = [
+const FILM_CAMERA_TYPES = [
   'SLR',           // Single Lens Reflex (单反)
   'Rangefinder',   // Rangefinder (旁轴)
   'P&S',           // Point & Shoot / PS机/傻瓜机
@@ -35,6 +38,20 @@ const CAMERA_TYPES = [
   'Half Frame',    // Half Frame (半格)
   'Other'
 ];
+
+const DIGITAL_CAMERA_TYPES = [
+  'DSLR',
+  'Mirrorless',
+  'Compact',
+  'Phone',
+  'Action Camera',
+  'Cinema Camera',
+  'Digital Medium Format',
+  'Other'
+];
+
+// Legacy alias: combined list for backward compat.
+const CAMERA_TYPES = [...FILM_CAMERA_TYPES, ...DIGITAL_CAMERA_TYPES.filter(t => t !== 'Other')];
 
 /**
  * Film formats enum
@@ -54,13 +71,18 @@ const FILM_FORMATS = [
 
 /**
  * Common lens mounts
+ *
+ * Includes both legacy film mounts and modern digital mounts.
  */
 const LENS_MOUNTS = [
+  // Legacy / film-era mounts
   'M42', 'Pentax K', 'Nikon F', 'Canon FD', 'Canon EF', 
   'Minolta MD', 'Minolta A', 'Leica M', 'Leica R', 'Leica L',
   'Contax/Yashica', 'Olympus OM', 'Sony A', 'Sony E',
   'Micro Four Thirds', 'Fuji X', 'Hasselblad V', 'Mamiya 645',
-  'Mamiya RB/RZ', 'Pentax 645', 'Pentax 67', 'Fixed'
+  'Mamiya RB/RZ', 'Pentax 645', 'Pentax 67', 'Fixed',
+  // Modern digital mounts
+  'Canon RF', 'Nikon Z', 'L Mount', 'Fuji GF', 'Hasselblad X'
 ];
 
 /**
@@ -731,6 +753,8 @@ function runEquipmentMigration() {
 module.exports = { 
   runEquipmentMigration, 
   CAMERA_TYPES, 
+  FILM_CAMERA_TYPES,
+  DIGITAL_CAMERA_TYPES,
   FILM_FORMATS, 
   LENS_MOUNTS, 
   SCANNER_TYPES,

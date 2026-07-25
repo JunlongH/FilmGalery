@@ -1,7 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Star } from 'lucide-react';
 import LocationInput from './LocationInput.jsx';
 import GeoSearchInput from './GeoSearchInput.jsx';
-import { getMetadataOptions, getApiBase, getTags } from '../api';
+import { getMetadataOptions, getApiBase, getTags, getAlbumsForPhoto } from '../api';
+import { getCacheStrategy } from '../lib';
 import EquipmentSelector from './EquipmentSelector';
 import { lazyModal } from './common/lazyModal';
 import { reverseGeocode } from '../utils/geocoding';
@@ -16,6 +20,7 @@ const LocationPickerModal = lazyModal(() => import('./map/LocationPickerModal.js
 const FIELD_GROUPS = {
   caption: ['caption'],
   tags: ['tags'],
+  rating: ['rating'],
   time: ['date_taken', 'time_taken'],
   equipment: ['camera', 'lens', 'camera_equip_id', 'lens_equip_id', 'photographer'],
   params: ['aperture', 'shutter_speed', 'iso', 'focal_length'],
@@ -29,6 +34,15 @@ const ALL_FIELDS = Object.values(FIELD_GROUPS).flat();
 export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSaved }) {
   const isBatch = Array.isArray(photos) && photos.length > 1;
   const base = photo || (isBatch ? photos[0] : null);
+  const navigate = useNavigate();
+  const isDigital = base?.source_type === 'digital';
+
+  const { data: photoAlbums = [] } = useQuery({
+    queryKey: ['photo-albums', base?.id],
+    queryFn: () => getAlbumsForPhoto(base.id),
+    enabled: !isBatch && isDigital && !!base?.id,
+    ...getCacheStrategy('photoAlbums'),
+  });
   
   // Dirty fields tracking
   const [dirtyFields, setDirtyFields] = useState(new Set());
@@ -82,6 +96,7 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
   const [currentTags, setCurrentTags] = useState(base?.tags ? base.tags.map(t => t.name || t) : []);
   const [tagInput, setTagInput] = useState('');
   const [allTags, setAllTags] = useState([]);
+  const [rating, setRating] = useState(Number(base?.rating) || 0);
   
   const [options, setOptions] = useState({ cameras: [], lenses: [], photographers: [] });
 
@@ -134,6 +149,7 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
     setCaption(currentBase.caption || '');
     setCurrentTags(currentBase.tags ? currentBase.tags.map(t => t.name || t) : []);
     setTagInput('');
+    setRating(Number(currentBase.rating) || 0);
   }, [base?.id, roll?.id]);
 
   // Dirty marking helper
@@ -211,6 +227,7 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
     switch (field) {
       case 'caption': return caption || null;
       case 'tags': return currentTags;
+      case 'rating': return rating;
       case 'date_taken': return dateTaken || null;
       case 'time_taken': return timeTaken || null;
       case 'location_id': return location.location_id || null;
@@ -261,12 +278,17 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
     try {
       const targets = isBatch ? photos : [photo];
       const apiBase = getApiBase();
+      let failed = 0;
       for (const p of targets) {
-        await fetch(`${apiBase}/api/photos/${p.id}`, {
+        const res = await fetch(`${apiBase}/api/photos/${p.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
-        }).then(r=>r.text()).catch(()=>null);
+        }).then(r => (r.ok ? null : new Error(`HTTP ${r.status}`))).catch(err => err);
+        if (res) failed++;
+      }
+      if (failed > 0) {
+        throw new Error(`${failed}/${targets.length} 张照片保存失败`);
       }
 
       // Cleanup saved fields from dirty state
@@ -346,6 +368,70 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
         <button className="fg-sidepanel-close" onClick={handleClose} aria-label="Close sidebar">×</button>
       </header>
 
+      {/* --- RATING SECTION (digital only) --- */}
+      {isDigital && (
+      <section className="fg-sidepanel-section">
+        <SectionHeader title="评分" sectionKey="rating" />
+        <div className="fg-separator" />
+        <div className="fg-field" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {[1, 2, 3, 4, 5].map(n => (
+            <button
+              key={n}
+              type="button"
+              aria-label={`${n} 星`}
+              onClick={() => { setRating(n); markDirty('rating'); }}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, color: n <= rating ? '#f59e0b' : '#9ca3af' }}
+            >
+              <Star size={22} fill={n <= rating ? 'currentColor' : 'none'} />
+            </button>
+          ))}
+          {rating > 0 && (
+            <button
+              type="button"
+              className="fg-btn-mini"
+              onClick={() => { setRating(0); markDirty('rating'); }}
+              style={{ fontSize: '0.75rem', padding: '2px 8px', border: '1px solid currentColor', borderRadius: 4, background: 'transparent', cursor: 'pointer', marginLeft: 8 }}
+            >
+              清除
+            </button>
+          )}
+        </div>
+      </section>
+      )}
+
+      {/* --- ALBUMS SECTION (digital only) --- */}
+      {!isBatch && isDigital && photoAlbums.length > 0 && (
+      <section className="fg-sidepanel-section">
+        <div className="fg-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div className="fg-section-label">所在相册</div>
+        </div>
+        <div className="fg-separator" />
+        <div className="fg-field" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {photoAlbums.map(a => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => { onClose && onClose(); navigate(`/albums/${a.id}`); }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 10px',
+                borderRadius: 12,
+                border: 'none',
+                cursor: 'pointer',
+                background: 'var(--fg-info-bg, #e0f2fe)',
+                color: 'var(--fg-info-text, #075985)',
+                fontSize: '0.85rem'
+              }}
+            >
+              {a.title}（{a.photo_count ?? 0}）
+            </button>
+          ))}
+        </div>
+      </section>
+      )}
+
       {/* --- TIME SECTION --- */}
       <section className="fg-sidepanel-section">
         <SectionHeader title="Time" sectionKey="time" />
@@ -384,6 +470,7 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
             <label className="fg-label">Camera</label>
             <EquipmentSelector 
               type="camera" 
+              mode={photo?.source_type === 'digital' ? 'digital' : 'film'}
               value={cameraEquipId} 
               onChange={(id, item) => {
                 setCameraEquipId(id);
@@ -412,6 +499,7 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
             ) : (
               <EquipmentSelector 
                 type="lens" 
+                mode={photo?.source_type === 'digital' ? 'digital' : 'film'}
                 value={lensEquipId} 
                 cameraId={cameraEquipId} 
                 onChange={(id, item) => {

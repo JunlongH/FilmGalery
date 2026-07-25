@@ -306,8 +306,9 @@ function FitBoundsToPhotos({ photos }) {
  * @param {Object} props.filters - Filter criteria
  * @param {Function} props.onPhotoClick - Callback when photo is clicked
  * @param {Object} props.selectedPhoto - Currently selected photo
+ * @param {string} [props.mode] - 'film' | 'digital' workspace filter
  */
-export default function PhotoMap({ filters, onPhotoClick, selectedPhoto }) {
+export default function PhotoMap({ filters, onPhotoClick, selectedPhoto, mode }) {
   // Get current theme
   const { theme } = useTheme();
 
@@ -381,6 +382,7 @@ export default function PhotoMap({ filters, onPhotoClick, selectedPhoto }) {
     rollId: filters?.rollId,
     dateRange: filters?.dateRange,
     bounds: viewMode === 'flat' ? bounds : null, // Only use bounds in flat mode
+    mode,
   });
 
   // Filter photos that have valid coordinates

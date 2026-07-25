@@ -7,6 +7,7 @@ import CachedImage from '../../components/CachedImage';
 import SkeletonBox from '../../components/SkeletonBox';
 import { getPhotoUrl } from '../../utils/urls';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useLibraryMode } from '../../hooks/useLibraryMode';
 
 const numColumns = 3;
 const screenWidth = Dimensions.get('window').width;
@@ -17,11 +18,12 @@ export default function TagDetailScreen({ route, navigation }: any) {
   const theme = useTheme();
   const { tagId } = route.params;
   const { baseUrl } = useContext(ApiContext);
+  const mode = useLibraryMode();
 
-  const photosKey = baseUrl ? `tagPhotos:${tagId}@${baseUrl}` : null;
+  const photosKey = baseUrl ? `tagPhotos:${tagId}@${baseUrl}#${mode}` : null;
   const { data, loading } = useApiQuery<any[]>(
     photosKey,
-    () => api.http.get(`/api/tags/${tagId}/photos`),
+    () => api.http.get(`/api/tags/${tagId}/photos`, { mode }),
   );
   const photos = useMemo(() => data ?? [], [data]);
 

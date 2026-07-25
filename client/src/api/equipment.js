@@ -16,8 +16,9 @@ export async function getEquipmentSuggestions() {
   return jsonFetch('/api/equipment/suggestions');
 }
 
-export async function getCompatibleLenses(cameraId) {
-  return jsonFetch(`/api/equipment/compatible-lenses/${cameraId}`);
+export async function getCompatibleLenses(cameraId, mode = null) {
+  const qs = mode ? `?mode=${encodeURIComponent(mode)}` : '';
+  return jsonFetch(`/api/equipment/compatible-lenses/${cameraId}${qs}`);
 }
 
 /**
