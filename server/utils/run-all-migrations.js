@@ -114,6 +114,13 @@ async function runAllMigrations() {
     await runDigitalModeMigration();
   });
 
+  // 5. Relax photos.roll_id NOT NULL (old DBs) so digital photos
+  //    (roll_id IS NULL) can be inserted. Table rebuild, idempotent.
+  runner.add('20260726_relax_photos_roll_id', async () => {
+    const { runRelaxPhotosRollId } = require('./relax-photos-rollid-migration');
+    await runRelaxPhotosRollId();
+  });
+
   const results = await runner.runAll();
   console.log('[MIGRATIONS] Unified migration complete:', results);
   return results;
@@ -129,7 +136,7 @@ async function getMigrationStatus() {
   return {
     executed,
     summary: {
-      total: 4,
+      total: 5,
       executed: executed.filter(m => m.success).length,
       failed: executed.filter(m => !m.success).length,
     },

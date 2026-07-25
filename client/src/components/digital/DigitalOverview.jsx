@@ -12,19 +12,15 @@ import { getCacheStrategy } from '../../lib';
 
 async function fetchDigitalStats() {
   const apiBase = getApiBase();
-  const [statsRes, albumsRes, favsRes, sessionsRes] = await Promise.all([
+  const [statsRes, albumsRes, favsRes] = await Promise.all([
     fetch(`${apiBase}/api/stats/summary?mode=digital`).then(r => r.json()),
     fetch(`${apiBase}/api/albums`).then(r => r.json()),
     fetch(`${apiBase}/api/photos?mode=digital&favorite=true&page=1&pageSize=1`).then(r => r.json()),
-    fetch(`${apiBase}/api/digital-sessions`).then(r => r.json()),
   ]);
-  const sessions = Array.isArray(sessionsRes) ? sessionsRes : [];
   return {
     photos: statsRes?.total_digital_photos || 0,
     albums: Array.isArray(albumsRes) ? albumsRes.length : 0,
     favorites: typeof favsRes?.total === 'number' ? favsRes.total : 0,
-    sessions: sessions.length,
-    recentSessions: sessions.slice(0, 5),
   };
 }
 
@@ -32,7 +28,6 @@ const STAT_ITEMS = [
   { key: 'photos', icon: Image, label: 'Photos', color: 'text-sky-500', path: '/library' },
   { key: 'albums', icon: BookMarked, label: 'Albums', color: 'text-violet-500', path: '/albums' },
   { key: 'favorites', icon: Heart, label: 'Favorites', color: 'text-rose-500', path: '/library' },
-  { key: 'sessions', icon: Upload, label: 'Imports', color: 'text-emerald-500', path: '/digital-import' },
 ];
 
 export default function DigitalOverview() {
@@ -54,7 +49,6 @@ export default function DigitalOverview() {
   });
 
   const recentAlbums = albums.slice(0, 6);
-  const recentSessions = stats?.recentSessions || [];
 
   const handlePhotoClick = (photo, photos) => {
     setViewerPhotos(photos || [photo]);
@@ -69,7 +63,7 @@ export default function DigitalOverview() {
         <HeroCarousel mode="digital" onPhotoClick={handlePhotoClick} />
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
           {STAT_ITEMS.map((item, index) => (
             <motion.div
               key={item.key}
@@ -127,40 +121,6 @@ export default function DigitalOverview() {
                 <AlbumCard key={album.id} album={album} onClick={() => navigate(`/albums/${album.id}`)} />
               ))}
             </div>
-          </motion.div>
-        )}
-
-        {/* 最近导入 */}
-        {recentSessions.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.35, duration: 0.5 }}
-            className="mb-8"
-          >
-            <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Recent imports</h2>
-            <Card className="bg-white dark:bg-zinc-900 shadow-none border-none">
-              <CardBody className="p-2">
-                <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {recentSessions.map(session => (
-                    <li key={session.id} className="flex items-center gap-4 px-4 py-3">
-                      <div className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-emerald-500 flex-shrink-0">
-                        <Upload size={16} />
-                      </div>
-                      <span className="flex-1 min-w-0 truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                        {session.label || 'Untitled import'}
-                      </span>
-                      <span className="text-xs text-zinc-400 dark:text-zinc-500 flex-shrink-0">
-                        {session.session_date || '—'}
-                      </span>
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400 flex-shrink-0 w-16 text-right">
-                        {session.file_count ?? 0}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </CardBody>
-            </Card>
           </motion.div>
         )}
 

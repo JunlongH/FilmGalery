@@ -237,13 +237,14 @@ async function processOne(item, sessionId) {
   // INSERT photo first to obtain an id for file naming
   const ins = await runAsync(
     `INSERT INTO photos (
-       source_type, session_id, content_hash, original_filename,
+       source_type, session_id, content_hash, filename, original_filename,
        date_taken, focal_length, aperture, shutter_speed, iso,
        white_balance, color_space
-     ) VALUES ('digital', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES ('digital', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       sessionId,
       item.hash,
+      item.file.originalname,
       item.file.originalname,
       exif.dateTimeOriginal || null,
       exif.focalLength || null,
