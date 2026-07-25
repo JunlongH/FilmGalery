@@ -9,27 +9,12 @@
 import React, { useMemo } from 'react';
 import { Marker } from 'react-leaflet';
 import L from 'leaflet';
-import { API_BASE } from '../../api';
+import { resolveThumbUrl } from '../../utils/thumbResolver';
 
 /**
  * Get the thumbnail URL for a photo
  */
-const getThumbUrl = (photo) => {
-  const apiBase = API_BASE;
-  const thumbPath = photo.positive_thumb_rel_path || photo.thumb_rel_path || photo.negative_thumb_rel_path;
-  
-  if (thumbPath) {
-    return `${apiBase}/uploads/${thumbPath}`;
-  }
-  
-  // Fallback to full image
-  const fullPath = photo.full_rel_path || photo.positive_rel_path || photo.negative_rel_path;
-  if (fullPath) {
-    return `${apiBase}/uploads/${fullPath}`;
-  }
-  
-  return null;
-};
+const getThumbUrl = (photo) => resolveThumbUrl(photo, 'positive');
 
 /**
  * Create a custom div icon with photo thumbnail

@@ -56,8 +56,8 @@ const FILM_SHORTCUTS = {
 
 const DIGITAL_SHORTCUTS = {
   '1': '/',
-  '2': '/library',
-  '3': '/albums',
+  '2': '/albums',
+  '3': '/library',
   '4': '/digital-import',
   '5': '/calendar',
   '6': '/map',
@@ -168,11 +168,11 @@ export function Sidebar({ tags = [], mode = 'film', onToggleMode }) {
           <>
             <SidebarSection>
               <SidebarItem to="/" icon={<Home className="w-5 h-5" />} label="Overview" exact shortcut="⌘1" />
-              <SidebarItem to="/library" icon={<Images className="w-5 h-5" />} label="Library" shortcut="⌘2" />
+              <SidebarItem to="/albums" icon={<BookMarked className="w-5 h-5" />} label="Albums" shortcut="⌘2" />
             </SidebarSection>
 
             <SidebarSection title="Organize" divider>
-              <SidebarItem to="/albums" icon={<BookMarked className="w-5 h-5" />} label="Albums" shortcut="⌘3" />
+              <SidebarItem to="/library" icon={<Images className="w-5 h-5" />} label="Library" shortcut="⌘3" />
               <SidebarItem to="/digital-import" icon={<FolderPlus className="w-5 h-5" />} label="Import" shortcut="⌘4" />
             </SidebarSection>
 

@@ -96,6 +96,10 @@ export default function HeroCarousel({ onPhotoClick, mode }) {
   }
 
   const current = photos[currentIndex];
+  const isDigitalPhoto = mode === 'digital' || current.source_type === 'digital' || current.roll_id == null;
+  const heroTitle = isDigitalPhoto
+    ? (current.caption || '')
+    : (current.roll_title || current.caption || (current.original_filename && current.original_filename.replace(/\.[^.]+$/, '')) || 'Untitled');
   // Preload next image
   const nextIndex = (currentIndex + 1) % photos.length;
   const prevIndex = (currentIndex - 1 + photos.length) % photos.length;
@@ -138,15 +142,18 @@ export default function HeroCarousel({ onPhotoClick, mode }) {
             className="transition-opacity duration-500"
             style={{ opacity: 1 }}
           >
-            <h2 className="text-white text-3xl md:text-4xl font-bold mb-3 tracking-tight drop-shadow-lg">
-              {current.roll_title || current.caption || (current.original_filename && current.original_filename.replace(/\.[^.]+$/, '')) || 'Untitled'}
-            </h2>
+            {heroTitle && (
+              <h2 className="text-white text-3xl md:text-4xl font-bold mb-3 tracking-tight drop-shadow-lg">
+                {heroTitle}
+              </h2>
+            )}
             
             {/* Photo Details - Simple inline text */}
             <p className="text-white/70 text-xs md:text-sm drop-shadow-lg">
               {[
                 current.date && new Date(current.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
                 current.city,
+                current.album_names,
                 current.camera_name,
                 current.lens_name,
                 current.film_name
@@ -175,8 +182,8 @@ export default function HeroCarousel({ onPhotoClick, mode }) {
               );
             })()}
             
-            {/* Photo Caption - if exists */}
-            {current.caption && (
+            {/* Photo Caption - if exists (digital photos already show it as the title) */}
+            {!isDigitalPhoto && current.caption && (
               <p className="text-white/60 text-xs md:text-sm drop-shadow-lg mt-2 max-w-2xl line-clamp-2">
                 {current.caption}
               </p>

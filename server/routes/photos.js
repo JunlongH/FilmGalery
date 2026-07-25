@@ -470,7 +470,8 @@ router.get('/random', async (req, res, next) => {
               (SELECT name FROM equip_lenses WHERE id = p.lens_equip_id),
               p.lens
            ) as lens_name,
-           COALESCE(loc.city_name, p.city) as city
+           COALESCE(loc.city_name, p.city) as city,
+           (SELECT GROUP_CONCAT(a.title, ', ') FROM album_photos ap JOIN albums a ON a.id = ap.album_id AND a.deleted_at IS NULL WHERE ap.photo_id = p.id) AS album_names
     FROM photos p
     LEFT JOIN rolls r ON p.roll_id = r.id
     LEFT JOIN films f ON f.id = r.filmId

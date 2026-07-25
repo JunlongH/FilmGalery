@@ -65,9 +65,9 @@ export default function AlbumDetail() {
 
   const coverMutation = useMutation({
     mutationFn: (photoId) => setAlbumCover(id, photoId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['albums'] });
-      queryClient.invalidateQueries({ queryKey: ['album', albumId] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['album', albumId] });
+      await queryClient.invalidateQueries({ queryKey: ['albums'], refetchType: 'all' });
     },
   });
 

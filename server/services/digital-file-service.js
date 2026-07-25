@@ -44,7 +44,7 @@ function computeShardPath(dateTaken) {
   if (!d || isNaN(d.getTime())) d = new Date();
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
-  return path.join(String(year), month);
+  return `${year}/${month}`;
 }
 
 /**

@@ -12,16 +12,16 @@ const { buildSourceTypeClause } = require('../../packages/shared/photographyMode
 router.get('/', asyncHandler(async (req, res) => {
   const { clause } = buildSourceTypeClause(req.query.mode);
   const modeFilter = clause ? `AND ${clause}` : '';
-  const countExpr = clause ? 'COUNT(p.id)' : 'COUNT(pt.photo_id)';
-  const photoJoin = clause ? `LEFT JOIN photos p ON p.id = pt.photo_id AND ${clause}` : '';
+  const photoJoin = `LEFT JOIN photos p ON p.id = pt.photo_id AND p.deleted_at IS NULL ${modeFilter}`;
   const rows = await allAsync(`
-    SELECT t.id, t.name, ${countExpr} AS photos_count,
-           (SELECT COALESCE(p.positive_thumb_rel_path, p.thumb_rel_path) FROM photo_tags pt2 JOIN photos p ON p.id = pt2.photo_id WHERE pt2.tag_id = t.id ${modeFilter} ORDER BY p.id DESC LIMIT 1) as cover_thumb,
-           (SELECT COALESCE(p.positive_rel_path, p.full_rel_path) FROM photo_tags pt2 JOIN photos p ON p.id = pt2.photo_id WHERE pt2.tag_id = t.id ${modeFilter} ORDER BY p.id DESC LIMIT 1) as cover_full
+    SELECT t.id, t.name, COUNT(p.id) AS photos_count,
+           (SELECT COALESCE(p.positive_thumb_rel_path, p.thumb_rel_path) FROM photo_tags pt2 JOIN photos p ON p.id = pt2.photo_id WHERE pt2.tag_id = t.id AND p.deleted_at IS NULL ${modeFilter} ORDER BY p.id DESC LIMIT 1) as cover_thumb,
+           (SELECT COALESCE(p.positive_rel_path, p.full_rel_path) FROM photo_tags pt2 JOIN photos p ON p.id = pt2.photo_id WHERE pt2.tag_id = t.id AND p.deleted_at IS NULL ${modeFilter} ORDER BY p.id DESC LIMIT 1) as cover_full
     FROM tags t
     LEFT JOIN photo_tags pt ON pt.tag_id = t.id
     ${photoJoin}
     GROUP BY t.id
+    HAVING photos_count > 0
     ORDER BY t.name COLLATE NOCASE
   `);
   res.json(rows);
@@ -39,7 +39,7 @@ router.get('/:tagId/photos', asyncHandler(async (req, res) => {
     JOIN photos p ON p.id = pt.photo_id
     LEFT JOIN rolls r ON r.id = p.roll_id
     LEFT JOIN films f ON f.id = r.filmId
-    WHERE pt.tag_id = ?
+    WHERE pt.tag_id = ? AND p.deleted_at IS NULL
   `;
   if (clause) sql += ` AND ${clause}`;
   sql += ` ORDER BY p.id DESC`;

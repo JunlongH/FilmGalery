@@ -9,19 +9,12 @@
  */
 import React, { useRef, useMemo, useCallback, useEffect, useState } from 'react';
 import Globe from 'react-globe.gl';
-import { getApiBase } from '../../api';
+import { resolveThumbUrl } from '../../utils/thumbResolver';
 
 /**
  * Get thumbnail URL for a photo
  */
-const getThumbUrl = (photo) => {
-  const thumbPath = photo.positive_thumb_rel_path || photo.thumb_rel_path || photo.negative_thumb_rel_path;
-  if (thumbPath) {
-    const apiBase = getApiBase();
-    return `${apiBase}/uploads/${thumbPath}`;
-  }
-  return null;
-};
+const getThumbUrl = (photo) => resolveThumbUrl(photo, 'positive');
 
 /**
  * Group nearby photos into clusters for globe display

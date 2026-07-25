@@ -7,7 +7,7 @@
  * @module hooks/useGeoPhotos
  */
 import { useQuery } from '@tanstack/react-query';
-import { API_BASE } from '../api';
+import { getApiBase } from '../api';
 
 /**
  * Fetch geo-tagged photos from the API
@@ -20,7 +20,7 @@ import { API_BASE } from '../api';
  * @param {string} [options.mode] - 'film' | 'digital'; omitted = legacy unfiltered behavior
  */
 async function fetchGeoPhotos({ rollId, dateRange, limit = 2000, mode }) {
-  const apiBase = API_BASE;
+  const apiBase = getApiBase();
   const params = new URLSearchParams();
 
   if (limit) {

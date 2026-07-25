@@ -8,19 +8,12 @@
  */
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { API_BASE } from '../../api';
+import { resolveThumbUrl } from '../../utils/thumbResolver';
 
 /**
  * Get the full image URL for preview
  */
-const getPreviewUrl = (photo) => {
-  const apiBase = API_BASE;
-  const thumbPath = photo.positive_thumb_rel_path || photo.thumb_rel_path || 
-               photo.positive_rel_path || photo.full_rel_path || 
-               photo.negative_rel_path;
-  
-  return thumbPath ? `${apiBase}/uploads/${thumbPath}` : null;
-};
+const getPreviewUrl = (photo) => resolveThumbUrl(photo, 'positive');
 
 /**
  * Format date for display
