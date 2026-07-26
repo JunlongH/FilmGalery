@@ -258,7 +258,7 @@ function PhotoItem({ p, index, onSelect, onSetCover, onDeletePhoto, onUpdatePhot
       </div>
       {!multiSelect && (
         <div className="photo-actions">
-          <button onClick={(e)=>{e.stopPropagation(); onSetCover(p.id);}}>Set cover</button>
+          {onSetCover && (<button onClick={(e)=>{e.stopPropagation(); onSetCover(p.id);}}>Set cover</button>)}
           <button onClick={handleEditNote}>Note</button>
           {/* Edit Meta moved to fullscreen ImageViewer sidebar */}
           <button onClick={(e)=>{e.stopPropagation(); onDeletePhoto(p.id);}}>Delete</button>

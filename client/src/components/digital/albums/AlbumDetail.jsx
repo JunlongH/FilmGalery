@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@heroui/react';
@@ -21,7 +21,17 @@ export default function AlbumDetail() {
   const [showAdd, setShowAdd] = useState(false);
   const [localPhotos, setLocalPhotos] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
+  const [coverFeedback, setCoverFeedback] = useState(null);
   const dragIndexRef = useRef(null);
+  const coverFeedbackTimer = useRef(null);
+
+  useEffect(() => () => clearTimeout(coverFeedbackTimer.current), []);
+
+  useEffect(() => {
+    if (!coverFeedback) return;
+    clearTimeout(coverFeedbackTimer.current);
+    coverFeedbackTimer.current = setTimeout(() => setCoverFeedback(null), 4000);
+  }, [coverFeedback]);
 
   const { data: album } = useQuery({
     queryKey: ['album', albumId],
@@ -66,8 +76,12 @@ export default function AlbumDetail() {
   const coverMutation = useMutation({
     mutationFn: (photoId) => setAlbumCover(id, photoId),
     onSuccess: async () => {
+      setCoverFeedback({ type: 'success', text: 'Cover updated' });
       await queryClient.invalidateQueries({ queryKey: ['album', albumId] });
       await queryClient.invalidateQueries({ queryKey: ['albums'], refetchType: 'all' });
+    },
+    onError: (err) => {
+      setCoverFeedback({ type: 'error', text: `Failed to set cover: ${err?.message || 'unknown error'}` });
     },
   });
 
@@ -145,13 +159,14 @@ export default function AlbumDetail() {
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             type="button"
-            className="pointer-events-auto rounded bg-white/20 px-2 py-1 text-[11px] text-white hover:bg-white/40"
+            disabled={coverMutation.isPending}
+            className="pointer-events-auto rounded bg-white/20 px-2 py-1 text-[11px] text-white hover:bg-white/40 disabled:opacity-50"
             onClick={e => {
               e.stopPropagation();
               coverMutation.mutate(photo.id);
             }}
           >
-            Set as cover
+            {coverMutation.isPending && coverMutation.variables === photo.id ? 'Setting…' : 'Set as cover'}
           </button>
           <button
             type="button"
@@ -166,7 +181,7 @@ export default function AlbumDetail() {
         </div>
       </div>
     );
-  }, [dropIndex, handleDrop, handleRemove, coverMutation.mutate]);
+  }, [dropIndex, handleDrop, handleRemove, coverMutation.mutate, coverMutation.isPending, coverMutation.variables]);
 
   return (
     <div className="flex flex-col min-h-full bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-6 md:p-8">
@@ -184,8 +199,7 @@ export default function AlbumDetail() {
             <p className="text-zinc-500 dark:text-zinc-400 mt-1 max-w-xl">{album.description}</p>
           )}
           <p className="text-zinc-400 dark:text-zinc-500 mt-1">{displayPhotos.length} photos</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        </div><div className="flex items-center gap-2 flex-wrap justify-end">
           {orderDirty && (
             <>
               <Button color="primary" size="sm" onPress={handleSaveOrder} isLoading={sortMutation.isPending}>
@@ -207,6 +221,18 @@ export default function AlbumDetail() {
           </Button>
         </div>
       </div>
+
+      {coverFeedback && (
+        <div
+          className={`mb-4 rounded-lg px-3 py-2 text-sm ${
+            coverFeedback.type === 'success'
+              ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
+              : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+          }`}
+        >
+          {coverFeedback.text}
+        </div>
+      )}
 
       {!isLoading && photos.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center">

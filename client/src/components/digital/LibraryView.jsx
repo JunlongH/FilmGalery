@@ -11,10 +11,13 @@ import {
 } from 'lucide-react';
 import {
   searchPhotos, getPhotoFacets, getDigitalSessions,
-  getAlbums, addAlbumPhotos, updatePhoto, deletePhoto,
+  getAlbums, addAlbumPhotos, updatePhoto, deletePhoto, getTags,
 } from '../../api';
 import { getCacheStrategy } from '../../lib';
 import PhotoGrid from '../PhotoGrid';
+import PhotoItem from '../PhotoItem';
+import TagEditModal from '../TagEditModal';
+import ImageViewer from '../common/LazyImageViewer';
 
 const PAGE_SIZE = 100;
 
@@ -47,6 +50,8 @@ export default function LibraryView() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selection, setSelection] = useState(new Set());
   const [showAlbumPicker, setShowAlbumPicker] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(null);
+  const [editingTagsPhoto, setEditingTagsPhoto] = useState(null);
 
   const searchRef = useRef('');
 
@@ -119,6 +124,12 @@ export default function LibraryView() {
     queryKey: ['digital-sessions'],
     queryFn: () => getDigitalSessions(),
     ...getCacheStrategy('digitalSessions'),
+  });
+
+  const { data: allTags = [] } = useQuery({
+    queryKey: ['tags'],
+    queryFn: getTags,
+    ...getCacheStrategy('tags'),
   });
 
   useEffect(() => {
@@ -219,6 +230,44 @@ export default function LibraryView() {
       setShowAlbumPicker(false);
     },
   });
+
+  const updatePhotoMutation = useMutation({
+    mutationFn: ({ id, data }) => updatePhoto(id, data),
+    onSuccess: (_res, { id, data }) => {
+      if (data.tags) {
+        invalidateLibrary();
+        queryClient.invalidateQueries({ queryKey: ['tags'] });
+        window.dispatchEvent(new Event('refresh-tags'));
+      } else {
+        setPagesMap(prev => {
+          const next = new Map(prev);
+          for (const [pg, arr] of next) {
+            next.set(pg, arr.map(p => (p.id === id ? { ...p, ...data } : p)));
+          }
+          return next;
+        });
+        invalidateLibrary();
+      }
+    },
+  });
+
+  const singleDeleteMutation = useMutation({
+    mutationFn: (id) => deletePhoto(id),
+    onSuccess: (_res, id) => {
+      setPagesMap(prev => {
+        const next = new Map();
+        for (const [pg, arr] of prev) next.set(pg, arr.filter(p => p.id !== id));
+        return next;
+      });
+      invalidateLibrary({ albums: true, facets: true });
+    },
+  });
+
+  function handleDeleteOne(photoId) {
+    if (window.confirm('Delete this photo? It will be removed from the library (disk files are kept).')) {
+      singleDeleteMutation.mutate(photoId);
+    }
+  }
 
   function handleBatchDelete() {
     const ids = [...selection];
@@ -392,11 +441,28 @@ export default function LibraryView() {
             </div>
           ) : (
             <>
-              <PhotoGrid
-                photos={photos}
-                selection={selectionMode ? selection : null}
-                onSelectionChange={setSelection}
-              />
+              {selectionMode ? (
+                <PhotoGrid
+                  photos={photos}
+                  selection={selection}
+                  onSelectionChange={setSelection}
+                />
+              ) : (
+                <div className="photo-grid">
+                  {photos.map((p, idx) => (
+                    <PhotoItem
+                      key={p.id}
+                      p={p}
+                      index={idx}
+                      viewMode="positive"
+                      onSelect={(i) => setViewerIndex(i)}
+                      onUpdatePhoto={(photoId, data) => updatePhotoMutation.mutate({ id: photoId, data })}
+                      onEditTags={(photo) => setEditingTagsPhoto(photo)}
+                      onDeletePhoto={handleDeleteOne}
+                    />
+                  ))}
+                </div>
+              )}
               <div className="flex flex-col items-center gap-2 mt-6">
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">
                   {photos.length} / {total} loaded
@@ -452,6 +518,26 @@ export default function LibraryView() {
             Clear
           </Button>
         </div>
+      )}
+
+      {editingTagsPhoto && (
+        <TagEditModal
+          photo={editingTagsPhoto}
+          allTags={allTags}
+          onClose={() => setEditingTagsPhoto(null)}
+          onSave={async (photoId, newTags) => {
+            try {
+              await updatePhotoMutation.mutateAsync({ id: photoId, data: { tags: newTags } });
+            } catch (err) {
+              console.error('[LibraryView] Failed to save tags:', err);
+            }
+            setEditingTagsPhoto(null);
+          }}
+        />
+      )}
+
+      {viewerIndex !== null && (
+        <ImageViewer images={photos} index={viewerIndex} onClose={() => setViewerIndex(null)} />
       )}
 
       <AlbumPickerModal

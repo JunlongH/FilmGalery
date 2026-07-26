@@ -102,6 +102,7 @@ export function bustImageCache() {
 export function buildUploadUrl(pathOrUrl) {
   const apiBase = getApiBase();
   if (!pathOrUrl) return null;
+  pathOrUrl = String(pathOrUrl).replace(/\\/g, '/');
   let url;
   // already absolute URL
   if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
@@ -119,12 +120,6 @@ export function buildUploadUrl(pathOrUrl) {
       // extract from 'uploads' onward and normalize slashes
       const sub = pathOrUrl.slice(idx).replace(/\\/g, '/').replace(/^\/+/, '');
       url = `${apiBase}/${sub}`;
-    }
-    // Windows path fallback - use basename
-    else if (pathOrUrl.indexOf('\\') !== -1 || /^([a-zA-Z]:\\)/.test(pathOrUrl)) {
-      const parts = pathOrUrl.split(/[/\\]+/);
-      const base = parts[parts.length - 1];
-      url = `${apiBase}/uploads/${base}`;
     }
     // default: assume value is relative inside uploads (e.g. 'rolls/..')
     else {

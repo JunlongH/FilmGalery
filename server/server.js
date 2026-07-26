@@ -739,6 +739,8 @@ const seedLocations = async () => {
 		if (mdnsEnabled) {
 			console.log('[SERVER] mDNS auto-discovery enabled for LAN clients');
 		}
+
+		require('./services/digital-gps-backfill').scheduleDigitalGpsBackfill();
 		
 		// Graceful shutdown on signals
 		const gracefulShutdown = async (signal) => {

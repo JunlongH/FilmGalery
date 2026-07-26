@@ -25,6 +25,8 @@ const REGISTERED_MIGRATIONS = [
   '20241001_equipment_tables',
   '20241101_film_structure',
   '20260701_digital_mode',
+  '20260726_relax_photos_roll_id',
+  '20260726_normalize_photo_path_separators',
 ];
 
 /**
@@ -121,6 +123,13 @@ async function runAllMigrations() {
     await runRelaxPhotosRollId();
   });
 
+  // 6. Normalize legacy Windows backslash path separators in photos rel-path
+  //    columns. Idempotent string REPLACE.
+  runner.add('20260726_normalize_photo_path_separators', async () => {
+    const { runNormalizePhotoPathSeparators } = require('./normalize-photo-path-separators-migration');
+    await runNormalizePhotoPathSeparators();
+  });
+
   const results = await runner.runAll();
   console.log('[MIGRATIONS] Unified migration complete:', results);
   return results;
@@ -136,7 +145,7 @@ async function getMigrationStatus() {
   return {
     executed,
     summary: {
-      total: 5,
+      total: 6,
       executed: executed.filter(m => m.success).length,
       failed: executed.filter(m => !m.success).length,
     },
