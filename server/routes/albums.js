@@ -20,6 +20,7 @@ const express = require('express');
 const router = express.Router();
 const PreparedStmt = require('../utils/prepared-statements');
 const { runAsync, getAsync, allAsync } = require('../utils/db-helpers');
+const { attachTagsToPhotos } = require('../services/tag-service');
 
 // ── Cycle detection ─────────────────────────────────────────────────────────
 
@@ -101,8 +102,24 @@ router.get('/:id', async (req, res, next) => {
 
 router.get('/:id/photos', async (req, res, next) => {
   try {
-    const rows = await PreparedStmt.allAsync('albums.photos', [req.params.id]);
-    res.json(rows);
+    let rows;
+    if (req.query.sort === 'date_taken') {
+      rows = await allAsync(
+        `SELECT p.*, ap.sort_order AS album_sort_order, ap.added_at AS album_added_at,
+                r.title AS roll_title,
+                ds.label AS session_label, ds.session_date
+         FROM album_photos ap
+         JOIN photos p ON ap.photo_id = p.id
+         LEFT JOIN rolls r ON p.roll_id = r.id
+         LEFT JOIN digital_sessions ds ON p.session_id = ds.id
+         WHERE ap.album_id = ? AND p.deleted_at IS NULL
+         ORDER BY p.date_taken ASC NULLS LAST, p.id ASC`,
+        [req.params.id]
+      );
+    } else {
+      rows = await PreparedStmt.allAsync('albums.photos', [req.params.id]);
+    }
+    res.json(await attachTagsToPhotos(rows));
   } catch (err) {
     next(err);
   }

@@ -157,10 +157,14 @@ async function buildPipeline(inputPath, params = {}, options = {}) {
   }
 
   if (cropRect && typeof cropRect === 'object') {
-    const left = Math.max(0, Math.min(targetW - 1, Math.round((cropRect.x || 0) * targetW)));
-    const top = Math.max(0, Math.min(targetH - 1, Math.round((cropRect.y || 0) * targetH)));
-    const width = Math.max(1, Math.min(targetW - left, Math.round((cropRect.w || 1) * targetW)));
-    const height = Math.max(1, Math.min(targetH - top, Math.round((cropRect.h || 1) * targetH)));
+    const cx = Number.isFinite(cropRect.x) ? cropRect.x : 0;
+    const cy = Number.isFinite(cropRect.y) ? cropRect.y : 0;
+    const cw = Number.isFinite(cropRect.w) ? cropRect.w : 1;
+    const ch = Number.isFinite(cropRect.h) ? cropRect.h : 1;
+    const left = Math.max(0, Math.min(targetW - 1, Math.round(cx * targetW)));
+    const top = Math.max(0, Math.min(targetH - 1, Math.round(cy * targetH)));
+    const width = Math.max(1, Math.min(targetW - left, Math.round(cw * targetW)));
+    const height = Math.max(1, Math.min(targetH - top, Math.round(ch * targetH)));
     img = img.extract({ left, top, width, height });
   }
 

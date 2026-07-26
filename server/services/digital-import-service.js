@@ -269,13 +269,17 @@ async function processOne(item, sessionId) {
   await fsp.mkdir(path.dirname(displayAbs), { recursive: true });
   await fsp.mkdir(path.dirname(thumbAbs), { recursive: true });
 
-  await sharp(sourceBuf)
-    .jpeg({ quality: 92 })
-    .toFile(displayAbs);
+  const oriented = sharp(sourceBuf).rotate();
+  if (item.isRaw && exif.orientation) {
+    const deg = { 3: 180, 6: 90, 8: 270 }[exif.orientation];
+    if (deg) oriented.rotate(deg);
+  }
 
-  await sharp(sourceBuf)
-    .resize({ width: 240, height: 240, fit: 'inside' })
-    .jpeg({ quality: 40 })
+  await oriented.clone().jpeg({ quality: 92 }).toFile(displayAbs);
+
+  await oriented.clone()
+    .resize({ width: 400, fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 80 })
     .toFile(thumbAbs);
 
   // Stage the original file copy

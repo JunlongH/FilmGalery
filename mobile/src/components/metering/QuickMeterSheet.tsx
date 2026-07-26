@@ -26,7 +26,20 @@ import { getFilmItems, getFilms } from '../../api/filmItems';
 
 const { height } = Dimensions.get('window');
 
-export default function QuickMeterSheet({ visible, onClose }: any) {
+export interface QuickMeterSheetProps {
+  visible: boolean;
+  onClose: () => void;
+  /**
+   * Optional override for what happens when a loaded film is picked. When
+   * omitted, the sheet navigates to ShotLog with autoOpenShotMode=true (the
+   * original FAB-style "quick meter" flow). When provided, the caller takes
+   * over — e.g. LibraryScreen navigates to ShotLog WITHOUT auto-opening the
+   * metering modal.
+   */
+  onSelectItem?: (item: any, filmName: string) => void;
+}
+
+export default function QuickMeterSheet({ visible, onClose, onSelectItem }: QuickMeterSheetProps) {
   const theme = useTheme();
   const t = useT();
   const navigation = useNavigation();
@@ -113,12 +126,16 @@ export default function QuickMeterSheet({ visible, onClose }: any) {
   const handleSelect = useCallback((item: any) => {
     const filmInfo = getFilmInfo(item);
     onClose();
-    navigation.navigate('ShotLog', {
-      itemId: item.id,
-      filmName: filmInfo.name,
-      autoOpenShotMode: true,
-    });
-  }, [navigation, onClose, getFilmInfo]);
+    if (onSelectItem) {
+      onSelectItem(item, filmInfo.name);
+    } else {
+      navigation.navigate('ShotLog', {
+        itemId: item.id,
+        filmName: filmInfo.name,
+        autoOpenShotMode: true,
+      });
+    }
+  }, [navigation, onClose, getFilmInfo, onSelectItem]);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
   if (!visible) return null;

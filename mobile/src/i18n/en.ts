@@ -5,6 +5,9 @@ const en: Record<TranslationKey, string> = {
   'tab.timeline': 'Timeline',
   'tab.map': 'Map',
   'tab.library': 'Library',
+  'tab.more': 'More',
+  'tab.overview': 'Overview',
+  'tab.albums': 'Albums',
 
   // Screen titles
   'title.app': 'Film Gallery',
@@ -27,6 +30,7 @@ const en: Record<TranslationKey, string> = {
   'title.aiAssistant': 'AI Assistant',
   'title.locationDiagnostics': 'Location Diagnostics',
   'title.photo': 'Photo',
+  'title.sessions': 'Import Sessions',
 
   // Common
   'common.retry': 'Retry',
@@ -48,6 +52,7 @@ const en: Record<TranslationKey, string> = {
   'common.photosCount': '{count} photos',
 
   // Home / Timeline
+  'timeline.unknownMonth': 'Unknown date',
   'home.emptyTitle': 'No rolls yet',
   'home.emptySubtitle': 'Your film rolls will appear here once the server is connected.',
   'home.error': 'Failed to connect to server. Check Settings.',
@@ -74,6 +79,9 @@ const en: Record<TranslationKey, string> = {
   'library.noFavorites': 'No favorites yet',
   'library.noCollections': 'No collections yet',
   'library.noEquipment': 'No equipment yet',
+  'library.sessions': 'Import Sessions',
+  'library.map': 'Map',
+  'library.shotLog': 'Shot Log',
 
   // RollDetail
   'roll.negatives': 'Negatives',
@@ -419,6 +427,11 @@ const en: Record<TranslationKey, string> = {
   'digital.sessionFallback': 'Import #{id}',
   'digital.loadingMore': 'Loading more…',
 
+  // Digital sessions list (N5)
+  'sessions.emptyTitle': 'No import sessions yet',
+  'sessions.emptyBody': 'Import digital photos from the desktop to see sessions here',
+  'sessions.loadFailed': 'Failed to load sessions',
+
   // Digital albums (M2-B)
   'digital.albumsTitle': 'My Albums',
   'digital.albumDetailTitle': 'Album',
@@ -475,6 +488,25 @@ const en: Record<TranslationKey, string> = {
 
   // Empty/error generic
   'empty.generic': 'Nothing here yet',
+
+  // Overview screen (N2)
+  'overview.title': 'Overview',
+  'overview.emptyTitle': 'Nothing here yet',
+  'overview.emptyBody': 'Pull to refresh or switch mode',
+  'overview.recentPhotos': 'Recent Photos',
+  'overview.recentEmpty': 'No recent photos',
+  'overview.browseTitle': 'Browse',
+  'overview.entry.favorites': 'Favorites',
+  'overview.entry.stats': 'Stats',
+  'overview.entry.albums': 'Albums',
+  'overview.entry.collections': 'Collections',
+  'overview.entry.map': 'Map',
+  'overview.stats.rolls': 'Rolls',
+  'overview.stats.photos': 'Photos',
+  'overview.stats.favorites': 'Favorites',
+  'overview.stats.locations': 'Locations',
+  'overview.stats.albums': 'Albums',
+  'overview.stats.thisMonth': 'This Month',
 };
 
 export default en;

@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Star } from 'lucide-react';
 import LocationInput from './LocationInput.jsx';
 import GeoSearchInput from './GeoSearchInput.jsx';
 import { getMetadataOptions, getApiBase, getTags, getAlbumsForPhoto } from '../api';
@@ -20,7 +19,6 @@ const LocationPickerModal = lazyModal(() => import('./map/LocationPickerModal.js
 const FIELD_GROUPS = {
   caption: ['caption'],
   tags: ['tags'],
-  rating: ['rating'],
   time: ['date_taken', 'time_taken'],
   equipment: ['camera', 'lens', 'camera_equip_id', 'lens_equip_id', 'photographer'],
   params: ['aperture', 'shutter_speed', 'iso', 'focal_length'],
@@ -96,8 +94,7 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
   const [currentTags, setCurrentTags] = useState(base?.tags ? base.tags.map(t => t.name || t) : []);
   const [tagInput, setTagInput] = useState('');
   const [allTags, setAllTags] = useState([]);
-  const [rating, setRating] = useState(Number(base?.rating) || 0);
-  
+
   const [options, setOptions] = useState({ cameras: [], lenses: [], photographers: [] });
 
   // Load metadata options for autocomplete
@@ -149,7 +146,6 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
     setCaption(currentBase.caption || '');
     setCurrentTags(currentBase.tags ? currentBase.tags.map(t => t.name || t) : []);
     setTagInput('');
-    setRating(Number(currentBase.rating) || 0);
   }, [base?.id, roll?.id]);
 
   // Dirty marking helper
@@ -227,7 +223,6 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
     switch (field) {
       case 'caption': return caption || null;
       case 'tags': return currentTags;
-      case 'rating': return rating;
       case 'date_taken': return dateTaken || null;
       case 'time_taken': return timeTaken || null;
       case 'location_id': return location.location_id || null;
@@ -367,37 +362,6 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
         <h3 className="fg-sidepanel-title">{isBatch ? `Batch Editing (${photos.length})` : 'Photo Details'}</h3>
         <button className="fg-sidepanel-close" onClick={handleClose} aria-label="Close sidebar">×</button>
       </header>
-
-      {/* --- RATING SECTION (digital only) --- */}
-      {isDigital && (
-      <section className="fg-sidepanel-section">
-        <SectionHeader title="评分" sectionKey="rating" />
-        <div className="fg-separator" />
-        <div className="fg-field" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {[1, 2, 3, 4, 5].map(n => (
-            <button
-              key={n}
-              type="button"
-              aria-label={`${n} 星`}
-              onClick={() => { setRating(n); markDirty('rating'); }}
-              style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, color: n <= rating ? '#f59e0b' : '#9ca3af' }}
-            >
-              <Star size={22} fill={n <= rating ? 'currentColor' : 'none'} />
-            </button>
-          ))}
-          {rating > 0 && (
-            <button
-              type="button"
-              className="fg-btn-mini"
-              onClick={() => { setRating(0); markDirty('rating'); }}
-              style={{ fontSize: '0.75rem', padding: '2px 8px', border: '1px solid currentColor', borderRadius: 4, background: 'transparent', cursor: 'pointer', marginLeft: 8 }}
-            >
-              清除
-            </button>
-          )}
-        </div>
-      </section>
-      )}
 
       {/* --- ALBUMS SECTION (digital only) --- */}
       {!isBatch && isDigital && photoAlbums.length > 0 && (

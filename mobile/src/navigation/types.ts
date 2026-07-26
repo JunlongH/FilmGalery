@@ -35,10 +35,17 @@ export type RootStackParamList = {
   AISettings: undefined;
   DigitalAlbumList: undefined;
   DigitalAlbumDetail: { id: number; title?: string };
+  Sessions: undefined;
+  // The Albums tab. Lives in RootTabParamList too; kept here so cross-stack
+  // navigation.navigate('Albums') (e.g. from BrowseSection in OverviewStack)
+  // typechecks, since the global RootParamList extends RootStackParamList.
+  Albums: undefined;
 };
 
 export type RootTabParamList = {
+  Overview: undefined;
   Timeline: undefined;
+  Albums: undefined;
   Map: undefined;
   Library: undefined;
 };

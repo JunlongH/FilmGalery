@@ -3,6 +3,9 @@ const zh = {
   'tab.timeline': '时间线',
   'tab.map': '地图',
   'tab.library': '图库',
+  'tab.more': '更多',
+  'tab.overview': '概览',
+  'tab.albums': '相册',
 
   // Screen titles
   'title.app': 'Film Gallery',
@@ -25,6 +28,7 @@ const zh = {
   'title.aiAssistant': 'AI 助手',
   'title.locationDiagnostics': '位置诊断',
   'title.photo': '照片',
+  'title.sessions': '导入会话',
 
   // Common
   'common.retry': '重试',
@@ -46,6 +50,7 @@ const zh = {
   'common.photosCount': '{count} 张照片',
 
   // Home / Timeline
+  'timeline.unknownMonth': '未知日期',
   'home.emptyTitle': '还没有胶卷',
   'home.emptySubtitle': '连接服务器后，你的胶卷会显示在这里。',
   'home.error': '无法连接服务器，请检查设置。',
@@ -72,6 +77,9 @@ const zh = {
   'library.noFavorites': '暂无收藏',
   'library.noCollections': '暂无合集',
   'library.noEquipment': '暂无器材',
+  'library.sessions': '导入会话',
+  'library.map': '地图',
+  'library.shotLog': '拍摄记录',
 
   // RollDetail
   'roll.negatives': '底片',
@@ -417,6 +425,11 @@ const zh = {
   'digital.sessionFallback': '导入 #{id}',
   'digital.loadingMore': '加载更多…',
 
+  // Digital sessions list (N5)
+  'sessions.emptyTitle': '暂无导入会话',
+  'sessions.emptyBody': '用桌面端导入数码照片后，会话会显示在这里',
+  'sessions.loadFailed': '加载导入会话失败',
+
   // Digital albums (M2-B)
   'digital.albumsTitle': '我的相册',
   'digital.albumDetailTitle': '相册',
@@ -473,6 +486,25 @@ const zh = {
 
   // Empty/error generic
   'empty.generic': '这里还没有内容',
+
+  // Overview screen (N2)
+  'overview.title': '概览',
+  'overview.emptyTitle': '还没有内容',
+  'overview.emptyBody': '下拉刷新或切换模式查看',
+  'overview.recentPhotos': '最近照片',
+  'overview.recentEmpty': '暂无最近照片',
+  'overview.browseTitle': '浏览',
+  'overview.entry.favorites': '收藏',
+  'overview.entry.stats': '统计',
+  'overview.entry.albums': '相册',
+  'overview.entry.collections': '合集',
+  'overview.entry.map': '地图',
+  'overview.stats.rolls': '卷',
+  'overview.stats.photos': '照片',
+  'overview.stats.favorites': '收藏',
+  'overview.stats.locations': '地点',
+  'overview.stats.albums': '相册',
+  'overview.stats.thisMonth': '本月新增',
 } as const;
 
 export type TranslationKey = keyof typeof zh;

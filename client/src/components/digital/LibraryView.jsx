@@ -24,7 +24,6 @@ const PAGE_SIZE = 100;
 const SORT_OPTIONS = [
   { key: 'date_desc', label: 'Date taken (new→old)', sort: 'date_taken', order: 'desc' },
   { key: 'date_asc', label: 'Date taken (old→new)', sort: 'date_taken', order: 'asc' },
-  { key: 'rating_desc', label: 'Rating (high→low)', sort: 'rating', order: 'desc' },
   { key: 'import_desc', label: 'Import time', sort: 'id', order: 'desc' },
 ];
 

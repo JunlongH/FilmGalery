@@ -4,6 +4,7 @@ import { TextInput, Button, Text, Switch, useTheme, Chip, SegmentedButtons, Card
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiContext } from '../../context/ApiContext';
+import { useAppMode } from '../../context/AppModeContext';
 import { api } from '../../api/client';
 import { useT, getLanguage, setLanguage as saveLanguage } from '../../i18n';
 import { Icon } from '../../components/ui';
@@ -21,6 +22,7 @@ export default function SettingsScreen({ navigation }: any) {
   const theme = useTheme();
   const t = useT();
   const { baseUrl, setBaseUrl, backupUrl, setBackupUrl, darkMode, setDarkMode, mapProvider, setMapProvider, amapKey, setAmapKey } = useContext(ApiContext);
+  const { setMode: setAppMode } = useAppMode();
   const [url, setUrl] = useState(baseUrl);
   const [backup, setBackup] = useState(backupUrl || '');
   const [isDark, setIsDark] = useState(!!darkMode);
@@ -52,11 +54,7 @@ export default function SettingsScreen({ navigation }: any) {
   }, [baseUrl]);
 
   const goToDigitalLibrary = async () => {
-    if (baseUrl) {
-      try {
-        await AsyncStorage.setItem(`library_mode@${baseUrl}`, 'digital');
-      } catch { /* best-effort */ }
-    }
+    setAppMode('digital');
     navigation.navigate('Main', { screen: 'Library' });
   };
 

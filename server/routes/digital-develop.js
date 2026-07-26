@@ -13,6 +13,15 @@ const express = require('express');
 const router = express.Router();
 const digitalDevelopService = require('../services/digital-develop-service');
 
+// Render failures (missing source, decode/encode errors) are
+// user-actionable — surface the real message instead of the masked 5xx.
+function exposeRenderError(err, next) {
+  if (err && typeof err === 'object' && !err.status) {
+    err.status = 422;
+  }
+  next(err);
+}
+
 // POST /preview — body: { photo_id, params_json }
 router.post('/preview', async (req, res, next) => {
   try {
@@ -21,7 +30,7 @@ router.post('/preview', async (req, res, next) => {
     const jpegBuf = await digitalDevelopService.renderPreview(photo_id, params_json);
     res.type('image/jpeg').send(jpegBuf);
   } catch (err) {
-    next(err);
+    exposeRenderError(err, next);
   }
 });
 
@@ -33,7 +42,7 @@ router.post('/save', async (req, res, next) => {
     const result = await digitalDevelopService.save(photo_id, params_json);
     res.json({ ok: true, ...result });
   } catch (err) {
-    next(err);
+    exposeRenderError(err, next);
   }
 });
 
@@ -47,7 +56,7 @@ router.post('/export', async (req, res, next) => {
     res.setHeader('Content-Disposition', `attachment; filename="photo_${photo_id}_export.jpg"`);
     res.send(buffer);
   } catch (err) {
-    next(err);
+    exposeRenderError(err, next);
   }
 });
 

@@ -149,7 +149,7 @@ async function renderPhoto({ photoId, paramsJson, maxWidth, quality = 90 }) {
     skipColorOps: true,
   });
 
-  const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = await img.rotate().raw().toBuffer({ resolveWithObject: true });
   const { width, height, channels } = info;
   const expectedBytes8 = width * height * channels;
   const is16bit = data.length >= expectedBytes8 * 2;
@@ -187,7 +187,16 @@ async function renderPreview(photoId, paramsJson) {
  * @returns {Promise<{buffer: Buffer, width: number, height: number}>}
  */
 async function renderExport(photoId, paramsJson) {
-  return renderPhoto({ photoId, paramsJson, maxWidth: EXPORT_MAX_WIDTH, quality: 95 });
+  try {
+    return await renderPhoto({ photoId, paramsJson, maxWidth: EXPORT_MAX_WIDTH, quality: 95 });
+  } catch (e) {
+    console.warn(`[DigitalDevelop] Export of photo ${photoId} at ${EXPORT_MAX_WIDTH}px failed (${e.message}); retrying at half resolution`);
+    try {
+      return await renderPhoto({ photoId, paramsJson, maxWidth: Math.floor(EXPORT_MAX_WIDTH / 2), quality: 95 });
+    } catch (e2) {
+      throw new Error(`Export failed at full resolution (${e.message}) and at half resolution (${e2.message})`);
+    }
+  }
 }
 
 // ── Save (overwrite positive + thumb + develop_params_json) ─────────────────

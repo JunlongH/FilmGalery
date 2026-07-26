@@ -1,462 +1,241 @@
 /**
- * LibraryScreen
+ * LibraryScreen — "More" tab.
  *
- * Modern dashboard combining previous tabs into organized sections.
- * Part of the 3-tab main navigation.
+ * Mode-aware entry list (ListItem rows) driven by AppModeContext. The previous
+ * dashboard layout + LibraryModeToggle + fadeAnim branches were retired in N5
+ * when the global ModeHeaderToggle took over mode switching.
  *
- * Sections:
- * - Favorites (quick access)
- * - Collections (Themes/Tags)
- * - Equipment overview
- * - Inventory summary
- * - Statistics overview
+ * Film entries:    Favorites / Collections / Stats / Films / Equipment /
+ *                  Inventory / ShotLog
+ * Digital entries: Favorites / Stats / Sessions / Map
+ *
+ * W5: Tapping ShotLog no longer drops the user into an empty ShotLogScreen
+ * (Library has no itemId in scope). Instead we query loaded film items first:
+ *   0 → Alert ("no loaded film")
+ *   1 → navigate directly with that itemId
+ *   many → open QuickMeterSheet as a "pick loaded roll" sheet (reused as-is,
+ *         with an onSelectItem override so we don't auto-open the metering
+ *         modal the way the FAB quick-meter flow does).
  */
 
-import React, { useCallback, useRef, useContext, useMemo, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   TouchableOpacity,
-  RefreshControl,
-  Dimensions,
-  Animated,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useTheme } from 'react-native-paper';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api } from '../../api/client';
-import { Icon } from '../../components/ui';
-import CachedImage from '../../components/CachedImage';
-import { ApiContext } from '../../context/ApiContext';
-import { getPhotoUrl } from '../../utils/urls';
-import { useApiQuery } from '../../hooks/useApiQuery';
+import { useNavigation } from '@react-navigation/native';
+import { useAppMode } from '../../context/AppModeContext';
 import { useT } from '../../i18n';
-import LibraryModeToggle, { type LibraryMode } from '../../components/digital/LibraryModeToggle';
-import DigitalLibraryScreen from './DigitalLibraryScreen';
+import { Icon } from '../../components/ui';
+import { getFilmItems } from '../../api/filmItems';
+import QuickMeterSheet from '../../components/metering/QuickMeterSheet';
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48) / 2;
-
-interface LibraryStats {
-  gear: { cameras: any[]; lenses: any[]; films: any[] };
-  summary: any;
+interface EntryDef {
+  key: string;
+  icon: string;
+  color: string;
+  bg: string;
+  labelKey: string;
+  target: string;
+  params?: Record<string, any>;
 }
+
+const FILM_ENTRIES: EntryDef[] = [
+  {
+    key: 'favorites',
+    icon: 'heart',
+    color: '#E53935',
+    bg: '#FFEBEE',
+    labelKey: 'library.favorites',
+    target: 'Favorites',
+    params: { mode: 'film' },
+  },
+  {
+    key: 'collections',
+    icon: 'tags',
+    color: '#7B1FA2',
+    bg: '#F3E5F5',
+    labelKey: 'library.collections',
+    target: 'Collections',
+    params: { mode: 'film' },
+  },
+  {
+    key: 'stats',
+    icon: 'bar-chart-2',
+    color: '#0097A7',
+    bg: '#E0F7FA',
+    labelKey: 'library.statistics',
+    target: 'Stats',
+    params: { mode: 'film' },
+  },
+  {
+    key: 'films',
+    icon: 'film',
+    color: '#388E3C',
+    bg: '#E8F5E9',
+    labelKey: 'library.filmCatalog',
+    target: 'Films',
+  },
+  {
+    key: 'equipment',
+    icon: 'camera',
+    color: '#1976D2',
+    bg: '#E3F2FD',
+    labelKey: 'library.equipment',
+    target: 'Equipment',
+  },
+  {
+    key: 'inventory',
+    icon: 'package',
+    color: '#F57C00',
+    bg: '#FFF3E0',
+    labelKey: 'library.inventory',
+    target: 'Inventory',
+  },
+  {
+    key: 'shotlog',
+    icon: 'calendar',
+    color: '#5D4037',
+    bg: '#EFEBE9',
+    labelKey: 'library.shotLog',
+    target: 'ShotLog',
+  },
+];
+
+const DIGITAL_ENTRIES: EntryDef[] = [
+  {
+    key: 'favorites',
+    icon: 'heart',
+    color: '#E53935',
+    bg: '#FFEBEE',
+    labelKey: 'library.favorites',
+    target: 'Favorites',
+    params: { mode: 'digital' },
+  },
+  {
+    key: 'stats',
+    icon: 'bar-chart-2',
+    color: '#0097A7',
+    bg: '#E0F7FA',
+    labelKey: 'library.statistics',
+    target: 'Stats',
+    params: { mode: 'digital' },
+  },
+  {
+    key: 'sessions',
+    icon: 'image',
+    color: '#7B1FA2',
+    bg: '#F3E5F5',
+    labelKey: 'library.sessions',
+    target: 'Sessions',
+  },
+  {
+    key: 'map',
+    icon: 'map',
+    color: '#FB8C00',
+    bg: '#FFF3E0',
+    labelKey: 'library.map',
+    target: 'Map',
+  },
+];
 
 export default function LibraryScreen() {
   const theme = useTheme();
-  const navigation = useNavigation();
-  const { baseUrl } = useContext(ApiContext);
+  const navigation = useNavigation<any>();
+  const { mode } = useAppMode();
   const t = useT();
 
-  const [mode, setMode] = useState<LibraryMode>('film');
-  const [modeLoaded, setModeLoaded] = useState(false);
+  const [resolvingShotLog, setResolvingShotLog] = useState(false);
+  const [showLoadedPicker, setShowLoadedPicker] = useState(false);
 
-  useEffect(() => {
-    if (!baseUrl) {
-      setModeLoaded(true);
-      return;
-    }
-    let cancelled = false;
-    AsyncStorage.getItem(`library_mode@${baseUrl}`)
-      .then((saved) => {
-        if (cancelled) return;
-        setMode(saved === 'digital' ? 'digital' : 'film');
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setModeLoaded(true); });
-    return () => { cancelled = true; };
-  }, [baseUrl]);
-
-  const favoritesKey = baseUrl && mode === 'film' ? `favorites@${baseUrl}#film` : null;
-  const tagsKey = baseUrl && mode === 'film' ? `tags@${baseUrl}#film` : null;
-  const statsKey = baseUrl && mode === 'film' ? `libraryStats@${baseUrl}#film` : null;
-
-  const favoritesQuery = useApiQuery<any[]>(
-    favoritesKey,
-    () => api.http.get('/api/photos/favorites', { mode: 'film' }),
+  const entries = useMemo<EntryDef[]>(
+    () => (mode === 'digital' ? DIGITAL_ENTRIES : FILM_ENTRIES),
+    [mode],
   );
-  const tagsQuery = useApiQuery<any[]>(
-    tagsKey,
-    () => api.http.get('/api/tags', { mode: 'film' }),
-  );
-  const statsQuery = useApiQuery<LibraryStats>(
-    statsKey,
-    async () => {
-      const [gear, summary] = await Promise.all([
-        api.http.get('/api/stats/gear', { mode: 'film' }).catch(() => ({ cameras: [], lenses: [], films: [] })),
-        api.http.get('/api/stats/summary', { mode: 'film' }).catch(() => ({})),
-      ]);
-      return { gear, summary };
-    },
-  );
-
-  const recentFavorites = useMemo(
-    () => (favoritesQuery.data ?? []).slice(0, 4),
-    [favoritesQuery.data],
-  );
-  const topThemes = useMemo(() => (tagsQuery.data ?? []).slice(0, 6), [tagsQuery.data]);
-  const topEquipment = useMemo(() => {
-    const cameras = statsQuery.data?.gear?.cameras;
-    return (Array.isArray(cameras) ? cameras : []).slice(0, 4).map((cam: any, idx: number) => ({
-      id: idx + 1,
-      name: cam.name,
-      photo_count: cam.count || 0,
-    }));
-  }, [statsQuery.data]);
-
-  const stats = useMemo(() => {
-    const summary = statsQuery.data?.summary ?? {};
-    const cameras = statsQuery.data?.gear?.cameras;
-    return {
-      favorites: favoritesQuery.data?.length ?? 0,
-      themes: tagsQuery.data?.length ?? 0,
-      equipment: Array.isArray(cameras) ? cameras.length : 0,
-      inventory: summary.inventory_in_stock || summary.inventory_total || 0,
-      rolls: summary.total_rolls || 0,
-      photos: summary.total_photos || 0,
-    };
-  }, [statsQuery.data, favoritesQuery.data, tagsQuery.data]);
-
-  const refreshing =
-    favoritesQuery.refreshing || tagsQuery.refreshing || statsQuery.refreshing;
-  const onRefresh = useCallback(() => {
-    favoritesQuery.refresh();
-    tagsQuery.refresh();
-    statsQuery.refresh();
-  }, [favoritesQuery.refresh, tagsQuery.refresh, statsQuery.refresh]);
-
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
-
-  // Animate on focus
-  useFocusEffect(
-    useCallback(() => {
-      fadeAnim.setValue(0);
-      slideAnim.setValue(20);
-
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, [])
-  );
-
-  const didMountRef = useRef(false);
-  useEffect(() => {
-    if (!didMountRef.current) { didMountRef.current = true; return; }
-    if (mode === 'film') {
-      fadeAnim.setValue(1);
-      slideAnim.setValue(0);
-    }
-  }, [mode, fadeAnim, slideAnim]);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  // Render empty state for a section
-  const renderEmpty = (text: any) => (
-    <View style={styles.emptyState}>
-      <Icon name="inbox" size={32} color={theme.colors.onSurfaceVariant} />
-      <Text style={styles.emptyText}>{text}</Text>
-    </View>
-  );
+  // W5: Resolve which loaded film item to open the ShotLog for, then navigate.
+  //   0 loaded → Alert. 1 → straight to ShotLog. many → open picker sheet.
+  const openShotLog = useCallback(async () => {
+    setResolvingShotLog(true);
+    try {
+      const res: any = await getFilmItems({ status: 'loaded', limit: 50 });
+      const items = res && Array.isArray(res.items) ? res.items : [];
+      if (items.length === 0) {
+        Alert.alert(t('library.shotLog'), t('shot.noLoaded'));
+        return;
+      }
+      if (items.length === 1) {
+        const item = items[0];
+        const filmName =
+          item.film_name || item.film_type || t('home.rollFallback', { id: item.id });
+        navigation.navigate('ShotLog', { itemId: item.id, filmName });
+        return;
+      }
+      // Multiple loaded: defer to the picker sheet (rendered below). It calls
+      // onSelectItem with the chosen item + resolved film name.
+      setShowLoadedPicker(true);
+    } catch (err) {
+      console.warn('[LibraryScreen] Failed to resolve loaded films for ShotLog', err);
+      Alert.alert(t('library.shotLog'), t('shot.loadFailed'));
+    } finally {
+      setResolvingShotLog(false);
+    }
+  }, [navigation, t]);
+
+  const onPress = (entry: EntryDef) => {
+    if (entry.key === 'shotlog') {
+      openShotLog();
+      return;
+    }
+    navigation.navigate(entry.target as any, entry.params);
+  };
 
   return (
-    <View style={styles.container}>
-      {modeLoaded && (
-        <View style={styles.toggleBar}>
-          <LibraryModeToggle value={mode} onChange={setMode} />
-        </View>
-      )}
-      {mode === 'digital' ? (
-        <DigitalLibraryScreen />
-      ) : (
-      <Animated.ScrollView
-        style={[styles.scrollView, {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        }]}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[theme.colors.primary]}
-            tintColor={theme.colors.primary}
-          />
-        }
-      >
-        {/* Quick Stats */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('library.overview')}</Text>
-          </View>
-          <View style={styles.statsGrid}>
-            <TouchableOpacity
-              style={styles.statCard}
-              onPress={() => navigation.navigate('Stats', { mode: 'film' })}
-            >
-              <View style={styles.statIconContainer}>
-                <Icon name="film" size={22} color={theme.colors.primary} />
-              </View>
-              <Text style={styles.statValue}>{stats.rolls}</Text>
-              <Text style={styles.statLabel}>{t('library.rolls')}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.statCard}
-              onPress={() => navigation.navigate('Stats', { mode: 'film' })}
-            >
-              <View style={styles.statIconContainer}>
-                <Icon name="image" size={22} color={theme.colors.primary} />
-              </View>
-              <Text style={styles.statValue}>{stats.photos}</Text>
-              <Text style={styles.statLabel}>{t('library.photos')}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.statCard}
-              onPress={() => navigation.navigate('Favorites', { mode: 'film' })}
-            >
-              <View style={[styles.statIconContainer, { backgroundColor: '#FFE4E4' }]}>
-                <Icon name="heart" size={22} color="#E53935" />
-              </View>
-              <Text style={styles.statValue}>{stats.favorites}</Text>
-              <Text style={styles.statLabel}>{t('library.favorites')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Recent Favorites */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('library.recentFavorites')}</Text>
-            <TouchableOpacity
-              style={styles.seeAllButton}
-              onPress={() => navigation.navigate('Favorites', { mode: 'film' })}
-            >
-              <Text style={styles.seeAllText}>{t('common.seeAll')}</Text>
-              <Icon name="chevron-right" size={16} color={theme.colors.primary} />
-            </TouchableOpacity>
-          </View>
-
-          {recentFavorites.length > 0 ? (
-            <View style={styles.quickAccessGrid}>
-              {recentFavorites.map((photo, index) => (
-                <TouchableOpacity
-                  key={photo.id}
-                  style={styles.favoriteCard}
-                  onPress={() => navigation.navigate('PhotoView', { photo, photosKey: favoritesKey ?? undefined, initialIndex: index, viewMode: 'positive' })}
-                >
-                  {getPhotoUrl(baseUrl, photo, 'thumb') ? (
-                    <CachedImage
-                      uri={getPhotoUrl(baseUrl, photo, 'thumb')!}
-                      style={styles.favoriteCardImage}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={[styles.favoriteCardImage, { justifyContent: 'center', alignItems: 'center' }]}>
-                      <Icon name="image" size={32} color={theme.colors.onSurfaceVariant} />
-                    </View>
-                  )}
-                  {/* Semi-transparent overlay with photo info */}
-                  <View style={styles.favoriteCardOverlay}>
-                    {photo.caption ? (
-                      <Text style={styles.favoriteCardNote} numberOfLines={2}>
-                        {photo.caption}
-                      </Text>
-                    ) : null}
-                    <View style={styles.favoriteCardMeta}>
-                      {photo.date_taken || photo.taken_at ? (
-                        <Text style={styles.favoriteCardMetaText} numberOfLines={1}>
-                          {new Date(photo.date_taken || photo.taken_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
-                        </Text>
-                      ) : null}
-                      {(photo.camera || photo.film_name) ? (
-                        <Text style={styles.favoriteCardMetaText} numberOfLines={1}>
-                          {photo.camera || photo.film_name}
-                        </Text>
-                      ) : null}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={styles.content}
+    >
+      <View style={styles.list}>
+        {entries.map((entry) => (
+          <TouchableOpacity
+            key={entry.key}
+            style={[styles.row, { backgroundColor: theme.colors.surface }]}
+            onPress={() => onPress(entry)}
+            activeOpacity={0.85}
+            disabled={entry.key === 'shotlog' && resolvingShotLog}
+            testID={`entry-${entry.key}`}
+          >
+            <View style={[styles.iconWrap, { backgroundColor: entry.bg }]}>
+              {entry.key === 'shotlog' && resolvingShotLog ? (
+                <ActivityIndicator color={entry.color} />
+              ) : (
+                <Icon name={entry.icon as any} size={22} color={entry.color} />
+              )}
             </View>
-          ) : renderEmpty(t('library.noFavorites'))}
-        </View>
-
-        {/* Collections/Themes */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('library.collections')}</Text>
-            <TouchableOpacity
-              style={styles.seeAllButton}
-              onPress={() => navigation.navigate('Collections', { mode: 'film' })}
-            >
-              <Text style={styles.seeAllText}>{t('common.seeAll')}</Text>
-              <Icon name="chevron-right" size={16} color={theme.colors.primary} />
-            </TouchableOpacity>
-          </View>
-
-          {topThemes.length > 0 ? (
-            <View style={styles.themesGrid}>
-              {topThemes.map((tag) => (
-                <TouchableOpacity
-                  key={tag.id}
-                  style={styles.themeChip}
-                  onPress={() => navigation.navigate('TagDetail', {
-                    tagId: tag.id,
-                    tagName: tag.name,
-                    mode: 'film',
-                  })}
-                >
-                  <Icon
-                    name="tag"
-                    size={14}
-                    color={tag.color || theme.colors.primary}
-                    style={styles.themeIcon}
-                  />
-                  <Text style={styles.themeName}>{tag.name}</Text>
-                  <Text style={styles.themeCount}>{tag.photos_count || tag.photo_count || 0}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : renderEmpty(t('library.noCollections'))}
-        </View>
-
-        {/* Equipment */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('library.equipment')}</Text>
-            <TouchableOpacity
-              style={styles.seeAllButton}
-              onPress={() => navigation.navigate('Equipment')}
-            >
-              <Text style={styles.seeAllText}>{t('common.seeAll')}</Text>
-              <Icon name="chevron-right" size={16} color={theme.colors.primary} />
-            </TouchableOpacity>
-          </View>
-
-          {topEquipment.length > 0 ? (
-            <View>
-              {topEquipment.map((item, index) => (
-                <TouchableOpacity
-                  key={item.id || index}
-                  style={styles.equipmentRow}
-                  onPress={() => navigation.navigate('EquipmentRolls', {
-                    type: 'camera',
-                    id: item.name, // Use camera name since stats/gear doesn't return equip_id
-                    name: item.name
-                  })}
-                >
-                  <View style={styles.equipmentIcon}>
-                    <Icon
-                      name="camera"
-                      size={20}
-                      color={theme.colors.secondary}
-                    />
-                  </View>
-                  <View style={styles.equipmentInfo}>
-                    <Text style={styles.equipmentName}>{item.name}</Text>
-                    <Text style={styles.equipmentMeta}>
-                      {t('common.photosCount', { count: item.photo_count || 0 })}
-                    </Text>
-                  </View>
-                  <Icon name="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : renderEmpty(t('library.noEquipment'))}
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('library.quickAccess')}</Text>
-          </View>
-
-          <View style={styles.quickAccessGrid}>
-            <TouchableOpacity
-              style={styles.quickCard}
-              onPress={() => navigation.navigate('Inventory')}
-            >
-              <View style={[styles.quickCardImage, {
-                justifyContent: 'center',
-                alignItems: 'center',
-                backgroundColor: theme.colors.primaryContainer + '40',
-              }]}>
-                <Icon name="package" size={40} color={theme.colors.primary} />
-              </View>
-              <View style={styles.quickCardContent}>
-                <Text style={styles.quickCardTitle}>{t('library.inventory')}</Text>
-                <Text style={styles.quickCardSubtitle}>{t('common.inStock', { count: stats.inventory })}</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.quickCard}
-              onPress={() => navigation.navigate('Stats', { mode: 'film' })}
-            >
-              <View style={[styles.quickCardImage, {
-                justifyContent: 'center',
-                alignItems: 'center',
-                backgroundColor: theme.colors.secondaryContainer + '40',
-              }]}>
-                <Icon name="bar-chart-2" size={40} color={theme.colors.secondary} />
-              </View>
-              <View style={styles.quickCardContent}>
-                <Text style={styles.quickCardTitle}>{t('library.statistics')}</Text>
-                <Text style={styles.quickCardSubtitle}>{t('library.viewInsights')}</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.quickCard}
-              onPress={() => navigation.navigate('Films')}
-            >
-              <View style={[styles.quickCardImage, {
-                justifyContent: 'center',
-                alignItems: 'center',
-                backgroundColor: theme.colors.tertiaryContainer + '40',
-              }]}>
-                <Icon name="film" size={40} color={theme.colors.tertiary} />
-              </View>
-              <View style={styles.quickCardContent}>
-                <Text style={styles.quickCardTitle}>{t('library.filmCatalog')}</Text>
-                <Text style={styles.quickCardSubtitle}>{t('library.browseFilmStocks')}</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.quickCard}
-              onPress={() => navigation.navigate('Negatives')}
-            >
-              <View style={[styles.quickCardImage, {
-                justifyContent: 'center',
-                alignItems: 'center',
-                backgroundColor: theme.colors.primaryContainer + '40',
-              }]}>
-                <Icon name="contrast" size={40} color={theme.colors.primary} />
-              </View>
-              <View style={styles.quickCardContent}>
-                <Text style={styles.quickCardTitle}>{t('library.negatives')}</Text>
-                <Text style={styles.quickCardSubtitle}>{t('library.allNegatives')}</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Animated.ScrollView>
-      )}
-    </View>
+            <Text style={[styles.label, { color: theme.colors.onSurface }]}>
+              {t(entry.labelKey as any)}
+            </Text>
+            <Icon name="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />
+          </TouchableOpacity>
+        ))}
+      </View>
+      <QuickMeterSheet
+        visible={showLoadedPicker}
+        onClose={() => setShowLoadedPicker(false)}
+        onSelectItem={(item, filmName) => {
+          setShowLoadedPicker(false);
+          navigation.navigate('ShotLog', { itemId: item.id, filmName });
+        }}
+      />
+    </ScrollView>
   );
 }
 
@@ -464,217 +243,32 @@ const createStyles = (theme: any) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
     },
-    toggleBar: {
-      paddingHorizontal: 16,
-      paddingTop: 12,
-    },
-    scrollView: {
-      flex: 1,
-    },
-    contentContainer: {
-      padding: 16,
+    content: {
+      padding: 12,
       paddingBottom: 100,
     },
-    section: {
-      marginBottom: 24,
+    list: {
+      gap: 8,
     },
-    sectionHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 12,
-    },
-    sectionTitle: {
-      fontSize: 18,
-      fontWeight: '700' as const,
-      color: theme.colors.onSurface,
-    },
-    seeAllButton: {
+    row: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 4,
-      paddingHorizontal: 8,
+      gap: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      borderRadius: 12,
     },
-    seeAllText: {
-      fontSize: 14,
-      color: theme.colors.primary,
-      marginRight: 4,
-    },
-    statsGrid: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      paddingHorizontal: 0,
-    },
-    statCard: {
-      flex: 1,
-      marginHorizontal: 4,
-      backgroundColor: theme.colors.surface,
-      borderRadius: 16,
-      padding: 12,
-      alignItems: 'center',
-      elevation: 1,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
-    },
-    statIconContainer: {
+    iconWrap: {
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: theme.colors.primaryContainer,
+      alignItems: 'center',
       justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 6,
     },
-    statValue: {
-      fontSize: 18,
-      fontWeight: 'bold' as const,
-      color: theme.colors.onSurface,
-    },
-    statLabel: {
-      fontSize: 11,
-      color: theme.colors.onSurfaceVariant,
-      marginTop: 2,
-    },
-    quickAccessGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      marginHorizontal: -8,
-    },
-    quickCard: {
-      width: CARD_WIDTH,
-      margin: 8,
-      backgroundColor: theme.colors.surface,
-      borderRadius: 16,
-      overflow: 'hidden',
-    },
-    quickCardImage: {
-      width: '100%',
-      height: 100,
-      backgroundColor: theme.colors.surfaceVariant,
-    },
-    quickCardContent: {
-      padding: 12,
-    },
-    quickCardTitle: {
-      fontSize: 14,
-      fontWeight: '600' as const,
-      color: theme.colors.onSurface,
-    },
-    quickCardSubtitle: {
-      fontSize: 12,
-      color: theme.colors.onSurfaceVariant,
-      marginTop: 2,
-    },
-    // Favorite card with overlay
-    favoriteCard: {
-      width: CARD_WIDTH,
-      margin: 8,
-      borderRadius: 12,
-      overflow: 'hidden',
-      position: 'relative',
-    },
-    favoriteCardImage: {
-      width: '100%',
-      height: 140,
-      backgroundColor: theme.colors.surfaceVariant,
-    },
-    favoriteCardOverlay: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      minHeight: 36,
-    },
-    favoriteCardNote: {
-      fontSize: 13,
-      fontWeight: '500' as const,
-      color: '#FFFFFF',
-      marginBottom: 4,
-    },
-    favoriteCardMeta: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-    },
-    favoriteCardMetaText: {
-      fontSize: 11,
-      color: 'rgba(255, 255, 255, 0.8)',
-    },
-    themesGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      marginHorizontal: -4,
-    },
-    themeChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: theme.colors.surface,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 20,
-      margin: 4,
-      borderWidth: 1,
-      borderColor: theme.colors.outline + '30',
-    },
-    themeIcon: {
-      marginRight: 6,
-    },
-    themeName: {
-      fontSize: 14,
-      color: theme.colors.onSurface,
-    },
-    themeCount: {
-      fontSize: 12,
-      color: theme.colors.onSurfaceVariant,
-      marginLeft: 6,
-      backgroundColor: theme.colors.surfaceVariant,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 10,
-    },
-    equipmentRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: theme.colors.surface,
-      padding: 12,
-      borderRadius: 12,
-      marginBottom: 8,
-    },
-    equipmentIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: theme.colors.secondaryContainer,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginRight: 12,
-    },
-    equipmentInfo: {
+    label: {
       flex: 1,
-    },
-    equipmentName: {
-      fontSize: 14,
-      fontWeight: '600' as const,
-      color: theme.colors.onSurface,
-    },
-    equipmentMeta: {
-      fontSize: 12,
-      color: theme.colors.onSurfaceVariant,
-      marginTop: 2,
-    },
-    emptyState: {
-      alignItems: 'center',
-      padding: 24,
-    },
-    emptyText: {
-      fontSize: 14,
-      color: theme.colors.onSurfaceVariant,
-      marginTop: 8,
+      fontSize: 15,
+      fontWeight: '500' as const,
     },
   });

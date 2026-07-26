@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -12,11 +13,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // UI Components
 import { HeaderRight } from './src/components/navigation';
 import ApiErrorSnackbar from './src/components/ApiErrorSnackbar';
+import ModeHeaderToggle from './src/components/ModeHeaderToggle';
 
 // Tab home screens
 import HomeScreen from './src/screens/timeline/HomeScreen';
 import MapScreen from './src/screens/map/MapScreen';
 import LibraryScreen from './src/screens/library/LibraryScreen';
+import OverviewScreen from './src/screens/overview/OverviewScreen';
+import AlbumsHomeScreen from './src/screens/albums/AlbumsHomeScreen';
 
 // Detail screens
 import RollDetailScreen from './src/screens/timeline/RollDetailScreen';
@@ -31,8 +35,8 @@ import TagDetailScreen from './src/screens/library/TagDetailScreen';
 import FilmRollsScreen from './src/screens/library/FilmRollsScreen';
 import InventoryScreen from './src/screens/library/InventoryScreen';
 import FilmItemDetailScreen from './src/screens/library/FilmItemDetailScreen';
-import DigitalAlbumListScreen from './src/screens/library/DigitalAlbumListScreen';
 import DigitalAlbumDetailScreen from './src/screens/library/DigitalAlbumDetailScreen';
+import SessionsScreen from './src/screens/library/SessionsScreen';
 import ShotLogScreen from './src/screens/shooting/ShotLogScreen';
 import StatsScreen from './src/screens/library/StatsScreen';
 import EquipmentScreen from './src/screens/library/EquipmentScreen';
@@ -41,6 +45,7 @@ import LocationDiagnosticScreen from './src/screens/settings/LocationDiagnosticS
 import AISettingsScreen from './src/screens/settings/AISettingsScreen';
 import LocationPickerScreen from './src/screens/location/LocationPickerScreen';
 import { LocationPickerProvider } from './src/context/LocationPickerContext';
+import { AppModeProvider } from './src/context/AppModeContext';
 import { ApiContext } from './src/context/ApiContext';
 import { configureApi, loadAuthToken, setApiOnUnauthorized } from './src/api/client';
 import appTheme, { appDarkTheme } from './src/theme';
@@ -51,8 +56,10 @@ const RootStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 // Phase 2B: ref for programmatic navigation on 401 (setApiOnUnauthorized)
 const navigationRef = createNavigationContainerRef<any>();
+const OverviewStack = createNativeStackNavigator();
 const TimelineStack = createNativeStackNavigator();
 const MapStack = createNativeStackNavigator();
+const AlbumsStack = createNativeStackNavigator();
 const LibraryStack = createNativeStackNavigator();
 
 const stackScreenOptions = (theme: any) =>
@@ -62,6 +69,37 @@ const stackScreenOptions = (theme: any) =>
     headerTitleStyle: { fontWeight: '600' as const, letterSpacing: 0.3 },
     contentStyle: { backgroundColor: theme.colors.background },
   }) as any;
+
+const styles = StyleSheet.create({
+  headerRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 4,
+  },
+});
+
+function OverviewStackScreen() {
+  const theme = useTheme();
+  const t = useT();
+  return (
+    <OverviewStack.Navigator screenOptions={stackScreenOptions(theme)}>
+      <OverviewStack.Screen
+        name="OverviewHome"
+        component={OverviewScreen}
+        options={{
+          title: t('tab.overview'),
+          headerTitle: t('overview.title'),
+          headerRight: () => (
+            <View style={styles.headerRightRow}>
+              <ModeHeaderToggle />
+              <HeaderRight showQuickMeter={true} showSettings={true} showAI={true} />
+            </View>
+          ),
+        }}
+      />
+    </OverviewStack.Navigator>
+  );
+}
 
 function TimelineStackScreen() {
   const theme = useTheme();
@@ -74,7 +112,12 @@ function TimelineStackScreen() {
         options={{
           title: t('tab.timeline'),
           headerTitle: 'Film Gallery',
-          headerRight: () => <HeaderRight showQuickMeter={true} showSettings={true} showAI={true} />,
+          headerRight: () => (
+            <View style={styles.headerRightRow}>
+              <ModeHeaderToggle />
+              <HeaderRight showQuickMeter={true} showSettings={true} showAI={true} />
+            </View>
+          ),
         }}
       />
     </TimelineStack.Navigator>
@@ -99,6 +142,36 @@ function MapStackScreen() {
   );
 }
 
+function AlbumsStackScreen() {
+  const theme = useTheme();
+  const t = useT();
+  return (
+    <AlbumsStack.Navigator screenOptions={stackScreenOptions(theme)}>
+      <AlbumsStack.Screen
+        name="AlbumsHome"
+        component={AlbumsHomeScreen}
+        options={{
+          title: t('tab.albums'),
+          headerTitle: t('tab.albums'),
+          headerRight: () => (
+            <View style={styles.headerRightRow}>
+              <ModeHeaderToggle />
+              <HeaderRight showQuickMeter={false} showSettings={true} />
+            </View>
+          ),
+        }}
+      />
+      <AlbumsStack.Screen
+        name="DigitalAlbumDetail"
+        component={DigitalAlbumDetailScreen}
+        options={({ route }) => ({
+          title: (route.params as any)?.title || t('digital.albumDetailTitle'),
+        })}
+      />
+    </AlbumsStack.Navigator>
+  );
+}
+
 function LibraryStackScreen() {
   const theme = useTheme();
   const t = useT();
@@ -108,9 +181,14 @@ function LibraryStackScreen() {
         name="LibraryHome"
         component={LibraryScreen}
         options={{
-          title: t('tab.library'),
-          headerTitle: t('title.myLibrary'),
-          headerRight: () => <HeaderRight showQuickMeter={false} showSettings={true} />,
+          title: t('tab.more'),
+          headerTitle: t('tab.more'),
+          headerRight: () => (
+            <View style={styles.headerRightRow}>
+              <ModeHeaderToggle />
+              <HeaderRight showQuickMeter={false} showSettings={true} />
+            </View>
+          ),
         }}
       />
       <LibraryStack.Screen
@@ -122,11 +200,6 @@ function LibraryStackScreen() {
         name="Collections"
         component={ThemesScreen}
         options={{ title: t('title.collections') }}
-      />
-      <LibraryStack.Screen
-        name="TagDetail"
-        component={TagDetailScreen}
-        options={({ route }) => ({ title: (route.params as any)?.tagName || t('title.tagDetails') })}
       />
       <LibraryStack.Screen
         name="Equipment"
@@ -169,16 +242,9 @@ function LibraryStackScreen() {
         options={{ title: t('title.negatives') }}
       />
       <LibraryStack.Screen
-        name="DigitalAlbumList"
-        component={DigitalAlbumListScreen}
-        options={{ title: t('digital.albumsTitle') }}
-      />
-      <LibraryStack.Screen
-        name="DigitalAlbumDetail"
-        component={DigitalAlbumDetailScreen}
-        options={({ route }) => ({
-          title: (route.params as any)?.title || t('digital.albumDetailTitle'),
-        })}
+        name="Sessions"
+        component={SessionsScreen}
+        options={{ title: t('title.sessions') }}
       />
     </LibraryStack.Navigator>
   );
@@ -200,8 +266,14 @@ function HomeTabs() {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof MaterialCommunityIcons.glyphMap;
           switch (route.name) {
+            case 'Overview':
+              iconName = focused ? 'view-dashboard' : 'view-dashboard-outline';
+              break;
             case 'Timeline':
               iconName = focused ? 'movie-open' : 'movie-open-outline';
+              break;
+            case 'Albums':
+              iconName = focused ? 'image-multiple' : 'image-multiple-outline';
               break;
             case 'Map':
               iconName = focused ? 'map' : 'map-outline';
@@ -234,13 +306,15 @@ function HomeTabs() {
         headerShown: false,
       })}
     >
+      <Tab.Screen name="Overview" component={OverviewStackScreen} options={{ title: t('tab.overview') }} />
       <Tab.Screen name="Timeline" component={TimelineStackScreen} options={{ title: t('tab.timeline') }} />
+      <Tab.Screen name="Albums" component={AlbumsStackScreen} options={{ title: t('tab.albums') }} />
       <Tab.Screen
         name="Map"
         component={MapStackScreen}
         options={{ freezeOnBlur: true, title: t('tab.map') }}
       />
-      <Tab.Screen name="Library" component={LibraryStackScreen} options={{ title: t('tab.library') }} />
+      <Tab.Screen name="Library" component={LibraryStackScreen} options={{ title: t('tab.more') }} />
     </Tab.Navigator>
   );
 }
@@ -312,76 +386,83 @@ export default function App() {
 
   return (
     <ApiContext.Provider value={apiContextValue}>
-      <PaperProvider theme={themeToUse as any}>
-        <SafeAreaProvider>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-        <NavigationContainer ref={navigationRef} theme={themeToUse as any}>
-          <LocationPickerProvider>
-          <RootStack.Navigator
-            initialRouteName="Main"
-            screenOptions={{
-              headerStyle: { backgroundColor: themeToUse.colors.surface },
-              headerTintColor: themeToUse.colors.primary,
-              headerTitleStyle: { fontWeight: '600' as const, letterSpacing: 0.3 },
-              contentStyle: { backgroundColor: themeToUse.colors.background },
-            } as any}
-          >
-            <RootStack.Screen
-              name="Main"
-              component={HomeTabs}
-              options={{ headerShown: false }}
-            />
-            {/* Shared detail screens (reachable from any tab) */}
-            <RootStack.Screen
-              name="RollDetail"
-              component={RollDetailScreen}
-              options={({ route }) => ({ title: (route.params as any)?.rollName || t('title.rollDetails') })}
-            />
-            {/* Full-screen / modal flows */}
-            <RootStack.Screen
-              name="PhotoView"
-              component={PhotoViewScreen}
-              options={{ title: t('title.photo'), headerShown: false, presentation: 'fullScreenModal' }}
-            />
-            <RootStack.Screen
-              name="ShotLog"
-              component={ShotLogScreen}
-              options={{ title: t('title.shotLog'), presentation: 'fullScreenModal' }}
-            />
-            {/* Settings group */}
-            <RootStack.Screen
-              name="Settings"
-              component={SettingsScreen}
-              options={{ title: '设置' }}
-            />
-            <RootStack.Screen
-              name="AISettings"
-              component={AISettingsScreen}
-              options={{ title: 'AI 助手' }}
-            />
-            <RootStack.Screen
-              name="LocationDiagnostic"
-              component={LocationDiagnosticScreen}
-              options={{ title: '位置诊断' }}
-            />
-            <RootStack.Screen
-              name="Pairing"
-              component={PairingScreen}
-              options={{ title: '设备配对' }}
-            />
-            <RootStack.Screen
-              name="LocationPicker"
-              component={LocationPickerScreen}
-              options={{ presentation: 'fullScreenModal', headerShown: false }}
-            />
-          </RootStack.Navigator>
-          </LocationPickerProvider>
-          <StatusBar style={darkMode ? 'light' : 'dark'} />
-          <ApiErrorSnackbar />
-        </NavigationContainer>
-        </GestureHandlerRootView>
-        </SafeAreaProvider>
-      </PaperProvider>
+      <AppModeProvider>
+        <PaperProvider theme={themeToUse as any}>
+          <SafeAreaProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+          <NavigationContainer ref={navigationRef} theme={themeToUse as any}>
+            <LocationPickerProvider>
+            <RootStack.Navigator
+              initialRouteName="Main"
+              screenOptions={{
+                headerStyle: { backgroundColor: themeToUse.colors.surface },
+                headerTintColor: themeToUse.colors.primary,
+                headerTitleStyle: { fontWeight: '600' as const, letterSpacing: 0.3 },
+                contentStyle: { backgroundColor: themeToUse.colors.background },
+              } as any}
+            >
+              <RootStack.Screen
+                name="Main"
+                component={HomeTabs}
+                options={{ headerShown: false }}
+              />
+              {/* Shared detail screens (reachable from any tab) */}
+              <RootStack.Screen
+                name="RollDetail"
+                component={RollDetailScreen}
+                options={({ route }) => ({ title: (route.params as any)?.rollName || t('title.rollDetails') })}
+              />
+              <RootStack.Screen
+                name="TagDetail"
+                component={TagDetailScreen}
+                options={({ route }) => ({ title: (route.params as any)?.tagName || t('title.tagDetails') })}
+              />
+              {/* Full-screen / modal flows */}
+              <RootStack.Screen
+                name="PhotoView"
+                component={PhotoViewScreen}
+                options={{ title: t('title.photo'), headerShown: false, presentation: 'fullScreenModal' }}
+              />
+              <RootStack.Screen
+                name="ShotLog"
+                component={ShotLogScreen}
+                options={{ title: t('title.shotLog'), presentation: 'fullScreenModal' }}
+              />
+              {/* Settings group */}
+              <RootStack.Screen
+                name="Settings"
+                component={SettingsScreen}
+                options={{ title: '设置' }}
+              />
+              <RootStack.Screen
+                name="AISettings"
+                component={AISettingsScreen}
+                options={{ title: 'AI 助手' }}
+              />
+              <RootStack.Screen
+                name="LocationDiagnostic"
+                component={LocationDiagnosticScreen}
+                options={{ title: '位置诊断' }}
+              />
+              <RootStack.Screen
+                name="Pairing"
+                component={PairingScreen}
+                options={{ title: '设备配对' }}
+              />
+              <RootStack.Screen
+                name="LocationPicker"
+                component={LocationPickerScreen}
+                options={{ presentation: 'fullScreenModal', headerShown: false }}
+              />
+            </RootStack.Navigator>
+            </LocationPickerProvider>
+            <StatusBar style={darkMode ? 'light' : 'dark'} />
+            <ApiErrorSnackbar />
+          </NavigationContainer>
+          </GestureHandlerRootView>
+          </SafeAreaProvider>
+        </PaperProvider>
+      </AppModeProvider>
     </ApiContext.Provider>
   );
 }

@@ -16,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const { MigrationRunner, hasMigrationRun } = require('./migration-tracker');
+const { runAsync } = require('./db-helpers');
 const { getDbPath } = require('../config/db-config');
 
 const BACKUP_RETENTION = 3;
@@ -27,6 +28,7 @@ const REGISTERED_MIGRATIONS = [
   '20260701_digital_mode',
   '20260726_relax_photos_roll_id',
   '20260726_normalize_photo_path_separators',
+  '20260726_digital_rating_like_only',
 ];
 
 /**
@@ -130,6 +132,14 @@ async function runAllMigrations() {
     await runNormalizePhotoPathSeparators();
   });
 
+  // 7. Digital mode dropped the 1-5 star rating; rating is now like-only
+  //    (0/1). Collapse any legacy 2-5 digital ratings to 1 (liked).
+  runner.add('20260726_digital_rating_like_only', async () => {
+    await runAsync(
+      `UPDATE photos SET rating = 1 WHERE source_type = 'digital' AND IFNULL(CAST(rating AS INTEGER), 0) > 1`,
+    );
+  });
+
   const results = await runner.runAll();
   console.log('[MIGRATIONS] Unified migration complete:', results);
   return results;
@@ -145,7 +155,7 @@ async function getMigrationStatus() {
   return {
     executed,
     summary: {
-      total: 6,
+      total: 7,
       executed: executed.filter(m => m.success).length,
       failed: executed.filter(m => !m.success).length,
     },

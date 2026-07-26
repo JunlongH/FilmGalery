@@ -33,6 +33,7 @@ import { getPhotoUrl } from '../../utils/urls';
 import LeafletMap from '../../components/map/LeafletMap';
 import { wgs84ToGcj02 } from '@filmgallery/shared/coordTransform';
 import { useApiQuery } from '../../hooks/useApiQuery';
+import { useAppMode } from '../../context/AppModeContext';
 import { useT } from '../../i18n';
 
 const { width, height } = Dimensions.get('window');
@@ -52,12 +53,15 @@ export default function MapScreen() {
   const t = useT();
   const navigation = useNavigation();
   const { baseUrl, mapProvider } = useContext(ApiContext);
+  const { mode: globalMode } = useAppMode();
   const mapRef = useRef<any>(null);
 
   const [mapRegion, setMapRegion] = useState(INITIAL_REGION);
   const [selectedPhoto, setSelectedPhoto] = useState<any>(null);
   const [showList, setShowList] = useState(false);
-  const [mapMode, setMapMode] = useState<MapMode>('all');
+  // Initialise from the current global mode; the segmented control below is
+  // the user-facing override. (Previous didMountRef effect was a no-op.)
+  const [mapMode, setMapMode] = useState<MapMode>(globalMode);
 
   const photosKey = baseUrl ? `geoPhotos@${baseUrl}#${mapMode}` : null;
   const { data: rawPhotos, loading, refresh } = useApiQuery<any[]>(

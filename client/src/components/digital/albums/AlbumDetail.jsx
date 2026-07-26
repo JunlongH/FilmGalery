@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@heroui/react';
-import { BookMarked, Pencil, Trash2, ChevronLeft, Plus, Check, X } from 'lucide-react';
+import { BookMarked, Pencil, Trash2, ChevronLeft, Plus, Check, X, Square, CheckSquare, ArrowDownUp } from 'lucide-react';
 import {
   getAlbum, getAlbumPhotos, deleteAlbum,
   removeAlbumPhoto, setAlbumCover, sortAlbumPhotos,
 } from '../../../api';
 import { getCacheStrategy } from '../../../lib';
 import PhotoGrid from '../../PhotoGrid';
+import PhotoDetailsSidebar from '../../PhotoDetailsSidebar';
 import AlbumEditModal from './AlbumEditModal';
 import AlbumAddPhotosModal from './AlbumAddPhotosModal';
 
@@ -22,6 +23,10 @@ export default function AlbumDetail() {
   const [localPhotos, setLocalPhotos] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
   const [coverFeedback, setCoverFeedback] = useState(null);
+  const [sortMode, setSortMode] = useState('manual');
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selection, setSelection] = useState(new Set());
+  const [batchEditPhotos, setBatchEditPhotos] = useState(null);
   const dragIndexRef = useRef(null);
   const coverFeedbackTimer = useRef(null);
 
@@ -33,6 +38,12 @@ export default function AlbumDetail() {
     coverFeedbackTimer.current = setTimeout(() => setCoverFeedback(null), 4000);
   }, [coverFeedback]);
 
+  useEffect(() => {
+    setLocalPhotos(null);
+    setDropIndex(null);
+    dragIndexRef.current = null;
+  }, [sortMode]);
+
   const { data: album } = useQuery({
     queryKey: ['album', albumId],
     queryFn: () => getAlbum(id),
@@ -40,13 +51,13 @@ export default function AlbumDetail() {
   });
 
   const { data: photos = [], isLoading } = useQuery({
-    queryKey: ['album-photos', albumId],
-    queryFn: () => getAlbumPhotos(id),
+    queryKey: ['album-photos', albumId, sortMode],
+    queryFn: () => getAlbumPhotos(id, sortMode === 'date' ? { sort: 'date_taken' } : undefined),
     ...getCacheStrategy('digitalPhotos'),
   });
 
   const displayPhotos = localPhotos || photos;
-  const orderDirty = localPhotos !== null;
+  const orderDirty = sortMode === 'manual' && localPhotos !== null;
   const existingIds = useMemo(() => new Set(photos.map(p => p.id)), [photos]);
   const photosRef = useRef(photos);
   photosRef.current = photos;
@@ -54,7 +65,12 @@ export default function AlbumDetail() {
   function invalidateAlbumQueries() {
     queryClient.invalidateQueries({ queryKey: ['albums'] });
     queryClient.invalidateQueries({ queryKey: ['album', albumId] });
-    queryClient.invalidateQueries({ queryKey: ['album-photos', albumId] });
+    queryClient.invalidateQueries({ queryKey: ['album-photos'] });
+  }
+
+  function clearSelection() {
+    setSelection(new Set());
+    setSelectionMode(false);
   }
 
   const deleteMutation = useMutation({
@@ -70,6 +86,19 @@ export default function AlbumDetail() {
     onSuccess: (_data, photoId) => {
       setLocalPhotos(prev => (prev ? prev.filter(p => p.id !== photoId) : prev));
       invalidateAlbumQueries();
+    },
+  });
+
+  const removeBatchMutation = useMutation({
+    mutationFn: async (ids) => {
+      for (let i = 0; i < ids.length; i += 5) {
+        await Promise.all(ids.slice(i, i + 5).map(pid => removeAlbumPhoto(id, pid)));
+      }
+    },
+    onSuccess: () => {
+      setLocalPhotos(null);
+      invalidateAlbumQueries();
+      clearSelection();
     },
   });
 
@@ -110,6 +139,25 @@ export default function AlbumDetail() {
     }
   }, [removeMutation.mutate]);
 
+  function toggleSelectionMode() {
+    setSelectionMode(prev => !prev);
+    setSelection(new Set());
+  }
+
+  function handleBatchEdit() {
+    const selected = displayPhotos.filter(p => selection.has(p.id));
+    if (selected.length === 0) return;
+    setBatchEditPhotos(selected);
+  }
+
+  function handleBatchRemove() {
+    const ids = [...selection];
+    if (ids.length === 0) return;
+    if (window.confirm(`Remove ${ids.length} photo(s) from this album? The photos themselves will not be deleted.`)) {
+      removeBatchMutation.mutate(ids);
+    }
+  }
+
   function handleSaveOrder() {
     if (!localPhotos || localPhotos.length === 0) return;
     sortMutation.mutate(localPhotos.map(p => p.id));
@@ -136,6 +184,11 @@ export default function AlbumDetail() {
   }, []);
 
   const renderTile = useCallback((photo, idx, defaultTile) => {
+    if (sortMode === 'date' || selectionMode) {
+      return (
+        <div className="group relative rounded">{defaultTile}</div>
+      );
+    }
     return (
       <div
         className={`group relative rounded cursor-grab active:cursor-grabbing ${dropIndex === idx ? 'ring-2 ring-primary' : ''}`}
@@ -181,7 +234,7 @@ export default function AlbumDetail() {
         </div>
       </div>
     );
-  }, [dropIndex, handleDrop, handleRemove, coverMutation.mutate, coverMutation.isPending, coverMutation.variables]);
+  }, [dropIndex, handleDrop, handleRemove, coverMutation.mutate, coverMutation.isPending, coverMutation.variables, sortMode, selectionMode]);
 
   return (
     <div className="flex flex-col min-h-full bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-6 md:p-8">
@@ -200,6 +253,26 @@ export default function AlbumDetail() {
           )}
           <p className="text-zinc-400 dark:text-zinc-500 mt-1">{displayPhotos.length} photos</p>
         </div><div className="flex items-center gap-2 flex-wrap justify-end">
+          <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-0.5">
+            <Button
+              size="sm"
+              radius="sm"
+              variant={sortMode === 'manual' ? 'solid' : 'light'}
+              color={sortMode === 'manual' ? 'primary' : 'default'}
+              onPress={() => setSortMode('manual')}
+            >
+              <ArrowDownUp className="w-3.5 h-3.5" /> Manual
+            </Button>
+            <Button
+              size="sm"
+              radius="sm"
+              variant={sortMode === 'date' ? 'solid' : 'light'}
+              color={sortMode === 'date' ? 'primary' : 'default'}
+              onPress={() => setSortMode('date')}
+            >
+              By date
+            </Button>
+          </div>
           {orderDirty && (
             <>
               <Button color="primary" size="sm" onPress={handleSaveOrder} isLoading={sortMutation.isPending}>
@@ -210,6 +283,14 @@ export default function AlbumDetail() {
               </Button>
             </>
           )}
+          <Button
+            size="sm"
+            variant={selectionMode ? 'solid' : 'flat'}
+            color={selectionMode ? 'primary' : 'default'}
+            onPress={toggleSelectionMode}
+          >
+            {selectionMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />} Select
+          </Button>
           <Button color="primary" variant="flat" size="sm" onPress={() => setShowAdd(true)}>
             <Plus className="w-4 h-4" /> Add photos
           </Button>
@@ -253,7 +334,46 @@ export default function AlbumDetail() {
           </div>
         </div>
       ) : (
-        <PhotoGrid photos={displayPhotos} renderTile={renderTile} />
+        <PhotoGrid
+          photos={displayPhotos}
+          renderTile={renderTile}
+          selection={selectionMode ? selection : null}
+          onSelectionChange={setSelection}
+        />
+      )}
+
+      {selectionMode && selection.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-800 shadow-lg border border-zinc-200 dark:border-zinc-700 px-4 py-2">
+          <span className="text-sm text-zinc-600 dark:text-zinc-300 mr-1">{selection.size} selected</span>
+          <Button size="sm" variant="flat" onPress={handleBatchEdit}>
+            <Pencil className="w-4 h-4" /> Edit info
+          </Button>
+          <Button
+            size="sm"
+            variant="flat"
+            color="danger"
+            isLoading={removeBatchMutation.isPending}
+            onPress={handleBatchRemove}
+          >
+            <Trash2 className="w-4 h-4" /> Remove from album
+          </Button>
+          <Button size="sm" variant="light" onPress={clearSelection}>
+            Cancel
+          </Button>
+        </div>
+      )}
+
+      {batchEditPhotos && (
+        <PhotoDetailsSidebar
+          key={`batch-${batchEditPhotos.map(p => p.id).join(',')}`}
+          photos={batchEditPhotos}
+          onClose={() => setBatchEditPhotos(null)}
+          onSaved={() => {
+            setBatchEditPhotos(null);
+            queryClient.invalidateQueries({ queryKey: ['album-photos'] });
+            clearSelection();
+          }}
+        />
       )}
 
       {album && (

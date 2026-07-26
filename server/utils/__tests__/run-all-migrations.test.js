@@ -73,23 +73,27 @@ describe('runAllMigrations — fresh DB integration', () => {
     cleanupBackups(dbPath);
   });
 
-  test('first run executes all 4 migrations and records them', async () => {
+  test('first run executes all registered migrations and records them', async () => {
     const { runAllMigrations } = loadRunWithDb(dbPath);
     const result = await runAllMigrations();
-    expect(result.total).toBe(4);
-    expect(result.executed).toBe(4);
+    const expectedNames = [
+      '20240101_core_schema',
+      '20241001_equipment_tables',
+      '20241101_film_structure',
+      '20260701_digital_mode',
+      '20260726_digital_rating_like_only',
+      '20260726_normalize_photo_path_separators',
+      '20260726_relax_photos_roll_id',
+    ];
+    expect(result.total).toBe(expectedNames.length);
+    expect(result.executed).toBe(expectedNames.length);
     expect(result.skipped).toBe(0);
     expect(result.failed).toBe(0);
 
     const db = openReadOnly(dbPath);
     try {
       const rows = await queryAll(db, "SELECT name, success FROM _migrations ORDER BY name");
-      expect(rows.map(r => r.name)).toEqual([
-        '20240101_core_schema',
-        '20241001_equipment_tables',
-        '20241101_film_structure',
-        '20260701_digital_mode',
-      ]);
+      expect(rows.map(r => r.name)).toEqual(expectedNames);
       expect(rows.every(r => r.success === 1)).toBe(true);
     } finally {
       await new Promise(r => db.close(r));
@@ -168,22 +172,23 @@ describe('runAllMigrations — fresh DB integration', () => {
     }
   });
 
-  test('second run is idempotent (all 4 skipped, no new _migrations rows)', async () => {
+  test('second run is idempotent (all skipped, no new _migrations rows)', async () => {
     const first = loadRunWithDb(dbPath);
-    await first.runAllMigrations();
+    const firstResult = await first.runAllMigrations();
+    const count = firstResult.total;
 
     // Re-load to simulate a fresh boot.
     const second = loadRunWithDb(dbPath);
     const result = await second.runAllMigrations();
 
     expect(result.executed).toBe(0);
-    expect(result.skipped).toBe(4);
+    expect(result.skipped).toBe(count);
     expect(result.failed).toBe(0);
 
     const db = openReadOnly(dbPath);
     try {
       const rows = await queryAll(db, "SELECT COUNT(*) AS n FROM _migrations WHERE success = 1");
-      expect(rows[0].n).toBe(4);
+      expect(rows[0].n).toBe(count);
     } finally {
       await new Promise(r => db.close(r));
     }
