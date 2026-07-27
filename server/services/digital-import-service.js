@@ -239,8 +239,9 @@ async function processOne(item, sessionId) {
     `INSERT INTO photos (
        source_type, session_id, content_hash, filename, original_filename,
        date_taken, focal_length, aperture, shutter_speed, iso,
-       white_balance, color_space, latitude, longitude
-     ) VALUES ('digital', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       white_balance, color_space, latitude, longitude,
+       camera, lens
+     ) VALUES ('digital', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       sessionId,
       item.hash,
@@ -255,6 +256,8 @@ async function processOne(item, sessionId) {
       exif.colorSpace || null,
       exif.gpsLatitude || null,
       exif.gpsLongitude || null,
+      [exif.make, exif.model].filter(Boolean).join(' ') || null,
+      exif.lensModel || null,
     ]
   );
   const photoId = ins.lastID;

@@ -30,7 +30,6 @@ const en: Record<TranslationKey, string> = {
   'title.aiAssistant': 'AI Assistant',
   'title.locationDiagnostics': 'Location Diagnostics',
   'title.photo': 'Photo',
-  'title.sessions': 'Import Sessions',
 
   // Common
   'common.retry': 'Retry',
@@ -79,7 +78,6 @@ const en: Record<TranslationKey, string> = {
   'library.noFavorites': 'No favorites yet',
   'library.noCollections': 'No collections yet',
   'library.noEquipment': 'No equipment yet',
-  'library.sessions': 'Import Sessions',
   'library.map': 'Map',
   'library.shotLog': 'Shot Log',
 
@@ -418,19 +416,12 @@ const en: Record<TranslationKey, string> = {
   'digital.modeFilm': 'Film',
   'digital.modeDigital': 'Digital',
   'digital.modeAll': 'All',
-  'digital.recentImports': 'Recent imports',
   'digital.albums': 'My albums',
   'digital.albumsHint': 'Organize digital photo collections',
   'digital.comingSoon': 'Coming soon',
   'digital.emptyTitle': 'No digital photos yet',
   'digital.emptyBody': 'Import digital photos from the desktop app',
-  'digital.sessionFallback': 'Import #{id}',
   'digital.loadingMore': 'Loading more…',
-
-  // Digital sessions list (N5)
-  'sessions.emptyTitle': 'No import sessions yet',
-  'sessions.emptyBody': 'Import digital photos from the desktop to see sessions here',
-  'sessions.loadFailed': 'Failed to load sessions',
 
   // Digital albums (M2-B)
   'digital.albumsTitle': 'My Albums',
@@ -485,6 +476,39 @@ const en: Record<TranslationKey, string> = {
   'digital.exif.filename': 'Filename',
   'digital.exif.fileSize': 'File size',
   'digital.exif.close': 'Close',
+
+  // Digital import (mobile upload)
+  'digital.import.title': 'Import digital photos',
+  'digital.import.pick': 'Pick photos',
+  'digital.import.picking': 'Opening gallery…',
+  'digital.import.uploading': 'Uploading {percent}%',
+  'digital.import.previewing': 'Analyzing photos…',
+  'digital.import.emptyHint': 'Pick photos from your device to start importing',
+  'digital.import.summaryTotal': '{count} photos selected',
+  'digital.import.duplicatesNote': '{count} duplicate photos will be skipped',
+  'digital.import.dateRange': 'Taken: {start} — {end}',
+  'digital.import.noExifDate': 'Date taken unknown',
+  'digital.import.duplicateBadge': 'Duplicate',
+  'digital.import.albumLabel': 'Add to album',
+  'digital.import.noAlbum': 'No album',
+  'digital.import.sessionTitle': 'Session title (optional)',
+  'digital.import.sessionPlaceholder': 'e.g. Weekend street',
+  'digital.import.submit': 'Import {count} photos',
+  'digital.import.importing': 'Importing…',
+  'digital.import.importProgress': 'Processed {done} / {total}',
+  'digital.import.successTitle': 'Import complete',
+  'digital.import.successBody': 'Successfully imported {count} photos',
+  'digital.import.failedTitle': 'Import failed',
+  'digital.import.partialTitle': 'Partial import failure',
+  'digital.import.partialBody': '{done} succeeded, {failed} failed',
+  'digital.import.cancel': 'Cancel',
+  'digital.import.done': 'Done',
+  'digital.import.cancelJob': 'Cancel import',
+  'digital.import.jobCancelled': 'Import cancelled',
+  'digital.import.errorLoadAlbums': 'Failed to load albums',
+  'digital.import.errorNoFiles': 'Please pick photos first',
+  'digital.import.errorPreview': 'Analysis failed, please retry',
+  'digital.import.errorExecute': 'Failed to start import',
 
   // Empty/error generic
   'empty.generic': 'Nothing here yet',

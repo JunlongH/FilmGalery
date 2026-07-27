@@ -118,14 +118,32 @@ export default function HeroCarousel({ photos, loading, active, mode, photosKey 
   const renderInfo = (photo: any) => {
     const isDigital = mode === 'digital' || photo.source_type === 'digital' || photo.roll_id == null;
     const title = isDigital
-      ? photo.caption || photo.original_filename || ''
-      : photo.roll_title || photo.caption || '';
+      ? photo.caption || ''
+      : photo.roll_title ||
+        photo.caption ||
+        (photo.original_filename && photo.original_filename.replace(/\.[^.]+$/, '')) ||
+        '';
     const dateStr = photo.date_taken || photo.date || photo.taken_at || photo.created_at;
     const dateLabel = dateStr
       ? new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
       : '';
-    const metaParts = [dateLabel, photo.camera_name || photo.camera, photo.city, photo.film_name].filter(Boolean);
-    return { title, meta: metaParts.join(' · ') };
+    const metaParts = [
+      dateLabel,
+      photo.city,
+      photo.album_names,
+      photo.camera_name,
+      photo.lens_name,
+      photo.film_name,
+    ].filter(Boolean);
+    const aperture = photo.aperture;
+    const shutter = photo.shutter_speed;
+    const iso = photo.iso || photo.roll_iso || photo.film_iso;
+    const exposureParts: string[] = [];
+    if (aperture) exposureParts.push(`ƒ/${aperture}`);
+    if (shutter) exposureParts.push(shutter);
+    if (iso) exposureParts.push(`ISO ${iso}`);
+    const exposure = aperture || shutter ? exposureParts.join(' · ') : '';
+    return { title, meta: metaParts.join(' · '), exposure };
   };
 
   return (
@@ -142,7 +160,7 @@ export default function HeroCarousel({ photos, loading, active, mode, photosKey 
         getItemLayout={(_, i) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * i, index: i })}
         onScrollToIndexFailed={() => {}}
         renderItem={({ item, index: i }) => {
-          const { title, meta } = renderInfo(item);
+          const { title, meta, exposure } = renderInfo(item);
           const uri = getPhotoUrl(baseUrl, item, 'full') ?? getPhotoUrl(baseUrl, item, 'thumb');
           return (
             <TouchableOpacity
@@ -170,6 +188,11 @@ export default function HeroCarousel({ photos, loading, active, mode, photosKey 
                   {meta ? (
                     <Text style={styles.meta} numberOfLines={1}>
                       {meta}
+                    </Text>
+                  ) : null}
+                  {exposure ? (
+                    <Text style={styles.exposure} numberOfLines={1}>
+                      {exposure}
                     </Text>
                   ) : null}
                 </View>
@@ -234,6 +257,14 @@ const styles = StyleSheet.create({
   meta: {
     color: 'rgba(255,255,255,0.82)',
     fontSize: 12,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  exposure: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 12,
+    marginTop: 2,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,

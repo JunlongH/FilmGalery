@@ -67,6 +67,12 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow FilmGallery to use your location for tagging shots."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow FilmGallery to access your photos."
+        }
       ]
     ],
     "extra": {

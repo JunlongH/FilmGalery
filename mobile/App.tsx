@@ -36,7 +36,7 @@ import FilmRollsScreen from './src/screens/library/FilmRollsScreen';
 import InventoryScreen from './src/screens/library/InventoryScreen';
 import FilmItemDetailScreen from './src/screens/library/FilmItemDetailScreen';
 import DigitalAlbumDetailScreen from './src/screens/library/DigitalAlbumDetailScreen';
-import SessionsScreen from './src/screens/library/SessionsScreen';
+import DigitalImportScreen from './src/screens/library/DigitalImportScreen';
 import ShotLogScreen from './src/screens/shooting/ShotLogScreen';
 import StatsScreen from './src/screens/library/StatsScreen';
 import EquipmentScreen from './src/screens/library/EquipmentScreen';
@@ -241,11 +241,6 @@ function LibraryStackScreen() {
         component={NegativeScreen}
         options={{ title: t('title.negatives') }}
       />
-      <LibraryStack.Screen
-        name="Sessions"
-        component={SessionsScreen}
-        options={{ title: t('title.sessions') }}
-      />
     </LibraryStack.Navigator>
   );
 }
@@ -416,6 +411,11 @@ export default function App() {
                 name="TagDetail"
                 component={TagDetailScreen}
                 options={({ route }) => ({ title: (route.params as any)?.tagName || t('title.tagDetails') })}
+              />
+              <RootStack.Screen
+                name="DigitalImport"
+                component={DigitalImportScreen}
+                options={{ title: t('digital.import.title') }}
               />
               {/* Full-screen / modal flows */}
               <RootStack.Screen

@@ -7,7 +7,7 @@
  *
  * Film entries:    Favorites / Collections / Stats / Films / Equipment /
  *                  Inventory / ShotLog
- * Digital entries: Favorites / Stats / Sessions / Map
+ * Digital entries: Favorites / Stats / Map
  *
  * W5: Tapping ShotLog no longer drops the user into an empty ShotLogScreen
  * (Library has no itemId in scope). Instead we query loaded film items first:
@@ -126,14 +126,6 @@ const DIGITAL_ENTRIES: EntryDef[] = [
     labelKey: 'library.statistics',
     target: 'Stats',
     params: { mode: 'digital' },
-  },
-  {
-    key: 'sessions',
-    icon: 'image',
-    color: '#7B1FA2',
-    bg: '#F3E5F5',
-    labelKey: 'library.sessions',
-    target: 'Sessions',
   },
   {
     key: 'map',

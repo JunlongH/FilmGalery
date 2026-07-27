@@ -20,7 +20,7 @@ import { ApiContext } from '../../context/ApiContext';
 import { api } from '../../api/client';
 import { useApiQuery } from '../../hooks/useApiQuery';
 import { invalidateQueries } from '../../api/queryCache';
-import { useT, getLanguage } from '../../i18n';
+import { useT } from '../../i18n';
 import { Icon } from '../../components/ui';
 import CachedImage from '../../components/CachedImage';
 
@@ -42,19 +42,6 @@ interface FlatAlbumNode {
   depth: number;
 }
 
-interface SessionRow {
-  id: number;
-  label?: string;
-  notes?: string;
-  session_date?: string;
-  import_batch?: string;
-  camera_name?: string;
-  cover_thumb?: string;
-  [key: string]: any;
-}
-
-const SESSION_CARD_WIDTH = 160;
-
 export default function DigitalAlbumListScreen() {
   const theme = useTheme();
   const navigation = useNavigation<any>();
@@ -68,16 +55,6 @@ export default function DigitalAlbumListScreen() {
     () => api.http.get('/api/albums', { include_deleted: false }),
   );
   const refreshAlbums = albumsQuery.refresh;
-
-  const sessionsKey = baseUrl ? `digitalSessions@${baseUrl}` : null;
-  const sessionsQuery = useApiQuery<SessionRow[]>(
-    sessionsKey,
-    () => api.http.get('/api/digital-sessions'),
-  );
-  const sessions = useMemo(
-    () => (sessionsQuery.data ?? []).slice(0, 12),
-    [sessionsQuery.data],
-  );
 
   const albums = useMemo(() => albumsQuery.data ?? [], [albumsQuery.data]);
 
@@ -131,8 +108,7 @@ export default function DigitalAlbumListScreen() {
 
   const onRefresh = useCallback(() => {
     refreshAlbums();
-    sessionsQuery.refresh();
-  }, [refreshAlbums, sessionsQuery]);
+  }, [refreshAlbums]);
 
   const openAlbum = useCallback(
     (album: AlbumRow) => {
@@ -148,50 +124,6 @@ export default function DigitalAlbumListScreen() {
     },
     [baseUrl],
   );
-
-  const sessionCoverUrl = useCallback(
-    (s: SessionRow): string | null => {
-      if (!baseUrl || !s.cover_thumb) return null;
-      return `${baseUrl}/uploads/${s.cover_thumb}`;
-    },
-    [baseUrl],
-  );
-
-  const renderSession = ({ item }: { item: SessionRow }) => {
-    const cover = sessionCoverUrl(item);
-    const title = item.label || t('digital.sessionFallback', { id: item.id });
-    return (
-      <View style={[styles.sessionCard, { backgroundColor: theme.colors.surface }]}>
-        <View style={styles.sessionCover}>
-          {cover ? (
-            <CachedImage uri={cover} style={styles.sessionCoverImg} contentFit="cover" />
-          ) : (
-            <View
-              style={[
-                styles.sessionCoverImg,
-                {
-                  backgroundColor: theme.colors.surfaceVariant,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                },
-              ]}
-            >
-              <Icon name="image" size={28} color={theme.colors.onSurfaceVariant} />
-            </View>
-          )}
-        </View>
-        <Text style={[styles.sessionTitle, { color: theme.colors.onSurface }]} numberOfLines={1}>
-          {title}
-        </Text>
-        <Text
-          style={[styles.sessionMeta, { color: theme.colors.onSurfaceVariant }]}
-          numberOfLines={1}
-        >
-          {item.camera_name || (item.session_date ? formatSessionDate(item.session_date) : '')}
-        </Text>
-      </View>
-    );
-  };
 
   const renderItem = ({ item }: { item: FlatAlbumNode }) => {
     const { album, depth } = item;
@@ -292,23 +224,6 @@ export default function DigitalAlbumListScreen() {
               </View>
               <Icon name="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />
             </TouchableOpacity>
-
-            {sessions.length > 0 && (
-              <View style={styles.sessionsSection}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-                  {t('digital.recentImports')}
-                </Text>
-                <FlatList
-                  horizontal
-                  data={sessions}
-                  keyExtractor={(item) => String(item.id)}
-                  renderItem={renderSession}
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.sessionsList}
-                  ItemSeparatorComponent={() => <View style={{ width: 10 }} />}
-                />
-              </View>
-            )}
 
             {albums.length > 0 ? (
               <Text style={[styles.headerCount, { color: theme.colors.onSurfaceVariant }]}>
@@ -480,21 +395,6 @@ function computeParentDepth(album: AlbumRow, albums: AlbumRow[]): number {
   return depth;
 }
 
-function formatSessionDate(value: string): string {
-  // useT() in the calling component subscribes to language changes, so
-  // getLanguage() reflects the active locale on each render pass.
-  const locale = getLanguage() === 'en' ? 'en-US' : 'zh-CN';
-  try {
-    return new Date(value).toLocaleDateString(locale, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return value;
-  }
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center', padding: 24 },
@@ -619,42 +519,5 @@ const styles = StyleSheet.create({
   createEntryHint: {
     fontSize: 12,
     marginTop: 2,
-  },
-  sessionsSection: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    marginBottom: 10,
-    paddingHorizontal: 4,
-  },
-  sessionsList: {
-    paddingVertical: 2,
-  },
-  sessionCard: {
-    width: SESSION_CARD_WIDTH,
-    borderRadius: 12,
-    overflow: 'hidden',
-    paddingBottom: 8,
-  },
-  sessionCover: {
-    width: '100%',
-    height: 110,
-  },
-  sessionCoverImg: {
-    width: '100%',
-    height: '100%',
-  },
-  sessionTitle: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    marginTop: 6,
-    marginHorizontal: 8,
-  },
-  sessionMeta: {
-    fontSize: 11,
-    marginTop: 2,
-    marginHorizontal: 8,
   },
 });

@@ -18,6 +18,7 @@ import {
   useTheme,
   Modal,
   Snackbar,
+  IconButton,
 } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ApiContext } from '../../context/ApiContext';
@@ -72,8 +73,24 @@ export default function DigitalAlbumDetailScreen() {
   const photoCount = photos.length;
 
   useEffect(() => {
-    navigation.setOptions({ title: headerTitle });
-  }, [navigation, headerTitle]);
+    navigation.setOptions({
+      title: headerTitle,
+      headerRight: () => (
+        <IconButton
+          icon="upload"
+          iconColor={theme.colors.primary}
+          size={22}
+          accessibilityLabel={t('digital.import.title')}
+          onPress={() =>
+            navigation.navigate('DigitalImport', {
+              albumId,
+              albumTitle: headerTitle,
+            })
+          }
+        />
+      ),
+    });
+  }, [navigation, headerTitle, theme, albumId, t]);
 
   const onPhotoPress = useCallback(
     (photo: DigitalPhoto, index: number) => {

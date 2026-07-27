@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Progress, Input } from '@heroui/react';
 import { Upload, Check, AlertCircle, FileImage, X, FolderPlus, MapPin } from 'lucide-react';
@@ -15,12 +15,17 @@ const ACCEPTED = '.jpg,.jpeg,.png,.tif,.tiff,.cr2,.cr3,.nef,.arw,.rw2,.raf,.dng'
 export default function DigitalImportWizard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const fileInputRef = useRef(null);
   const [step, setStep] = useState(0);
   const [files, setFiles] = useState([]);
   const [previewResult, setPreviewResult] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [albumId, setAlbumId] = useState(null);
+  const [albumId, setAlbumId] = useState(() => {
+    const raw = searchParams.get('album');
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  });
   const [sessionTitle, setSessionTitle] = useState('');
   const [jobId, setJobId] = useState(null);
   const [progress, setProgress] = useState(null);

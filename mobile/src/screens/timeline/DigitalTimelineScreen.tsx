@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
   type ListRenderItem,
 } from 'react-native';
-import { useTheme } from 'react-native-paper';
+import { useTheme, FAB } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { ApiContext } from '../../context/ApiContext';
 import { api } from '../../api/client';
@@ -303,6 +303,13 @@ export default function DigitalTimelineScreen() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       />
+      <FAB
+        icon="plus"
+        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+        color="#fff"
+        accessibilityLabel={t('digital.import.title')}
+        onPress={() => navigation.navigate('DigitalImport')}
+      />
     </View>
   );
 }
@@ -318,7 +325,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: ROW_PADDING_H,
-    paddingBottom: 32,
+    paddingBottom: 96,
   },
   headerRow: {
     height: HEADER_HEIGHT,
@@ -365,6 +372,11 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
+  },
+  fab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
   },
 });
 

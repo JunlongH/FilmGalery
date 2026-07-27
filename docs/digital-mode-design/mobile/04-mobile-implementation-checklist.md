@@ -108,3 +108,7 @@
 - Nit: AlbumPickerSheet 内联 useAlbumsKey
 - Nit: navigation/types.ts 补 DigitalAlbumList/DigitalAlbumDetail 路由类型
 - Bug: DigitalAlbumDetailScreen `handleAddToAlbum` 不再提前清 activePhoto（原实现导致 POST 永不发出）
+
+## 关联改造记录
+
+2026-07-26 完成 05-navigation-overhaul-plan 全部 N1–N6 阶段（全局模式/5 tab/Overview/数码 Timeline 分节/Albums 双模式/Library 更多化），jest 92 绿、e2e 8/8 通过，详见 05 文档验收清单。

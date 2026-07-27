@@ -28,7 +28,6 @@ const zh = {
   'title.aiAssistant': 'AI 助手',
   'title.locationDiagnostics': '位置诊断',
   'title.photo': '照片',
-  'title.sessions': '导入会话',
 
   // Common
   'common.retry': '重试',
@@ -77,7 +76,6 @@ const zh = {
   'library.noFavorites': '暂无收藏',
   'library.noCollections': '暂无合集',
   'library.noEquipment': '暂无器材',
-  'library.sessions': '导入会话',
   'library.map': '地图',
   'library.shotLog': '拍摄记录',
 
@@ -416,19 +414,12 @@ const zh = {
   'digital.modeFilm': '胶片',
   'digital.modeDigital': '数码',
   'digital.modeAll': '全部',
-  'digital.recentImports': '最近导入',
   'digital.albums': '我的相册',
   'digital.albumsHint': '整理数码照片合集',
   'digital.comingSoon': '即将上线',
   'digital.emptyTitle': '还没有数码照片',
   'digital.emptyBody': '请用桌面端导入数码照片',
-  'digital.sessionFallback': '导入 #{id}',
   'digital.loadingMore': '加载更多…',
-
-  // Digital sessions list (N5)
-  'sessions.emptyTitle': '暂无导入会话',
-  'sessions.emptyBody': '用桌面端导入数码照片后，会话会显示在这里',
-  'sessions.loadFailed': '加载导入会话失败',
 
   // Digital albums (M2-B)
   'digital.albumsTitle': '我的相册',
@@ -483,6 +474,39 @@ const zh = {
   'digital.exif.filename': '文件名',
   'digital.exif.fileSize': '文件大小',
   'digital.exif.close': '关闭',
+
+  // Digital import (mobile upload)
+  'digital.import.title': '导入数码照片',
+  'digital.import.pick': '选择照片',
+  'digital.import.picking': '正在打开相册…',
+  'digital.import.uploading': '正在上传 {percent}%',
+  'digital.import.previewing': '正在分析照片…',
+  'digital.import.emptyHint': '选择设备中的照片以开始导入',
+  'digital.import.summaryTotal': '已选 {count} 张照片',
+  'digital.import.duplicatesNote': '{count} 张重复照片将被跳过',
+  'digital.import.dateRange': '拍摄时间：{start} — {end}',
+  'digital.import.noExifDate': '拍摄时间未知',
+  'digital.import.duplicateBadge': '重复',
+  'digital.import.albumLabel': '加入相册',
+  'digital.import.noAlbum': '不加入相册',
+  'digital.import.sessionTitle': '会话名称（可选）',
+  'digital.import.sessionPlaceholder': '例如：周末扫街',
+  'digital.import.submit': '导入 {count} 张照片',
+  'digital.import.importing': '导入中…',
+  'digital.import.importProgress': '已处理 {done} / {total}',
+  'digital.import.successTitle': '导入完成',
+  'digital.import.successBody': '成功导入 {count} 张照片',
+  'digital.import.failedTitle': '导入失败',
+  'digital.import.partialTitle': '部分导入失败',
+  'digital.import.partialBody': '成功 {done} 张，失败 {failed} 张',
+  'digital.import.cancel': '取消',
+  'digital.import.done': '完成',
+  'digital.import.cancelJob': '取消导入',
+  'digital.import.jobCancelled': '已取消导入',
+  'digital.import.errorLoadAlbums': '加载相册失败',
+  'digital.import.errorNoFiles': '请先选择照片',
+  'digital.import.errorPreview': '分析失败，请重试',
+  'digital.import.errorExecute': '启动导入失败',
 
   // Empty/error generic
   'empty.generic': '这里还没有内容',

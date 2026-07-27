@@ -16,8 +16,8 @@ export default function ModeHeaderToggle() {
       }}
       density="small"
       buttons={[
-        { value: 'film', label: t('digital.modeFilm'), icon: 'movie' },
-        { value: 'digital', label: t('digital.modeDigital'), icon: 'camera-burst' },
+        { value: 'film', icon: 'movie', accessibilityLabel: t('digital.modeFilm') },
+        { value: 'digital', icon: 'camera-burst', accessibilityLabel: t('digital.modeDigital') },
       ]}
       style={styles.toggle}
     />
@@ -26,7 +26,7 @@ export default function ModeHeaderToggle() {
 
 const styles = StyleSheet.create({
   toggle: {
-    width: 130,
+    width: 104,
     marginRight: 6,
   },
 });

@@ -42,6 +42,29 @@ export interface HttpHelpers {
   setOnUnauthorized: (fn: ((response: any) => void) | null) => void;
 }
 
+export interface DigitalImportApi {
+  preview: (formData: FormData, onProgress?: (pct: number) => void) => Promise<any>;
+  execute: (data: {
+    items: Array<{ file: any; hash: string; duplicate?: boolean; isRaw?: boolean; exif?: any }>;
+    album_id?: number;
+    session_title?: string;
+  }) => Promise<{ jobId: string }>;
+  progress: (jobId: string) => Promise<{
+    jobId: string;
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+    total: number;
+    done: number;
+    failed: number;
+    currentFile?: string | null;
+    errors?: Array<{ file?: string; error?: string; at?: string }>;
+    result?: any;
+    startedAt?: string;
+    endedAt?: string;
+  }>;
+  cancel: (jobId: string) => Promise<{ ok: boolean; jobId: string }>;
+  checkHash: (hash: string) => Promise<any>;
+}
+
 export interface ApiClient {
   readonly baseUrl: string;
   readonly primaryBaseUrl: string;
@@ -60,6 +83,7 @@ export interface ApiClient {
   locations: any;
   stats: any;
   metadata: any;
+  digitalImport: DigitalImportApi;
 }
 
 export declare function createApiClient(config?: ApiClientConfig): ApiClient;

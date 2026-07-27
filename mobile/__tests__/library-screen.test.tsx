@@ -199,7 +199,7 @@ describe('LibraryScreen / "More" tab (N5)', () => {
       expect(texts.some((s) => s === label)).toBe(true);
     }
     // Sanity: digital-only labels must NOT render in film mode.
-    expect(texts.some((s) => s === '导入会话' || s === '地图')).toBe(false);
+    expect(texts.some((s) => s === '地图')).toBe(false);
   });
 
   test('film entry tap navigates with mode=film (Favorites)', async () => {
@@ -215,7 +215,7 @@ describe('LibraryScreen / "More" tab (N5)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Favorites', { mode: 'film' });
   });
 
-  test('digital mode renders 4 entries after switching mode', async () => {
+  test('digital mode renders 3 entries after switching mode', async () => {
     let r: any;
     await act(async () => {
       r = renderLibrary();
@@ -228,30 +228,12 @@ describe('LibraryScreen / "More" tab (N5)', () => {
     await settle();
 
     const texts = allText(r);
-    const expected = ['收藏', '统计', '导入会话', '地图'];
+    const expected = ['收藏', '统计', '地图'];
     for (const label of expected) {
       expect(texts.some((s) => s === label)).toBe(true);
     }
     // Film-only entries must NOT render in digital mode.
     expect(texts.some((s) => s === '胶卷目录' || s === '器材' || s === '库存')).toBe(false);
-  });
-
-  test('digital Sessions entry navigates to Sessions route', async () => {
-    let r: any;
-    await act(async () => {
-      r = renderLibrary();
-    });
-    await settle();
-
-    await act(async () => {
-      modeSetter!('digital');
-    });
-    await settle();
-
-    act(() => {
-      pressEntry(r, 'entry-sessions');
-    });
-    expect(mockNavigate).toHaveBeenCalledWith('Sessions', undefined);
   });
 
   test('digital Map entry navigates cross-tab to Map', async () => {

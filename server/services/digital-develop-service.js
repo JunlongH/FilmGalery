@@ -12,12 +12,17 @@
  */
 
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
+const crypto = require('crypto');
 const fsp = require('fs').promises;
 const sharp = require('sharp');
 
+const db = require('../db');
 const { uploadsDir } = require('../config/paths');
 const { buildPipeline } = require('./filmlab-service');
+const { buildExifData, writeExifWithExiftool } = require('./exif-service');
+const { getPhotoWithRoll } = require('./download-service');
 const { renderBuffer, EXPORT_MAX_WIDTH, PREVIEW_MAX_WIDTH_SERVER } = require('../../packages/shared');
 const { runAsync, getAsync } = require('../utils/db-helpers');
 
@@ -266,6 +271,65 @@ async function getParams(photoId) {
   }
 }
 
+// ── EXIF attachment for exports ─────────────────────────────────────────────
+
+/**
+ * Attach the photo's EXIF metadata to a rendered JPEG buffer.
+ *
+ * Mirrors download-service.prepareDownload: writes the buffer to a temp file,
+ * builds EXIF from the photo record (with equipment/film JOINs), writes it via
+ * exiftool-vendored alongside the photo's tag keywords, then reads the file
+ * back into a Buffer and removes the temp file.
+ *
+ * Failure-tolerant: on ANY error (photo missing, exiftool unavailable, write
+ * failure, read failure) logs a warning and returns the original buffer —
+ * export must never fail because of metadata.
+ *
+ * @param {Buffer} buffer - rendered JPEG bytes (from renderExport)
+ * @param {number} photoId
+ * @returns {Promise<Buffer>}
+ */
+async function attachExifToJpegBuffer(buffer, photoId) {
+  const tempDir = path.join(os.tmpdir(), 'filmgallery-export');
+  const tempPath = path.join(tempDir, `photo_${photoId}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.jpg`);
+  try {
+    await fsp.mkdir(tempDir, { recursive: true });
+    await fsp.writeFile(tempPath, buffer);
+
+    const photo = await getPhotoWithRoll(photoId);
+    if (!photo) {
+      console.warn(`[DigitalDevelop] EXIF attach skipped — photo ${photoId} not found`);
+      return buffer;
+    }
+
+    const exifData = buildExifData(photo, null, {});
+
+    const tags = await new Promise((resolve) => {
+      db.all(
+        'SELECT t.name FROM photo_tags pt JOIN tags t ON t.id = pt.tag_id WHERE pt.photo_id = ?',
+        [photoId],
+        (err, rows) => {
+          if (err) resolve([]);
+          else resolve(rows ? rows.map((r) => r.name) : []);
+        }
+      );
+    });
+
+    await writeExifWithExiftool(tempPath, exifData, { keywords: tags });
+
+    return await fsp.readFile(tempPath);
+  } catch (e) {
+    console.warn(`[DigitalDevelop] EXIF attach failed for photo ${photoId}:`, e.message);
+    return buffer;
+  } finally {
+    try {
+      await fsp.unlink(tempPath);
+    } catch (_) {
+      // best-effort — temp file may not exist if write failed
+    }
+  }
+}
+
 module.exports = {
   renderPhoto,
   renderPreview,
@@ -276,4 +340,5 @@ module.exports = {
   getSourcePath,
   normalizeParams,
   deserializeLut,
+  attachExifToJpegBuffer,
 };

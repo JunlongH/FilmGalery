@@ -18,7 +18,38 @@ jest.mock('../../utils/db-helpers', () => ({
   getAsync: jest.fn(),
 }));
 
-const { normalizeParams, deserializeLut } = require('../digital-develop-service');
+jest.mock('../../db', () => ({
+  all: jest.fn((_sql, _params, cb) => cb(null, [])),
+}));
+
+jest.mock('../exif-service', () => ({
+  buildExifData: jest.fn(() => ({ Make: 'Canon' })),
+  writeExifWithExiftool: jest.fn().mockResolvedValue(true),
+}));
+
+jest.mock('../download-service', () => ({
+  getPhotoWithRoll: jest.fn().mockResolvedValue({ id: 1, camera: 'Canon EOS R5' }),
+}));
+
+// Stub fs.promises so the helper does no real disk I/O. Default behavior
+// simulates a successful round-trip: reads back the same buffer that was
+// "written".
+const mockFsp = {
+  mkdir: jest.fn().mockResolvedValue(undefined),
+  writeFile: jest.fn().mockResolvedValue(undefined),
+  readFile: jest.fn().mockResolvedValue(null),
+  unlink: jest.fn().mockResolvedValue(undefined),
+};
+jest.mock('fs', () => {
+  const actual = jest.requireActual('fs');
+  return { ...actual, promises: mockFsp };
+});
+
+const os = require('os');
+const path = require('path');
+const { normalizeParams, deserializeLut, attachExifToJpegBuffer } = require('../digital-develop-service');
+const exifService = require('../exif-service');
+const downloadService = require('../download-service');
 
 describe('digital-develop-service normalizeParams', () => {
   test('crop alias maps to cropRect and removes crop key', () => {
@@ -141,5 +172,59 @@ describe('digital-develop-service deserializeLut', () => {
   test('data shorter than 3 * size^3 → null (truncated LUT guard)', () => {
     expect(deserializeLut({ size: 2, data: [0, 0, 0, 1, 1, 1] })).toBeNull();
     expect(deserializeLut({ size: 2, data: new Array(24).fill(0) })).not.toBeNull();
+  });
+});
+
+describe('digital-develop-service attachExifToJpegBuffer', () => {
+  const inputBuf = Buffer.from([0xff, 0xd8, 0xff, 0xd9, 0x01, 0x02, 0x03]);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    downloadService.getPhotoWithRoll.mockResolvedValue({ id: 1, camera: 'Canon EOS R5' });
+    exifService.buildExifData.mockReturnValue({ Make: 'Canon', Model: 'EOS R5' });
+    exifService.writeExifWithExiftool.mockResolvedValue(true);
+    mockFsp.readFile.mockResolvedValue(inputBuf);
+  });
+
+  test('happy path: writes temp file, builds EXIF, writes via exiftool, returns rewritten buffer', async () => {
+    const rewritten = Buffer.concat([inputBuf, Buffer.from('EXIF-OK')]);
+    mockFsp.readFile.mockResolvedValue(rewritten);
+
+    const out = await attachExifToJpegBuffer(inputBuf, 42);
+
+    expect(out).toBeInstanceOf(Buffer);
+    expect(out).toBe(rewritten);
+    expect(downloadService.getPhotoWithRoll).toHaveBeenCalledWith(42);
+    expect(exifService.buildExifData).toHaveBeenCalledWith({ id: 1, camera: 'Canon EOS R5' }, null, {});
+    expect(exifService.writeExifWithExiftool).toHaveBeenCalledTimes(1);
+    const [tempPath, exifData, opts] = exifService.writeExifWithExiftool.mock.calls[0];
+    expect(tempPath).toContain(path.join(os.tmpdir(), 'filmgallery-export'));
+    expect(tempPath).toMatch(/photo_42_\d+_[0-9a-f]{8}\.jpg$/);
+    expect(exifData).toEqual({ Make: 'Canon', Model: 'EOS R5' });
+    expect(opts).toMatchObject({ keywords: [] });
+    expect(mockFsp.writeFile).toHaveBeenCalledWith(tempPath, inputBuf);
+    expect(mockFsp.unlink).toHaveBeenCalledWith(tempPath);
+  });
+
+  test('EXIF write failure → returns the ORIGINAL buffer (export never fails on metadata)', async () => {
+    exifService.writeExifWithExiftool.mockRejectedValue(new Error('exiftool missing'));
+
+    const out = await attachExifToJpegBuffer(inputBuf, 7);
+    expect(Buffer.isBuffer(out)).toBe(true);
+    expect(out.length).toBe(inputBuf.length);
+  });
+
+  test('photo not found → returns ORIGINAL buffer without attempting EXIF write', async () => {
+    downloadService.getPhotoWithRoll.mockResolvedValue(null);
+
+    const out = await attachExifToJpegBuffer(inputBuf, 99);
+    expect(out.length).toBe(inputBuf.length);
+    expect(exifService.writeExifWithExiftool).not.toHaveBeenCalled();
+  });
+
+  test('temp dir path matches download-service convention', async () => {
+    await attachExifToJpegBuffer(inputBuf, 5);
+    const mkdirPath = mockFsp.mkdir.mock.calls[0][0];
+    expect(mkdirPath).toBe(path.join(os.tmpdir(), 'filmgallery-export'));
   });
 });

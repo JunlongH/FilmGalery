@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@heroui/react';
-import { BookMarked, Pencil, Trash2, ChevronLeft, Plus, Check, X, Square, CheckSquare, ArrowDownUp } from 'lucide-react';
+import { BookMarked, Pencil, Trash2, ChevronLeft, Plus, Check, X, Square, CheckSquare, ArrowDownUp, Upload } from 'lucide-react';
 import {
   getAlbum, getAlbumPhotos, deleteAlbum,
   removeAlbumPhoto, setAlbumCover, sortAlbumPhotos,
@@ -294,6 +294,9 @@ export default function AlbumDetail() {
           <Button color="primary" variant="flat" size="sm" onPress={() => setShowAdd(true)}>
             <Plus className="w-4 h-4" /> Add photos
           </Button>
+          <Button variant="flat" size="sm" onPress={() => navigate(`/digital-import?album=${albumId}`)}>
+            <Upload className="w-4 h-4" /> Import
+          </Button>
           <Button variant="flat" size="sm" onPress={() => setShowEdit(true)}>
             <Pencil className="w-4 h-4" /> Edit
           </Button>
@@ -328,8 +331,8 @@ export default function AlbumDetail() {
             <Button color="primary" onPress={() => setShowAdd(true)}>
               <Plus className="w-4 h-4" /> Add photos
             </Button>
-            <Button color="primary" variant="flat" onPress={() => navigate('/digital-import')}>
-              Import Photos
+            <Button color="primary" variant="flat" onPress={() => navigate(`/digital-import?album=${albumId}`)}>
+              <Upload className="w-4 h-4" /> Import Photos
             </Button>
           </div>
         </div>

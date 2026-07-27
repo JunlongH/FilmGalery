@@ -1,7 +1,7 @@
 # 05 — 移动端导航改造：全局模式 + Overview + 数码 Timeline/Albums
 
 > 前置：`04-mobile-implementation-checklist.md`（数码模式 M1–M2C 已完成并 e2e 通过）。
-> 本文档是下一阶段改造的实施计划。状态：**待实施**。
+> 本文档是下一阶段改造的实施计划。状态：**已实施（2026-07-26）**。
 
 ## 1. 需求与决策记录
 
@@ -202,7 +202,7 @@ pages(全部已加载照片, date_taken desc)
 
 | 项 | 说明 | 处置 |
 |----|------|------|
-| 分节网格 getItemLayout 失效 | header/row 异高，固定高度优化不可用，长列表滚动性能待实测 | N3 实施时实测；必要时 header 高度固定化后仍可提供精确 offset（row 数可计算） |
+| 分节网格 getItemLayout 失效 | header/row 异高，固定高度优化不可用，长列表滚动性能待实测 | **已解决：预计算 offsets O(1) 查表** |
 | sticky header | FlatList 不支持；SectionList 多列需自行分行 | 本期不做；若用户反馈需要，P2 用 SectionList+分行重构 |
 | HeroCarousel 自动播放与 PhotoView 手势冲突 | 轮播定时器在屏内停留时持续触发 | 离开屏（blur）时 clearInterval；点击后暂停 |
 | `/api/photos/random` 数码数据量少 | seed/真实库照片少时轮播单薄 | limit 内不足 8 张按实际渲染；0 张时隐藏区块 |
@@ -212,10 +212,14 @@ pages(全部已加载照片, date_taken desc)
 
 ## 7. 验收清单（实施完成后勾选）
 
-- [ ] 全局切换：任一主屏 header 切换，5 个 tab 内容全部跟随（Map 为默认段跟随）
-- [ ] Library 内无残留 toggle；`library_mode@` 持久化跨重启生效
-- [ ] Overview：双模式 HeroCarousel/QuickStats/Browse 渲染正确，轮播可点进 PhotoView
-- [ ] 数码 Timeline：按月 header 正确、分页追加不重复分组、缺 date_taken 照片归入 created_at 月份
-- [ ] Albums：胶片=Collections 网格可进 TagDetail；数码=相册列表+详情+sessions 区块，长按操作回归
-- [ ] Map：数码模式进入默认段=digital；手动切三态后不被全局切换打断
-- [ ] jest 全绿 + tsc 0 错误 + e2e 通过 + @review 无未修复 Critical
+- [x] 全局切换：任一主屏 header 切换，5 个 tab 内容全部跟随（Map 为默认段跟随）
+- [x] Library 内无残留 toggle；`library_mode@` 持久化跨重启生效
+- [x] Overview：双模式 HeroCarousel/QuickStats/Browse 渲染正确，轮播可点进 PhotoView
+- [x] 数码 Timeline：按月 header 正确、分页追加不重复分组、缺 date_taken 照片归入 created_at 月份
+- [x] Albums：胶片=Collections 网格可进 TagDetail；数码=相册列表+详情+sessions 区块，长按操作回归
+- [x] Map：数码模式进入默认段=digital；手动切三态后不被全局切换打断
+- [x] jest 全绿 + tsc 0 错误 + e2e 通过 + @review 无未修复 Critical
+
+### 实施记录
+
+N1–N5 已完成；jest 92/92 绿 + tsc 0 错误；@review 1 Critical（HomeScreen 条件 hook）+ 6 Warning 已全部修复；e2e 模拟器 8/8 场景通过（证据截图 `/tmp/e2e-nav/`，临时目录）。已知遗留 2 项：①Map 全局跟随仅首次挂载生效（驻留期间不跟随，符合 §3.7「仅首次跟随」决策的严格字面实现，如需驻留跟随再迭代）；②既有测试数据 `thumb_rel_path` 失效导致个别胶片缩略图 404（数据问题非代码）。

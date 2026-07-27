@@ -24,6 +24,7 @@ function binaryParser(res, cb) {
 jest.mock('../../services/digital-develop-service', () => ({
   renderPreview: jest.fn().mockResolvedValue(mockFakeJpeg),
   renderExport: jest.fn().mockResolvedValue({ buffer: mockFakeJpeg, width: 8, height: 8 }),
+  attachExifToJpegBuffer: jest.fn((buf) => Promise.resolve(buf)),
   save: jest.fn().mockResolvedValue({ photoId: 1, positivePath: 'p.jpg', thumbPath: 't.jpg' }),
   getParams: jest.fn().mockResolvedValue({ exposure: 10 }),
 }));
@@ -90,6 +91,7 @@ describe('routes/digital-develop — preview/save/export contract', () => {
     expect(res.headers['content-type']).toMatch(/image\/jpeg/);
     expect(res.headers['content-disposition']).toMatch(/attachment/);
     expect(digitalDevelopService.renderExport).toHaveBeenCalledWith(1, params);
+    expect(digitalDevelopService.attachExifToJpegBuffer).toHaveBeenCalledWith(mockFakeJpeg, 1);
   });
 
   test('GET /:photoId/params → 200 { params }', async () => {
