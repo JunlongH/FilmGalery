@@ -21,9 +21,15 @@ const fs = require('fs');
 const { getDbPath } = require('../config/db-config');
 
 function log(msg) {
-  const logPath = path.join(path.dirname(getDbPath()), 'digital-mode-migration.log');
   const ts = new Date().toISOString();
-  fs.appendFileSync(logPath, `[${ts}] ${msg}\n`);
+  try {
+    const logPath = path.join(path.dirname(getDbPath()), 'digital-mode-migration.log');
+    fs.appendFileSync(logPath, `[${ts}] ${msg}\n`);
+  } catch (err) {
+    // Read-only DB dir (e.g. mounted NAS volume) — fall back to console-only,
+    // never crash startup. See D-P2-6.
+    console.warn(`[DIGITAL-MIGRATION] Failed to append to migration log file: ${err.message}`);
+  }
   console.log(`[DIGITAL-MIGRATION] ${msg}`);
 }
 
@@ -104,6 +110,8 @@ function runDigitalModeMigration(dbPathOverride) {
         )`,
 
         // albums — curated M2M collections (independent from rolls)
+        // is_smart / smart_rule_json — RESERVED for future smart-album support;
+        // no code reads or writes these columns yet (Phase 2 feature).
         `CREATE TABLE IF NOT EXISTS albums (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL,
@@ -149,6 +157,8 @@ function runDigitalModeMigration(dbPathOverride) {
         { col: 'content_hash', type: 'TEXT' },
         { col: 'deleted_at', type: 'TEXT' },
         { col: 'media_type', type: "TEXT DEFAULT 'image'" },
+        // stack_id / stack_role — RESERVED for future photo-stacking support;
+        // no code reads or writes these columns yet (Phase 2 feature).
         { col: 'stack_id', type: 'TEXT' },
         { col: 'stack_role', type: "TEXT DEFAULT 'cover'" },
         { col: 'white_balance', type: 'TEXT' },
@@ -158,6 +168,10 @@ function runDigitalModeMigration(dbPathOverride) {
         { col: 'scene_id', type: 'TEXT' },
       ];
 
+      // equip_cameras.is_digital — BINARY (NOT NULL DEFAULT 0):
+      //   A camera is either film (0) or digital (1); no universal state.
+      //   Unlike lenses (three-state, NULL = universal), a camera body cannot
+      //   be both — it physically shoots either film or digital.
       const cameraColumns = [
         { col: 'is_digital', type: 'INTEGER NOT NULL DEFAULT 0' },
         { col: 'sensor_type', type: 'TEXT' },
@@ -285,4 +299,4 @@ function runDigitalModeMigration(dbPathOverride) {
   });
 }
 
-module.exports = { runDigitalModeMigration };
+module.exports = { runDigitalModeMigration, _log: log };

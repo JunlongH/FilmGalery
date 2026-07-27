@@ -197,7 +197,7 @@ ALTER TABLE equip_cameras ADD COLUMN sensor_format TEXT;  -- 'full-frame' | 'APS
 
 ```javascript
 {
-  id: '20260801_digital_mode',
+  id: '20260701_digital_mode',
   description: 'Add digital photo management mode (albums, sessions, source_type, etc.)',
   runner: require('./digital-mode-migration.js')
 }

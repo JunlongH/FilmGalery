@@ -99,6 +99,14 @@ function isNativeDecoder() {
   return activeDecoder === 'native';
 }
 
+/**
+ * Synchronous availability check (no Promise).
+ * Same semantics as isAvailable() — true iff a decoder loaded at module init.
+ */
+function isAvailableSync() {
+  return activeDecoder !== null;
+}
+
 // ============================================================================
 // RawDecoder 类
 // ============================================================================
@@ -580,6 +588,7 @@ const rawDecoder = new RawDecoder();
 module.exports = rawDecoder;
 module.exports.SUPPORTED_EXTENSIONS = SUPPORTED_EXTENSIONS;
 module.exports.isNativeDecoder = isNativeDecoder;
+module.exports.isAvailableSync = isAvailableSync;
 module.exports.getDecoderInfo = () => decoderInfo;
 module.exports.isSupportedCamera = (model) => {
   if (LibRawNative && LibRawNative.isSupportedCamera) {

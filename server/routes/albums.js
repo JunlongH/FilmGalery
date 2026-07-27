@@ -111,7 +111,8 @@ router.get('/:id/photos', async (req, res, next) => {
          FROM album_photos ap
          JOIN photos p ON ap.photo_id = p.id
          LEFT JOIN rolls r ON p.roll_id = r.id
-         LEFT JOIN digital_sessions ds ON p.session_id = ds.id
+         LEFT JOIN digital_sessions ds
+           ON p.session_id = ds.id AND ds.deleted_at IS NULL
          WHERE ap.album_id = ? AND p.deleted_at IS NULL
          ORDER BY p.date_taken ASC NULLS LAST, p.id ASC`,
         [req.params.id]

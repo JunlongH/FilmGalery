@@ -24,27 +24,27 @@ const statsCache = getCacheStrategy('stats');
 /**
  * Statistics - 统计仪表盘
  *
- * mode 取值：
- *   - 'stats'（默认）/ 'spending'：胶片工作区的统计 / 开销视图（历史行为）
- *   - 'film' / 'digital'：工作区统计视图，所有查询附带 ?mode= 保持工作区纯净
+ * Props:
+ *   - workspace: 'film'（默认）| 'digital' — 工作区选择，所有查询附带 ?mode=<workspace>
+ *   - view: 'stats'（默认）| 'spending' — 视图切换（仅胶片工作区使用，开销看板）
  */
-export default function Statistics({ mode = 'stats' }) {
-  const isSpending = mode === 'spending';
-  const workspace = mode === 'digital' ? 'digital' : 'film';
-  const isDigital = workspace === 'digital';
-  const modeQs = `?mode=${workspace}`;
+export default function Statistics({ workspace = 'film', view = 'stats' }) {
+  const isSpending = view === 'spending';
+  const ws = workspace === 'digital' ? 'digital' : 'film';
+  const isDigital = ws === 'digital';
+  const modeQs = `?mode=${ws}`;
 
-  const { data: summary } = useQuery({ queryKey: ['stats-summary', workspace], queryFn: () => fetch(`${API}/api/stats/summary${modeQs}`).then(r => r.json()), ...statsCache });
-  const { data: gear } = useQuery({ queryKey: ['stats-gear', workspace], queryFn: () => fetch(`${API}/api/stats/gear${modeQs}`).then(r => r.json()), ...statsCache });
+  const { data: summary } = useQuery({ queryKey: ['stats-summary', ws], queryFn: () => fetch(`${API}/api/stats/summary${modeQs}`).then(r => r.json()), ...statsCache });
+  const { data: gear } = useQuery({ queryKey: ['stats-gear', ws], queryFn: () => fetch(`${API}/api/stats/gear${modeQs}`).then(r => r.json()), ...statsCache });
   // 胶片：按胶卷统计的拍摄活动；数码：按月统计的照片数量（同构 [{month, count}]）
   const { data: activity } = useQuery({
-    queryKey: ['stats-activity', workspace],
+    queryKey: ['stats-activity', ws],
     queryFn: () => fetch(isDigital ? `${API}/api/stats/digital/monthly` : `${API}/api/stats/activity?mode=film`).then(r => r.json()),
     ...statsCache
   });
-  const { data: costs } = useQuery({ queryKey: ['stats-costs'], queryFn: () => fetch(`${API}/api/stats/costs`).then(r => r.json()), enabled: mode === 'spending', ...statsCache });
-  const { data: locations } = useQuery({ queryKey: ['stats-locations', workspace], queryFn: () => fetch(`${API}/api/stats/locations${modeQs}`).then(r => r.json()).catch(() => []), ...statsCache });
-  const { data: themes } = useQuery({ queryKey: ['stats-themes', workspace], queryFn: () => fetch(`${API}/api/stats/themes${modeQs}`).then(r => r.json()), ...statsCache });
+  const { data: costs } = useQuery({ queryKey: ['stats-costs'], queryFn: () => fetch(`${API}/api/stats/costs`).then(r => r.json()), enabled: isSpending, ...statsCache });
+  const { data: locations } = useQuery({ queryKey: ['stats-locations', ws], queryFn: () => fetch(`${API}/api/stats/locations${modeQs}`).then(r => r.json()).catch(() => []), ...statsCache });
+  const { data: themes } = useQuery({ queryKey: ['stats-themes', ws], queryFn: () => fetch(`${API}/api/stats/themes${modeQs}`).then(r => r.json()), ...statsCache });
   const { data: inventory } = useQuery({ queryKey: ['stats-inventory'], queryFn: () => fetch(`${API}/api/stats/inventory`).then(r => r.json()), enabled: !isDigital, ...statsCache });
   // 数码专属：相机分布
   const { data: digitalCameras } = useQuery({

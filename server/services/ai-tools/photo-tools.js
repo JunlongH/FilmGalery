@@ -6,6 +6,7 @@
  */
 const { allAsync, getAsync, runAsync } = require('../../utils/db-helpers');
 const { sanitizeToolResult } = require('./helpers');
+const { buildSourceTypeClause } = require('../../../packages/shared/photographyMode');
 
 const PHOTO_TOOLS = {
 
@@ -34,8 +35,10 @@ const PHOTO_TOOLS = {
         },
       },
     },
-    handler: async (args) => {
+    handler: async (args, context = {}) => {
       const { query, roll_id, camera, lens, year, month, date_from, date_to, favorite_only, min_rating, limit = 20 } = args;
+      const { clause: sourceClause, params: sourceParams } = buildSourceTypeClause(context.mode, 'p.source_type');
+      const sourceFilter = sourceClause ? `AND ${sourceClause}` : '';
       let sql = `
         SELECT p.id, p.frame_number, p.caption, p.rating,
                p.aperture, p.shutter_speed, p.iso, p.focal_length,
@@ -45,8 +48,9 @@ const PHOTO_TOOLS = {
         LEFT JOIN rolls r ON p.roll_id = r.id
         LEFT JOIN films f ON r.filmId = f.id
         WHERE 1=1
+        ${sourceFilter}
       `;
-      const params = [];
+      const params = [...sourceParams];
       if (roll_id)       { sql += ' AND p.roll_id = ?';                        params.push(roll_id); }
       if (query)         { sql += ' AND (p.caption LIKE ? OR r.title LIKE ?)'; params.push(`%${query}%`, `%${query}%`); }
       if (camera)        { sql += ' AND p.camera LIKE ?';                      params.push(`%${camera}%`); }
@@ -86,14 +90,17 @@ const PHOTO_TOOLS = {
         },
       },
     },
-    handler: async ({ photo_id }) => {
+    handler: async ({ photo_id }, context = {}) => {
+      const { clause: sourceClause, params: sourceParams } = buildSourceTypeClause(context.mode, 'p.source_type');
+      const sourceFilter = sourceClause ? `AND ${sourceClause}` : '';
       const photo = await getAsync(
         `SELECT p.*, r.title AS roll_title, f.name AS film_name
          FROM photos p
          LEFT JOIN rolls r ON p.roll_id = r.id
          LEFT JOIN films f ON r.filmId = f.id
-         WHERE p.id = ?`,
-        [photo_id]
+         WHERE p.id = ?
+         ${sourceFilter}`,
+        [photo_id, ...sourceParams]
       );
       if (!photo) return sanitizeToolResult(JSON.stringify({ error: 'photo not found' }));
       const tags = await allAsync(
@@ -151,9 +158,11 @@ const PHOTO_TOOLS = {
         },
       },
     },
-    handler: async ({ photo_id, count = 3 }) => {
+    handler: async ({ photo_id, count = 3 }, context = {}) => {
       const n = Math.min(Number(count) || 3, 10);
-      const photo = await getAsync('SELECT roll_id, frame_number, display_seq FROM photos WHERE id = ?', [photo_id]);
+      const { clause: sourceClause, params: sourceParams } = buildSourceTypeClause(context.mode, 'photos.source_type');
+      const sourceFilter = sourceClause ? `AND ${sourceClause}` : '';
+      const photo = await getAsync(`SELECT roll_id, frame_number, display_seq FROM photos WHERE id = ? ${sourceFilter}`, [photo_id, ...sourceParams]);
       if (!photo) return sanitizeToolResult(JSON.stringify({ error: 'photo not found' }));
 
       const orderCol = photo.frame_number ? 'frame_number' : 'display_seq';
@@ -161,13 +170,13 @@ const PHOTO_TOOLS = {
 
       const before = await allAsync(
         `SELECT id, frame_number, caption, rating, date_taken, camera, lens, location_name
-         FROM photos WHERE roll_id = ? AND ${orderCol} < ? ORDER BY ${orderCol} DESC LIMIT ?`,
-        [photo.roll_id, orderVal, n]
+         FROM photos WHERE roll_id = ? ${sourceFilter} AND ${orderCol} < ? ORDER BY ${orderCol} DESC LIMIT ?`,
+        [photo.roll_id, ...sourceParams, orderVal, n]
       );
       const after = await allAsync(
         `SELECT id, frame_number, caption, rating, date_taken, camera, lens, location_name
-         FROM photos WHERE roll_id = ? AND ${orderCol} > ? ORDER BY ${orderCol} ASC LIMIT ?`,
-        [photo.roll_id, orderVal, n]
+         FROM photos WHERE roll_id = ? ${sourceFilter} AND ${orderCol} > ? ORDER BY ${orderCol} ASC LIMIT ?`,
+        [photo.roll_id, ...sourceParams, orderVal, n]
       );
 
       return sanitizeToolResult(JSON.stringify({

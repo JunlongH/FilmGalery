@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, Card, CardBody } from '@heroui/react';
 import { Film, Camera, Layers } from 'lucide-react';
-import { getAppConfig, updateAppConfig, setOnboardingChoice, getRolls } from '../api';
+import { getAppConfig, updateAppConfig, setOnboardingChoice, API_BASE as API } from '../api';
 
 const MODE_KEY = 'fg-workspace-mode';
 export const WORKSPACE_EVENT = 'fg-set-workspace-mode';
@@ -28,18 +28,42 @@ export default function Onboarding() {
 
   const needsOnboarding = !!config && Number(config.onboarding_completed) !== 1;
 
-  const { data: rolls, isLoading: rollsLoading } = useQuery({
-    queryKey: ['onboarding-rolls-probe'],
-    queryFn: () => getRolls(),
+  // Liveness probe: while connectivity is unconfirmed, hold the modal.
+  // On probe failure we fail open (show onboarding anyway, summary stays
+  // disabled → first-run cards) — matching the pre-health-probe behavior.
+  const { isLoading: healthLoading, isError: healthError } = useQuery({
+    queryKey: ['onboarding-health'],
+    queryFn: () => fetch(`${API}/api/health`).then((r) => {
+      if (!r.ok) throw new Error(`health check failed: ${r.status}`);
+      return r.json();
+    }),
     enabled: needsOnboarding,
+    staleTime: 60 * 1000,
+    retry: 1,
+  });
+
+  const healthOk = !healthLoading && !healthError;
+
+  // Existing-data signal: mode-agnostic. A film user who deleted all rolls
+  // but still has photos (or has digital photos) still counts as having
+  // existing data → show the upgrade gate rather than the first-run cards.
+  const { data: summary, isLoading: summaryLoading } = useQuery({
+    queryKey: ['onboarding-existing-data'],
+    queryFn: () => fetch(`${API}/api/stats/summary`).then(r => r.json()),
+    enabled: needsOnboarding && healthOk,
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 
   if (isError || !needsOnboarding || dismissed) return null;
-  if (rollsLoading) return null;
+  if (healthLoading) return null;
+  if (summaryLoading) return null;
 
-  const hasExistingData = Array.isArray(rolls) && rolls.length > 0;
+  const hasExistingData = (
+    Number(summary?.total_rolls || 0) +
+    Number(summary?.total_photos || 0) +
+    Number(summary?.total_digital_photos || 0)
+  ) > 0;
   const showGate = hasExistingData && step === 'gate';
 
   const applyWorkspace = (m) => {

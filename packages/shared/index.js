@@ -448,6 +448,7 @@ module.exports = {
   getCapabilities: serverCapabilities.getCapabilities,
   isComputeEnabled: serverCapabilities.isComputeEnabled,
   isComputeRoute: serverCapabilities.isComputeRoute,
+  setDigitalAvailabilityProbe: serverCapabilities.setDigitalAvailabilityProbe,
 
   // ============================================================================
   // 反向地理编码（BigDataCloud 共享 provider）
@@ -510,6 +511,7 @@ module.exports = {
   isFilmMode: photographyMode.isFilmMode,
   isDigitalMode: photographyMode.isDigitalMode,
   isAllMode: photographyMode.isAllMode,
+  isFilmPipelineSource: photographyMode.isFilmPipelineSource,
   sourceTypeFilter: photographyMode.sourceTypeFilter,
   buildSourceTypeClause: photographyMode.buildSourceTypeClause,
 };

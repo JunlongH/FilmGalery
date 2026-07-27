@@ -58,8 +58,8 @@ function FilmRoutes() {
       <Route path="/" element={<Overview />} />
       <Route path="/calendar" element={<CalendarView mode="film" />} />
       <Route path="/map" element={<MapPage mode="film" />} />
-      <Route path="/stats" element={<Statistics mode="film" />} />
-      <Route path="/spending" element={<Statistics mode="spending" />} />
+      <Route path="/stats" element={<Statistics workspace="film" />} />
+      <Route path="/spending" element={<Statistics workspace="film" view="spending" />} />
       <Route path="/rolls" element={<RollLibrary />} />
       <Route path="/rolls/new" element={<NewRollForm />} />
       <Route path="/rolls/:id" element={<RollDetail />} />
@@ -88,7 +88,7 @@ function DigitalRoutes() {
       <Route path="/favorites" element={<Favorites mode="digital" />} />
       <Route path="/themes" element={<TagGallery mode="digital" />} />
       <Route path="/themes/:tagId" element={<TagGallery mode="digital" />} />
-      <Route path="/stats" element={<Statistics mode="digital" />} />
+      <Route path="/stats" element={<Statistics workspace="digital" />} />
       <Route path="/equipment" element={<EquipmentManager />} />
       <Route path="/settings" element={<Settings />} />
       {/* 数码模式下的兜底路由 → 跳转到 Overview */}

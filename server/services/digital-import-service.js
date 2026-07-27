@@ -219,7 +219,7 @@ async function preview(files) {
  *
  * @param {Object} item - item from preview
  * @param {number} sessionId
- * @returns {Promise<{id: number}>}
+ * @returns {Promise<{id: number, relPaths: {originalRelPath: string, positiveRelPath: string, thumbRelPath: string}}>}
  */
 async function processOne(item, sessionId) {
   const exif = item.exif || {};
@@ -262,43 +262,65 @@ async function processOne(item, sessionId) {
   );
   const photoId = ins.lastID;
 
+  // Compute all candidate abs paths up front so that if any step below
+  // throws, the catch can best-effort unlink all three (a partially-written
+  // display/thumb or an un-started original) — matching rollbackPartial's
+  // shape.
   const originalExt = digitalFileService.extOf(item.file.originalname);
   const relPaths = digitalFileService.computeDigitalRelPaths(photoId, originalExt, shard);
-
-  // Generate display JPEG (full quality) and thumbnail from sourceBuf
   const displayAbs = digitalFileService.toUploadAbsPath(relPaths.positiveRelPath);
   const thumbAbs = digitalFileService.toUploadAbsPath(relPaths.thumbRelPath);
+  const originalAbs = digitalFileService.toUploadAbsPath(relPaths.originalRelPath);
 
-  await fsp.mkdir(path.dirname(displayAbs), { recursive: true });
-  await fsp.mkdir(path.dirname(thumbAbs), { recursive: true });
+  try {
+    await fsp.mkdir(path.dirname(displayAbs), { recursive: true });
+    await fsp.mkdir(path.dirname(thumbAbs), { recursive: true });
 
-  const oriented = sharp(sourceBuf).rotate();
-  if (item.isRaw && exif.orientation) {
-    const deg = { 3: 180, 6: 90, 8: 270 }[exif.orientation];
-    if (deg) oriented.rotate(deg);
+    const oriented = sharp(sourceBuf).rotate();
+    if (item.isRaw && exif.orientation) {
+      const deg = { 3: 180, 6: 90, 8: 270 }[exif.orientation];
+      if (deg) oriented.rotate(deg);
+    }
+
+    await oriented.clone().jpeg({ quality: 92 }).toFile(displayAbs);
+
+    await oriented.clone()
+      .resize({ width: 400, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 80 })
+      .toFile(thumbAbs);
+
+    await fsp.mkdir(path.dirname(originalAbs), { recursive: true });
+    await fsp.copyFile(item.file.path, originalAbs);
+
+    await runAsync(
+      `UPDATE photos SET original_rel_path = ?, positive_rel_path = ?, thumb_rel_path = ?,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [relPaths.originalRelPath, relPaths.positiveRelPath, relPaths.thumbRelPath, photoId]
+    );
+  } catch (e) {
+    // Self-cleanup: a failure after INSERT (sharp encode, copyFile, or the
+    // path UPDATE) would otherwise orphan the photo row and any partially-
+    // written files. Best-effort unlink each candidate abs path, hard-delete
+    // the row, then rethrow so execute()'s per-file catch records the error.
+    for (const abs of [displayAbs, thumbAbs, originalAbs]) {
+      if (abs) {
+        try {
+          await fsp.unlink(abs);
+        } catch (_) {
+          // best-effort — file may not exist or already be gone
+        }
+      }
+    }
+    try {
+      await runAsync('DELETE FROM photos WHERE id = ?', [photoId]);
+    } catch (_) {
+      // best-effort
+    }
+    throw e;
   }
 
-  await oriented.clone().jpeg({ quality: 92 }).toFile(displayAbs);
-
-  await oriented.clone()
-    .resize({ width: 400, fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 80 })
-    .toFile(thumbAbs);
-
-  // Stage the original file copy
-  const originalAbs = digitalFileService.toUploadAbsPath(relPaths.originalRelPath);
-  await fsp.mkdir(path.dirname(originalAbs), { recursive: true });
-  await fsp.copyFile(item.file.path, originalAbs);
-
-  // Update photo with resolved paths
-  await runAsync(
-    `UPDATE photos SET original_rel_path = ?, positive_rel_path = ?, thumb_rel_path = ?,
-       updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    [relPaths.originalRelPath, relPaths.positiveRelPath, relPaths.thumbRelPath, photoId]
-  );
-
-  return { id: photoId };
+  return { id: photoId, relPaths };
 }
 
 /**
@@ -363,6 +385,11 @@ async function execute(body, jobId, jobRegistry) {
   for (let i = 0; i < items.length; i++) {
     if (jobRegistry.isCancelled(jobId)) {
       await rollbackPartial(photoRows);
+      try {
+        await runAsync('UPDATE digital_sessions SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL', [sessionId]);
+      } catch (e) {
+        console.warn('[DigitalImport] session soft-delete failed:', e.message);
+      }
       await cleanupTempFiles(items);
       jobRegistry.markCancelled(jobId);
       return;
@@ -435,13 +462,34 @@ async function execute(body, jobId, jobRegistry) {
 
 /**
  * Best-effort cleanup of partially imported photos on cancellation.
- * Soft-deletes inserted rows; file cleanup is best-effort.
- * @param {Array<{id: number}>} photoRows
+ *
+ * For each row: unlinks the display/thumb/original files (best-effort,
+ * per-file catch), then HARD-DELETES the photos row. Hard-delete is safe
+ * because cancellation is checked at the top of the per-file loop, BEFORE
+ * the album_photos join in step 4 of execute() — so no FK rows can reference
+ * these photo ids yet. The wider schema has additional FKs to photos
+ * (albums.cover_photo_id, non-CASCADE; photo_tags) but neither is written
+ * by this flow, and cover_photo_id is only ever set by album-update routes
+ * outside the cancel timeline.
+ *
+ * @param {Array<{id: number, relPaths?: {originalRelPath: string, positiveRelPath: string, thumbRelPath: string}}>} photoRows
  */
 async function rollbackPartial(photoRows) {
   for (const r of photoRows) {
+    if (r.relPaths) {
+      for (const rel of [r.relPaths.positiveRelPath, r.relPaths.thumbRelPath, r.relPaths.originalRelPath]) {
+        const abs = digitalFileService.toUploadAbsPath(rel);
+        if (abs) {
+          try {
+            await fsp.unlink(abs);
+          } catch (_) {
+            // best-effort — file may not exist or already be gone
+          }
+        }
+      }
+    }
     try {
-      await runAsync('UPDATE photos SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [r.id]);
+      await runAsync('DELETE FROM photos WHERE id = ?', [r.id]);
     } catch (_) {
       // best-effort
     }

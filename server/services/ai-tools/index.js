@@ -42,6 +42,7 @@ const FILM_ONLY_TOOL_KEYS = new Set([
   ...Object.keys(FILM_TOOLS),
   ...Object.keys(SHOT_LOG_TOOLS),
   ...Object.keys(RENDER_TOOLS),
+  'get_roll_photos',
 ]);
 
 // ─── 导出接口（与旧版 ai-tools.js 完全兼容） ───

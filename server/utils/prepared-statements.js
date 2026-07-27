@@ -29,7 +29,7 @@ const STATEMENTS = {
   'photos.getById': 'SELECT * FROM photos WHERE id = ?',
   'photos.getByIdWithPaths': 'SELECT id, roll_id, filename, original_rel_path, positive_rel_path, full_rel_path, negative_rel_path, thumb_rel_path, positive_thumb_rel_path, negative_thumb_rel_path FROM photos WHERE id = ?',
   'photos.listByRoll': 'SELECT p.*, COALESCE(l.country_name, p.country) AS country_name, COALESCE(l.city_name, p.city) AS city_name, l.country_code, l.city_lat AS location_lat, l.city_lng AS location_lng FROM photos p LEFT JOIN locations l ON p.location_id = l.id WHERE p.roll_id = ? AND p.deleted_at IS NULL ORDER BY p.frame_number',
-  'photos.getByRollSimple': 'SELECT id, roll_id, frame_number, full_rel_path, thumb_rel_path, positive_rel_path, positive_thumb_rel_path FROM photos WHERE id = ?',
+  'photos.getByRollSimple': 'SELECT id, roll_id, source_type, frame_number, full_rel_path, thumb_rel_path, positive_rel_path, positive_thumb_rel_path FROM photos WHERE id = ?',
   'photos.updateRating': 'UPDATE photos SET rating = ? WHERE id = ?',
   'photos.delete': 'UPDATE photos SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?',
   'photos.hardDelete': 'DELETE FROM photos WHERE id = ?', // Caller MUST delete photo_tags first (no FK cascade)
@@ -106,7 +106,8 @@ const STATEMENTS = {
     FROM album_photos ap
     JOIN photos p ON ap.photo_id = p.id
     LEFT JOIN rolls r ON p.roll_id = r.id
-    LEFT JOIN digital_sessions ds ON p.session_id = ds.id
+    LEFT JOIN digital_sessions ds
+      ON p.session_id = ds.id AND ds.deleted_at IS NULL
     WHERE ap.album_id = ? AND p.deleted_at IS NULL
     ORDER BY ap.sort_order, ap.added_at`,
 
@@ -115,7 +116,8 @@ const STATEMENTS = {
     SELECT p.*, ds.label AS session_label, ds.session_date,
            c.brand || ' ' || c.model AS camera_name
     FROM photos p
-    LEFT JOIN digital_sessions ds ON p.session_id = ds.id
+    LEFT JOIN digital_sessions ds
+      ON p.session_id = ds.id AND ds.deleted_at IS NULL
     LEFT JOIN equip_cameras c ON p.camera_equip_id = c.id
     WHERE p.source_type = 'digital' AND p.deleted_at IS NULL
     ORDER BY p.date_taken DESC NULLS LAST, p.id DESC`,

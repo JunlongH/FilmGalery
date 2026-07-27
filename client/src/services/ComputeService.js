@@ -93,6 +93,7 @@ export async function getServerCapabilities() {
         // 与服务端 schema 对齐（data/compute/storage），保留旧字段名兼容
         database: data.capabilities?.data ?? data.capabilities?.database ?? true,
         files: data.capabilities?.storage ?? data.capabilities?.files ?? true,
+        digital: data.capabilities?.digital ?? true,
         version: data.version
       };
       lastCapabilityCheck = now;

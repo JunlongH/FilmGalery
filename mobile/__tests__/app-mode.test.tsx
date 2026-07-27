@@ -38,6 +38,14 @@ function ModeWriter({ onSetter }: { onSetter: (s: (m: 'film' | 'digital') => voi
   return null;
 }
 
+function HydratedProbe({ onHydrated }: { onHydrated: (h: boolean) => void }) {
+  const { hydrated } = useAppMode();
+  React.useEffect(() => {
+    onHydrated(hydrated);
+  }, [hydrated, onHydrated]);
+  return null;
+}
+
 function LibModeProbe({ onMode }: { onMode: (m: string) => void }) {
   const mode = useLibraryMode();
   React.useEffect(() => {
@@ -151,6 +159,126 @@ describe('AppModeContext persistence', () => {
     });
     await settle();
     expect(seen[seen.length - 1]).toBe('digital');
+  });
+
+  test('hydrated is false on first render and true after read settles', async () => {
+    const seen: boolean[] = [];
+    const onHydrated = (h: boolean) => {
+      if (seen[seen.length - 1] !== h) seen.push(h);
+    };
+    await act(async () => {
+      renderAppModeTree(BASE, React.createElement(HydratedProbe, { onHydrated }));
+    });
+    expect(seen[0]).toBe(false);
+    await settle();
+    expect(seen[seen.length - 1]).toBe(true);
+  });
+
+  test('read failure warns, keeps default mode, and hydrated still becomes true', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    (AsyncStorage.getItem as jest.Mock).mockRejectedValueOnce(new Error('boom'));
+
+    const modeSeen: string[] = [];
+    const onMode = (m: string) => {
+      if (modeSeen[modeSeen.length - 1] !== m) modeSeen.push(m);
+    };
+    const hydratedSeen: boolean[] = [];
+    const onHydrated = (h: boolean) => {
+      if (hydratedSeen[hydratedSeen.length - 1] !== h) hydratedSeen.push(h);
+    };
+
+    await act(async () => {
+      renderAppModeTree(
+        BASE,
+        React.createElement(
+          React.Fragment,
+          null,
+          React.createElement(ModeProbe, { onMode }),
+          React.createElement(HydratedProbe, { onHydrated }),
+        ),
+      );
+    });
+    await settle();
+
+    expect(modeSeen[modeSeen.length - 1]).toBe('film');
+    expect(hydratedSeen[hydratedSeen.length - 1]).toBe(true);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[AppMode] Failed to load persisted mode:',
+      expect.any(Error),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  test('write failure warns but mode state still updates', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    (AsyncStorage.setItem as jest.Mock).mockRejectedValueOnce(new Error('boom'));
+
+    let setter: ((m: 'film' | 'digital') => void) | null = null;
+    const onSetter = (s: (m: 'film' | 'digital') => void) => {
+      setter = s;
+    };
+    const seen: string[] = [];
+    const onMode = (m: string) => {
+      if (seen[seen.length - 1] !== m) seen.push(m);
+    };
+
+    await act(async () => {
+      renderAppModeTree(
+        BASE,
+        React.createElement(
+          React.Fragment,
+          null,
+          React.createElement(ModeWriter, { onSetter }),
+          React.createElement(ModeProbe, { onMode }),
+        ),
+      );
+    });
+    await settle();
+    expect(seen[seen.length - 1]).toBe('film');
+
+    await act(async () => {
+      setter!('digital');
+    });
+    await settle();
+
+    expect(seen[seen.length - 1]).toBe('digital');
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[AppMode] Failed to persist mode:',
+      expect.any(Error),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  test('hydrated resets to false on baseUrl change and true again after re-read', async () => {
+    await AsyncStorage.setItem(`library_mode@${BASE}`, 'film');
+    await AsyncStorage.setItem(`library_mode@${BASE2}`, 'digital');
+
+    const seen: boolean[] = [];
+    const onHydrated = (h: boolean) => {
+      if (seen[seen.length - 1] !== h) seen.push(h);
+    };
+
+    const probe = React.createElement(HydratedProbe, { onHydrated });
+    let r: any;
+    await act(async () => {
+      r = renderAppModeTree(BASE, probe);
+    });
+    await settle();
+    expect(seen).toEqual([false, true]);
+
+    await act(async () => {
+      r.update(
+        React.createElement(
+          ApiContext.Provider,
+          { value: { baseUrl: BASE2 } as any },
+          React.createElement(AppModeProvider, null, probe),
+        ),
+      );
+    });
+    await settle();
+    expect(seen).toEqual([false, true, false, true]);
   });
 });
 

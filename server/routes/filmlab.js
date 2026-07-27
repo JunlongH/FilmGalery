@@ -22,6 +22,8 @@ const {
   SOURCE_TYPE 
 } = require('../../packages/shared/sourcePathResolver');
 
+const { isFilmPipelineSource } = require('../../packages/shared/photographyMode');
+
 // POST /api/filmlab/preview
 // Body: { photoId, params, maxWidth, sourceType }
 router.post('/preview', async (req, res, next) => {
@@ -29,9 +31,17 @@ router.post('/preview', async (req, res, next) => {
   if (!photoId) return res.status(400).json({ error: 'photoId required' });
   try {
     const row = await new Promise((resolve, reject) => {
-      db.get('SELECT id, roll_id, original_rel_path, positive_rel_path, full_rel_path, negative_rel_path FROM photos WHERE id = ?', [photoId], (err, r) => err ? reject(err) : resolve(r));
+      db.get('SELECT id, roll_id, source_type, original_rel_path, positive_rel_path, full_rel_path, negative_rel_path FROM photos WHERE id = ?', [photoId], (err, r) => err ? reject(err) : resolve(r));
     });
     if (!row) return res.status(404).json({ error: 'photo not found' });
+    if (!isFilmPipelineSource(row.source_type)) {
+      return res.status(409).json({
+        error: 'source_type_mismatch',
+        message: 'This endpoint only accepts film photos; use /api/digital-develop/* for digital photos.',
+        sourceType: row.source_type,
+        photoId
+      });
+    }
     
     // 【重要】使用严格源路径选择，不允许跨类型回退
     const sourceResult = getStrictSourcePath(row, sourceType || 'original', {
@@ -128,9 +138,17 @@ router.post('/render', async (req, res, next) => {
   if (!photoId) return res.status(400).json({ error: 'photoId required' });
   try {
     const row = await new Promise((resolve, reject) => {
-      db.get('SELECT id, roll_id, frame_number, original_rel_path, positive_rel_path, full_rel_path, negative_rel_path, positive_thumb_rel_path, filename FROM photos WHERE id = ?', [photoId], (err, r) => err ? reject(err) : resolve(r));
+      db.get('SELECT id, roll_id, frame_number, source_type, original_rel_path, positive_rel_path, full_rel_path, negative_rel_path, positive_thumb_rel_path, filename FROM photos WHERE id = ?', [photoId], (err, r) => err ? reject(err) : resolve(r));
     });
     if (!row) return res.status(404).json({ error: 'photo not found' });
+    if (!isFilmPipelineSource(row.source_type)) {
+      return res.status(409).json({
+        error: 'source_type_mismatch',
+        message: 'This endpoint only accepts film photos; use /api/digital-develop/* for digital photos.',
+        sourceType: row.source_type,
+        photoId
+      });
+    }
     
     // 使用严格源路径选择
     const sourceResult = getStrictSourcePath(row, sourceType || 'original', {
@@ -258,9 +276,17 @@ router.post('/export', async (req, res, next) => {
   if (!photoId) return res.status(400).json({ error: 'photoId required' });
   try {
     const row = await new Promise((resolve, reject) => {
-      db.get('SELECT id, roll_id, frame_number, filename, original_rel_path, positive_rel_path, full_rel_path, negative_rel_path, positive_thumb_rel_path FROM photos WHERE id = ?', [photoId], (err, r) => err ? reject(err) : resolve(r));
+      db.get('SELECT id, roll_id, frame_number, source_type, filename, original_rel_path, positive_rel_path, full_rel_path, negative_rel_path, positive_thumb_rel_path FROM photos WHERE id = ?', [photoId], (err, r) => err ? reject(err) : resolve(r));
     });
     if (!row) return res.status(404).json({ error: 'photo not found' });
+    if (!isFilmPipelineSource(row.source_type)) {
+      return res.status(409).json({
+        error: 'source_type_mismatch',
+        message: 'This endpoint only accepts film photos; use /api/digital-develop/* for digital photos.',
+        sourceType: row.source_type,
+        photoId
+      });
+    }
     
     // 使用严格源路径选择
     const sourceResult = getStrictSourcePath(row, sourceType || 'original', {

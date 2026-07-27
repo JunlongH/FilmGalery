@@ -59,6 +59,23 @@ const DATA_ROUTES = [
 ];
 
 /**
+ * Optional sync probe registered by the server to report whether a RAW
+ * decoder (libraw) is actually loaded. null = no probe registered →
+ * capabilities.digital defaults to true (preserves pure-shared consumers).
+ */
+let digitalAvailabilityProbe = null;
+
+/**
+ * Register (or unregister, when passed null) a synchronous probe that
+ * reports actual RAW-decoder availability. Must be called by the server
+ * process at startup; client/mobile/watch consumers never call this.
+ * @param {(() => boolean)|null} fn
+ */
+function setDigitalAvailabilityProbe(fn) {
+  digitalAvailabilityProbe = fn;
+}
+
+/**
  * Get current server mode from environment
  */
 function getServerMode() {
@@ -91,14 +108,23 @@ function isComputeRoute(path) {
 function getCapabilities() {
   const mode = getServerMode();
   const computeEnabled = isComputeEnabled();
-  
+
+  let digital = computeEnabled;
+  if (computeEnabled && digitalAvailabilityProbe) {
+    try {
+      digital = !!digitalAvailabilityProbe();
+    } catch (_) {
+      digital = false;
+    }
+  }
+
   return {
     mode,
     capabilities: {
       data: true,
       compute: computeEnabled,
       storage: true,
-      digital: true
+      digital
     },
     endpoints: {
       data: DATA_ROUTES,
@@ -120,5 +146,6 @@ module.exports = {
   getServerMode,
   isComputeEnabled,
   isComputeRoute,
-  getCapabilities
+  getCapabilities,
+  setDigitalAvailabilityProbe
 };

@@ -28,7 +28,7 @@ jest.mock('../exif-service', () => ({
 }));
 
 jest.mock('../download-service', () => ({
-  getPhotoWithRoll: jest.fn().mockResolvedValue({ id: 1, camera: 'Canon EOS R5' }),
+  getPhotoForExport: jest.fn().mockResolvedValue({ id: 1, camera: 'Canon EOS R5' }),
 }));
 
 // Stub fs.promises so the helper does no real disk I/O. Default behavior
@@ -47,7 +47,8 @@ jest.mock('fs', () => {
 
 const os = require('os');
 const path = require('path');
-const { normalizeParams, deserializeLut, attachExifToJpegBuffer } = require('../digital-develop-service');
+const { normalizeParams, deserializeLut, attachExifToJpegBuffer, getDigitalPhotoRecord } = require('../digital-develop-service');
+const dbHelpers = require('../../utils/db-helpers');
 const exifService = require('../exif-service');
 const downloadService = require('../download-service');
 
@@ -155,6 +156,45 @@ describe('digital-develop-service normalizeParams', () => {
   });
 });
 
+describe('digital-develop-service normalizeParams — corrupt JSON warning (D-P2-3)', () => {
+  let warnSpy;
+  beforeEach(() => {
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => { warnSpy.mockRestore(); });
+
+  test('corrupt JSON string → returns {} AND console.warn fires with photoId', () => {
+    const out = normalizeParams('{not json', 42);
+    expect(out.inverted).toBe(false);
+    expect(out.filmCurveEnabled).toBe(false);
+    expect(out.cropRect).toBeUndefined();
+    expect(out.temp).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const [msg, errMsg] = warnSpy.mock.calls[0];
+    expect(String(msg)).toContain('[DigitalDevelop]');
+    expect(String(msg)).toContain('photoId=42');
+    expect(String(msg)).toContain('develop_params_json');
+    expect(typeof errMsg).toBe('string');
+    expect(errMsg.length).toBeGreaterThan(0);
+  });
+
+  test('photoId omitted → warn still fires with photoId=unknown', () => {
+    normalizeParams('{broken');
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0][0])).toContain('photoId=unknown');
+  });
+
+  test('valid JSON string → no warn', () => {
+    normalizeParams(JSON.stringify({ exposure: 5 }), 1);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('object input → no warn (no parse path taken)', () => {
+    normalizeParams({ exposure: 5 }, 1);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe('digital-develop-service deserializeLut', () => {
   test('keeps Float32Array data as-is', () => {
     const f32 = new Float32Array([0.1, 0.2, 0.3]);
@@ -180,7 +220,7 @@ describe('digital-develop-service attachExifToJpegBuffer', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    downloadService.getPhotoWithRoll.mockResolvedValue({ id: 1, camera: 'Canon EOS R5' });
+    downloadService.getPhotoForExport.mockResolvedValue({ id: 1, camera: 'Canon EOS R5' });
     exifService.buildExifData.mockReturnValue({ Make: 'Canon', Model: 'EOS R5' });
     exifService.writeExifWithExiftool.mockResolvedValue(true);
     mockFsp.readFile.mockResolvedValue(inputBuf);
@@ -194,7 +234,7 @@ describe('digital-develop-service attachExifToJpegBuffer', () => {
 
     expect(out).toBeInstanceOf(Buffer);
     expect(out).toBe(rewritten);
-    expect(downloadService.getPhotoWithRoll).toHaveBeenCalledWith(42);
+    expect(downloadService.getPhotoForExport).toHaveBeenCalledWith(42);
     expect(exifService.buildExifData).toHaveBeenCalledWith({ id: 1, camera: 'Canon EOS R5' }, null, {});
     expect(exifService.writeExifWithExiftool).toHaveBeenCalledTimes(1);
     const [tempPath, exifData, opts] = exifService.writeExifWithExiftool.mock.calls[0];
@@ -215,7 +255,7 @@ describe('digital-develop-service attachExifToJpegBuffer', () => {
   });
 
   test('photo not found → returns ORIGINAL buffer without attempting EXIF write', async () => {
-    downloadService.getPhotoWithRoll.mockResolvedValue(null);
+    downloadService.getPhotoForExport.mockResolvedValue(null);
 
     const out = await attachExifToJpegBuffer(inputBuf, 99);
     expect(out.length).toBe(inputBuf.length);
@@ -226,5 +266,39 @@ describe('digital-develop-service attachExifToJpegBuffer', () => {
     await attachExifToJpegBuffer(inputBuf, 5);
     const mkdirPath = mockFsp.mkdir.mock.calls[0][0];
     expect(mkdirPath).toBe(path.join(os.tmpdir(), 'filmgallery-export'));
+  });
+});
+
+describe('digital-develop-service getDigitalPhotoRecord — soft-deleted session masking', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('predicate lives in the JOIN ON clause (photo stays reachable; only ds columns mask)', async () => {
+    dbHelpers.getAsync.mockResolvedValue({ id: 7, source_type: 'digital' });
+    await getDigitalPhotoRecord(7);
+    const [sql, params] = dbHelpers.getAsync.mock.calls[0];
+    expect(sql).toMatch(/LEFT JOIN digital_sessions ds\s+ON p\.session_id = ds\.id AND ds\.deleted_at IS NULL/);
+    const whereClause = sql.split(/\bWHERE\b/i)[1];
+    expect(whereClause).not.toContain('ds.deleted_at');
+    expect(params).toEqual([7]);
+  });
+
+  test('photo under a soft-deleted session → returned with session_label NULL (LEFT JOIN masks ds columns)', async () => {
+    dbHelpers.getAsync.mockResolvedValue({
+      id: 7, source_type: 'digital', session_id: 5,
+      session_label: null, import_batch: null,
+    });
+    const result = await getDigitalPhotoRecord(7);
+    expect(result).not.toBeNull();
+    expect(result.id).toBe(7);
+    expect(result.session_label).toBeNull();
+    expect(result.import_batch).toBeNull();
+  });
+
+  test('genuinely missing photo → null', async () => {
+    dbHelpers.getAsync.mockResolvedValue(null);
+    const result = await getDigitalPhotoRecord(7);
+    expect(result).toBeNull();
   });
 });

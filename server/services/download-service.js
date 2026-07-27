@@ -41,11 +41,11 @@ const NAMING_PATTERNS = {
 // ============================================================================
 
 /**
- * 获取照片记录及相关信息 (包含设备、胶片、扫描仪信息)
+ * Fetch a photo with all metadata needed for EXIF/export (LEFT JOIN rolls — roll fields are NULL for digital photos).
  * @param {number} photoId - 照片 ID
  * @returns {Promise<Object|null>}
  */
-async function getPhotoWithRoll(photoId) {
+async function getPhotoForExport(photoId) {
   return new Promise((resolve, reject) => {
     const sql = `
       SELECT p.*, r.title as roll_title, r.film_type, r.camera as roll_camera, r.lens as roll_lens,
@@ -228,7 +228,7 @@ async function prepareDownload(options) {
   } = options;
 
   // 获取照片记录
-  const photo = await getPhotoWithRoll(photoId);
+  const photo = await getPhotoForExport(photoId);
   if (!photo) {
     throw new Error(`Photo not found: ${photoId}`);
   }
@@ -457,7 +457,7 @@ module.exports = {
   getAvailableCount,
   
   // 辅助函数
-  getPhotoWithRoll,
+  getPhotoForExport,
   getPhotosWithRoll,
   getSourcePathByType,
   generateFilename,

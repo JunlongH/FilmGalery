@@ -22,7 +22,7 @@ const db = require('../db');
 const { uploadsDir } = require('../config/paths');
 const { buildPipeline } = require('./filmlab-service');
 const { buildExifData, writeExifWithExiftool } = require('./exif-service');
-const { getPhotoWithRoll } = require('./download-service');
+const { getPhotoForExport } = require('./download-service');
 const { renderBuffer, EXPORT_MAX_WIDTH, PREVIEW_MAX_WIDTH_SERVER } = require('../../packages/shared');
 const { runAsync, getAsync } = require('../utils/db-helpers');
 
@@ -40,7 +40,8 @@ async function getDigitalPhotoRecord(photoId) {
   return getAsync(
     `SELECT p.*, ds.label AS session_label, ds.import_batch
      FROM photos p
-     LEFT JOIN digital_sessions ds ON p.session_id = ds.id
+     LEFT JOIN digital_sessions ds
+       ON p.session_id = ds.id AND ds.deleted_at IS NULL
      WHERE p.id = ? AND p.source_type = 'digital' AND p.deleted_at IS NULL`,
     [photoId]
   );
@@ -93,12 +94,17 @@ function deserializeLut(lutData) {
  * @param {string|Object} paramsJson
  * @returns {Object}
  */
-function normalizeParams(paramsJson) {
+function normalizeParams(paramsJson, photoId) {
   let params = {};
   if (paramsJson) {
     try {
       params = typeof paramsJson === 'string' ? JSON.parse(paramsJson) : { ...paramsJson };
-    } catch (_) {
+    } catch (err) {
+      console.warn(
+        `[DigitalDevelop] photoId=${photoId == null ? 'unknown' : photoId} ` +
+        `failed to parse develop_params_json, using defaults:`,
+        err.message
+      );
       params = {};
     }
   }
@@ -145,7 +151,7 @@ async function renderPhoto({ photoId, paramsJson, maxWidth, quality = 90 }) {
   const sourcePath = getSourcePath(photo);
   if (!sourcePath) throw new Error(`Source file not found for photo: ${photoId}`);
 
-  const params = normalizeParams(paramsJson);
+  const params = normalizeParams(paramsJson, photoId);
 
   const img = await buildPipeline(sourcePath, params, {
     maxWidth: maxWidth || PREVIEW_MAX_WIDTH_SERVER,
@@ -296,7 +302,7 @@ async function attachExifToJpegBuffer(buffer, photoId) {
     await fsp.mkdir(tempDir, { recursive: true });
     await fsp.writeFile(tempPath, buffer);
 
-    const photo = await getPhotoWithRoll(photoId);
+    const photo = await getPhotoForExport(photoId);
     if (!photo) {
       console.warn(`[DigitalDevelop] EXIF attach skipped — photo ${photoId} not found`);
       return buffer;

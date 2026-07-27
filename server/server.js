@@ -19,7 +19,11 @@ const { isPathConfined } = require('./utils/path-security');
 const { requestProfiler, getProfilerStats, scheduleProfilerLog } = require('./utils/profiler');
 const PreparedStmt = require('./utils/prepared-statements');
 const { computeGuard } = require('./middleware/compute-guard');
-const { getServerMode, getCapabilities, isComputeEnabled } = require('@filmgallery/shared/serverCapabilities');
+const { getServerMode, getCapabilities, isComputeEnabled, setDigitalAvailabilityProbe } = require('@filmgallery/shared/serverCapabilities');
+
+// Reflect actual RAW-decoder (libraw) availability in /api/discover.
+// Lazy require so we don't pull the native module earlier than today.
+setDigitalAvailabilityProbe(() => require('./services/raw-decoder').isAvailableSync());
 
 // Log server mode
 const serverMode = getServerMode();

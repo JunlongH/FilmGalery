@@ -448,6 +448,7 @@ const _sharedExports = {
   getCapabilities: serverCapabilities.getCapabilities,
   isComputeEnabled: serverCapabilities.isComputeEnabled,
   isComputeRoute: serverCapabilities.isComputeRoute,
+  setDigitalAvailabilityProbe: serverCapabilities.setDigitalAvailabilityProbe,
 
   // ============================================================================
   // 反向地理编码（BigDataCloud 共享 provider）
@@ -507,6 +508,7 @@ const _sharedExports = {
   isFilmMode: photographyMode.isFilmMode,
   isDigitalMode: photographyMode.isDigitalMode,
   isAllMode: photographyMode.isAllMode,
+  isFilmPipelineSource: photographyMode.isFilmPipelineSource,
   sourceTypeFilter: photographyMode.sourceTypeFilter,
   buildSourceTypeClause: photographyMode.buildSourceTypeClause,
 };
@@ -776,6 +778,8 @@ const _e_isComputeEnabled = _sharedExports.isComputeEnabled;
 export { _e_isComputeEnabled as isComputeEnabled };
 const _e_isComputeRoute = _sharedExports.isComputeRoute;
 export { _e_isComputeRoute as isComputeRoute };
+const _e_setDigitalAvailabilityProbe = _sharedExports.setDigitalAvailabilityProbe;
+export { _e_setDigitalAvailabilityProbe as setDigitalAvailabilityProbe };
 const _e_reverseGeocodeBigDataCloud = _sharedExports.reverseGeocodeBigDataCloud;
 export { _e_reverseGeocodeBigDataCloud as reverseGeocodeBigDataCloud };
 const _e_normalizeBigDataCloud = _sharedExports.normalizeBigDataCloud;
@@ -833,6 +837,8 @@ const _e_isDigitalMode = _sharedExports.isDigitalMode;
 export { _e_isDigitalMode as isDigitalMode };
 const _e_isAllMode = _sharedExports.isAllMode;
 export { _e_isAllMode as isAllMode };
+const _e_isFilmPipelineSource = _sharedExports.isFilmPipelineSource;
+export { _e_isFilmPipelineSource as isFilmPipelineSource };
 const _e_sourceTypeFilter = _sharedExports.sourceTypeFilter;
 export { _e_sourceTypeFilter as sourceTypeFilter };
 const _e_buildSourceTypeClause = _sharedExports.buildSourceTypeClause;

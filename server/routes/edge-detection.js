@@ -13,6 +13,7 @@ const { getAsync, allAsync, runAsync } = require('../utils/db-helpers');
 const edgeDetectionService = require('../services/edge-detection-service');
 const { uploadsDir } = require('../config/paths');
 const { getStrictSourcePath, SOURCE_TYPE } = require('../../packages/shared/sourcePathResolver');
+const { isFilmPipelineSource } = require('../../packages/shared/photographyMode');
 
 /**
  * POST /api/photos/:id/detect-edges
@@ -52,6 +53,16 @@ router.post('/photos/:id/detect-edges', async (req, res, next) => {
     
     if (!photo) {
       return res.status(404).json({ success: false, error: 'Photo not found' });
+    }
+
+    if (!isFilmPipelineSource(photo.source_type)) {
+      return res.status(409).json({
+        success: false,
+        error: 'source_type_mismatch',
+        message: 'This endpoint only accepts film photos; use /api/digital-develop/* for digital photos.',
+        sourceType: photo.source_type,
+        photoId
+      });
     }
 
     // 获取源文件路径
@@ -179,6 +190,16 @@ router.post('/photos/:id/apply-edge-detection', async (req, res, next) => {
     
     if (!photo) {
       return res.status(404).json({ success: false, error: 'Photo not found' });
+    }
+
+    if (!isFilmPipelineSource(photo.source_type)) {
+      return res.status(409).json({
+        success: false,
+        error: 'source_type_mismatch',
+        message: 'This endpoint only accepts film photos; use /api/digital-develop/* for digital photos.',
+        sourceType: photo.source_type,
+        photoId
+      });
     }
 
     // 解析现有 filmlab_params

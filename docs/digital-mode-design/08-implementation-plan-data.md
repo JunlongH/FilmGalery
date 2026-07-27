@@ -210,14 +210,14 @@ const REGISTERED_MIGRATIONS = [
   '20240101_core_schema',
   '20241001_equipment_tables',
   '20241101_film_structure',
-  '20260801_digital_mode',  // ← 新增(触发备份逻辑)
+  '20260701_digital_mode',  // ← 新增(触发备份逻辑)
 ];
 ```
 
 **改动 2** — `runAllMigrations()` 内(line 104 之后)追加 runner.add:
 ```javascript
   // 4. Digital photo mode (albums, sessions, source_type, develop params).
-  runner.add('20260801_digital_mode', async () => {
+  runner.add('20260701_digital_mode', async () => {
     const { runDigitalModeMigration } = require('./digital-mode-migration');
     await runDigitalModeMigration();
   });

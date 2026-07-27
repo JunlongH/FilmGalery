@@ -338,7 +338,7 @@ async function* handleMessage({ conversationId, userMessage, context, imageConte
             const handler = getToolHandler(toolName);
             resultStr = JSON.stringify({ error: `unknown tool: ${toolName}` });
             if (handler) {
-              try { resultStr = await handler(toolArgs); }
+              try { resultStr = await handler(toolArgs, { mode: photographyMode }); }
               catch (err) { resultStr = JSON.stringify({ error: err.message }); }
             }
             yield {
@@ -354,7 +354,7 @@ async function* handleMessage({ conversationId, userMessage, context, imageConte
           const handler = getToolHandler(toolName);
           resultStr = JSON.stringify({ error: `unknown tool: ${toolName}` });
           if (handler) {
-            try { resultStr = await handler(toolArgs); }
+            try { resultStr = await handler(toolArgs, { mode: photographyMode }); }
             catch (err) { resultStr = JSON.stringify({ error: err.message }); }
           }
           yield { type: 'tool_result', tool_call_id: toolCall.id, tool_name: toolName, result: String(resultStr).substring(0, 200) };

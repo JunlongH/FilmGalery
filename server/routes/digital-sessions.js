@@ -3,7 +3,7 @@
  *
  * GET    /api/digital-sessions               — list (optional ?import_batch=)
  * GET    /api/digital-sessions/:id           — single
- * GET    /api/digital-sessions/:id/photos    — photos in session
+ * GET    /api/digital-sessions/:id/photos    — photos in session (404 if session is soft-deleted or missing)
  * PUT    /api/digital-sessions/:id           — update label/notes
  * DELETE /api/digital-sessions/:id           — soft delete (photos untouched)
  *
@@ -39,10 +39,13 @@ router.get('/:id', async (req, res, next) => {
 
 router.get('/:id/photos', async (req, res, next) => {
   try {
+    const session = await PreparedStmt.getAsync('digitalSessions.getById', [req.params.id]);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
     const rows = await allAsync(
       `SELECT p.*, ds.label AS session_label
        FROM photos p
-       LEFT JOIN digital_sessions ds ON p.session_id = ds.id
+       LEFT JOIN digital_sessions ds
+         ON p.session_id = ds.id AND ds.deleted_at IS NULL
        WHERE p.session_id = ? AND p.deleted_at IS NULL
        ORDER BY p.date_taken ASC`,
       [req.params.id]
