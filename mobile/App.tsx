@@ -336,7 +336,7 @@ export default function App() {
       AsyncStorage.getItem('amap_key'),
       initLanguage(),
     ]).then(async ([url, backup, themeDark, savedProvider, savedAmapKey]) => {
-      configureApi(url || '', backup || '');
+      configureApi(url || '', backup || '', { retry: { maxRetries: 2, delayMs: 1000, backoff: 'linear' } });
       // Phase 2B: restore auth token + wire 401 → pairing screen
       await loadAuthToken();
       setApiOnUnauthorized(() => {

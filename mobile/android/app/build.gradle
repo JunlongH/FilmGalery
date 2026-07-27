@@ -122,6 +122,11 @@ android {
             crunchPngs enablePngCrunchInRelease.toBoolean()
         }
     }
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "filmgallery-v${variant.versionName}-${variant.name}.apk"
+        }
+    }
     packagingOptions {
         jniLibs {
             def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'

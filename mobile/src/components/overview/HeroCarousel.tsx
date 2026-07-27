@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -42,21 +42,43 @@ export default function HeroCarousel({ photos, loading, active, mode, photosKey 
   const [paused, setPaused] = useState(false);
   const flatListRef = useRef<FlatList<any>>(null);
   const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const indexRef = useRef(0);
 
   const items = useMemo(() => (Array.isArray(photos) ? photos.slice(0, 8) : []), [photos]);
+
+  // Pad one clone on each end so autoplay forward past the last slide (and a
+  // backward swipe past the first) snap back invisibly — a seamless loop
+  // instead of a jarring full backward scroll.
+  const loopData = useMemo(() => {
+    if (items.length <= 1) return items;
+    return [items[items.length - 1], ...items, items[0]];
+  }, [items]);
+
+  useEffect(() => {
+    indexRef.current = index;
+  }, [index]);
 
   useEffect(() => {
     if (index > items.length - 1) setIndex(0);
   }, [items.length, index]);
 
+  // Anchor the FlatList at the real current item whenever the data set
+  // (re)loads. `index+1` accounts for the leading pad clone.
+  useLayoutEffect(() => {
+    if (items.length > 1) {
+      const pos = Math.min(indexRef.current + 1, loopData.length - 1);
+      flatListRef.current?.scrollToIndex({ index: pos, animated: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length]);
+
   useEffect(() => {
     if (!active || paused || items.length <= 1) return;
     const timer = setInterval(() => {
-      setIndex((prev) => {
-        const next = (prev + 1) % items.length;
-        flatListRef.current?.scrollToIndex({ index: next, animated: true });
-        return next;
-      });
+      const next = (indexRef.current + 1) % items.length;
+      setIndex(next);
+      indexRef.current = next;
+      flatListRef.current?.scrollToIndex({ index: next + 1, animated: true });
     }, AUTOPLAY_MS);
     return () => clearInterval(timer);
   }, [active, paused, items.length]);
@@ -85,24 +107,39 @@ export default function HeroCarousel({ photos, loading, active, mode, photosKey 
 
   const onMomentumScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const newIndex = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-      if (newIndex !== index) setIndex(newIndex);
+      if (items.length <= 1) return;
+      const pos = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+      if (pos === 0) {
+        // Landed on the leading clone (copy of the last real item).
+        flatListRef.current?.scrollToIndex({ index: items.length, animated: false });
+        setIndex(items.length - 1);
+        indexRef.current = items.length - 1;
+      } else if (pos === loopData.length - 1) {
+        // Landed on the trailing clone (copy of the first real item).
+        flatListRef.current?.scrollToIndex({ index: 1, animated: false });
+        setIndex(0);
+        indexRef.current = 0;
+      } else {
+        setIndex(pos - 1);
+        indexRef.current = pos - 1;
+      }
       pauseAutoplay();
     },
-    [index, pauseAutoplay],
+    [items, loopData.length, pauseAutoplay],
   );
 
   const onPhotoPress = useCallback(
-    (photo: any, i: number) => {
+    (photo: any, loopIdx: number) => {
       pauseAutoplay();
+      const realIdx = items.length > 1 ? Math.max(0, Math.min(loopIdx - 1, items.length - 1)) : 0;
       navigation.navigate('PhotoView', {
         photo,
         photosKey: photosKey ?? undefined,
-        initialIndex: i,
+        initialIndex: realIdx,
         viewMode: 'positive',
       });
     },
-    [navigation, pauseAutoplay, photosKey],
+    [navigation, pauseAutoplay, photosKey, items.length],
   );
 
   if (loading && items.length === 0) {
@@ -150,13 +187,14 @@ export default function HeroCarousel({ photos, loading, active, mode, photosKey 
     <View style={styles.wrapper}>
       <FlatList
         ref={flatListRef as any}
-        data={items}
-        keyExtractor={(item, i) => String(item.id ?? i)}
+        data={loopData}
+        keyExtractor={(_, i) => String(i)}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onMomentumScrollEnd}
         scrollEventThrottle={16}
+        initialScrollIndex={items.length > 1 ? 1 : 0}
         getItemLayout={(_, i) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * i, index: i })}
         onScrollToIndexFailed={() => {}}
         renderItem={({ item, index: i }) => {

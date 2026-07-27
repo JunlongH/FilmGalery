@@ -56,13 +56,18 @@ function applyAuth(client: ApiClient) {
 // TEST HACK (temp): default to host server via adb reverse. Revert before commit.
 let _client: ApiClient = createApiClient({ baseUrl: 'http://localhost:4001', timeout: 5000, onError: notifyError });
 
-export function configureApi(primaryUrl: string, secondaryUrl?: string | null): void {
+export function configureApi(
+  primaryUrl: string,
+  secondaryUrl?: string | null,
+  opts?: { retry?: { maxRetries?: number; delayMs?: number; backoff?: 'linear' | 'fixed' } },
+): void {
   _client = createApiClient({
     baseUrl: primaryUrl || '',
     backupUrl: secondaryUrl || undefined,
     failover: !!secondaryUrl,
     timeout: 5000,
     onError: notifyError,
+    retry: opts?.retry ?? { maxRetries: 2, delayMs: 1000, backoff: 'linear' },
   });
   // Re-apply auth token + 401 hook after client re-creation.
   applyAuth(_client);

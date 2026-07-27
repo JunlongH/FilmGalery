@@ -93,3 +93,55 @@ describe('routes/digital-import — execute contract', () => {
     expect(digitalImportService.execute).not.toHaveBeenCalled();
   });
 });
+
+describe('routes/digital-import — preview contract', () => {
+  beforeEach(() => {
+    digitalImportService.preview.mockClear();
+    digitalImportService.preview.mockResolvedValue({ total: 0, items: [] });
+  });
+
+  test('POST /preview with multiple files → 200, forwards ALL files to service', async () => {
+    // Regression for multi-photo import: multer must parse every file under
+    // the shared 'files' field name and hand the full array to the service.
+    const app = buildApp((a) => a.use('/api/digital/import', router));
+    digitalImportService.preview.mockResolvedValue({
+      total: 3, items: [], duplicates: 0, raws: 0,
+    });
+    const res = await request(app)
+      .post('/api/digital/import/preview')
+      .attach('files', Buffer.from('img1-bytes'), 'a.jpg')
+      .attach('files', Buffer.from('img2-bytes'), 'b.jpg')
+      .attach('files', Buffer.from('img3-bytes'), 'c.jpg');
+
+    expect(res.status).toBe(200);
+    expect(digitalImportService.preview).toHaveBeenCalledTimes(1);
+    const files = digitalImportService.preview.mock.calls[0][0];
+    expect(files).toHaveLength(3);
+    expect(files.map((f) => f.originalname)).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+    files.forEach((f) => {
+      expect(typeof f.path).toBe('string'); // multer wrote to disk
+      expect(typeof f.size).toBe('number');
+    });
+  });
+
+  test('POST /preview with a single file → 200', async () => {
+    const app = buildApp((a) => a.use('/api/digital/import', router));
+    const res = await request(app)
+      .post('/api/digital/import/preview')
+      .attach('files', Buffer.from('solo'), 'solo.jpg');
+
+    expect(res.status).toBe(200);
+    expect(digitalImportService.preview).toHaveBeenCalledTimes(1);
+    expect(digitalImportService.preview.mock.calls[0][0]).toHaveLength(1);
+  });
+
+  test('POST /preview with no files → 400', async () => {
+    const app = buildApp((a) => a.use('/api/digital/import', router));
+    const res = await request(app)
+      .post('/api/digital/import/preview');
+
+    expect(res.status).toBe(400);
+    expect(typeof res.body.error).toBe('string');
+    expect(digitalImportService.preview).not.toHaveBeenCalled();
+  });
+});

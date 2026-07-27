@@ -17,6 +17,9 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useTheme, Button, TextInput, ProgressBar, RadioButton } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -137,9 +140,12 @@ export default function DigitalImportScreen() {
       });
       const res: PreviewResponse = await api.digitalImport.preview(form, onUploadProgress);
       setPreview(res);
+      setPreviewError(null);
       setPhase('reviewing');
-    } catch {
-      setPreviewError(t('digital.import.errorPreview'));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e ?? '');
+      console.warn('[DigitalImport] preview failed:', msg || e);
+      setPreviewError(msg || t('digital.import.errorPreview'));
       setPhase(preview ? 'reviewing' : 'idle');
     }
   }, [phase, preview, onUploadProgress, t]);
@@ -295,13 +301,18 @@ export default function DigitalImportScreen() {
       <Icon name="upload" size={44} color={theme.colors.onSurfaceVariant} />
       <Text style={[styles.emptyTitle, onSurface]}>{t('digital.import.title')}</Text>
       <Text style={[styles.emptyBody, onSurfaceVariant]}>{t('digital.import.emptyHint')}</Text>
+      {previewError ? (
+        <Text style={[styles.previewErrorText, { color: theme.colors.error }]}>
+          {previewError}
+        </Text>
+      ) : null}
       <Button
         mode="contained"
         icon="image"
         onPress={handlePick}
         loading={phase === 'previewing'}
         disabled={busy}
-        style={styles.primaryBtn}
+        style={styles.ctaBtn}
       >
         {t('digital.import.pick')}
       </Button>
@@ -351,97 +362,117 @@ export default function DigitalImportScreen() {
   );
 
   const renderReviewing = () => (
-    <View style={styles.body}>
-      {/* Summary */}
-      <View style={[styles.card, surfaceBg]}>
-        <Text style={[styles.summaryTitle, onSurface]}>
-          {t('digital.import.summaryTotal', { count: preview?.total ?? 0 })}
-        </Text>
-        {duplicateCount > 0 && (
-          <Text style={[styles.summaryNote, { color: theme.colors.secondary }]}>
-            {t('digital.import.duplicatesNote', { count: duplicateCount })}
-          </Text>
-        )}
-        {dateRange ? (
-          <Text style={[styles.summaryNote, onSurfaceVariant]}>
-            {t('digital.import.dateRange', {
-              start: formatDate(dateRange.start),
-              end: formatDate(dateRange.end),
-            })}
-          </Text>
-        ) : (
-          <Text style={[styles.summaryNote, onSurfaceVariant]}>
-            {t('digital.import.noExifDate')}
-          </Text>
-        )}
-      </View>
+    <KeyboardAvoidingView
+      style={styles.body}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.bodyContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Preview error banner (e.g. re-pick failed while reviewing) */}
+        {previewError ? (
+          <View style={[styles.card, { backgroundColor: theme.colors.errorContainer }]}>
+            <Text style={[styles.previewErrorText, { color: theme.colors.onErrorContainer }]}>
+              {previewError}
+            </Text>
+          </View>
+        ) : null}
 
-      {/* File list */}
-      <View style={[styles.card, surfaceBg, { flex: 1 }]}>
-        <FlatList
-          data={preview?.items ?? []}
-          keyExtractor={(item, i) => `${item.hash || i}`}
-          renderItem={({ item }) => (
-            <View style={[styles.fileRow, { borderBottomColor: theme.colors.outline + '20' }]}>
-              <Icon
-                name={item.duplicate ? 'check' : 'image'}
-                size={16}
-                color={item.duplicate ? theme.colors.secondary : theme.colors.onSurfaceVariant}
-              />
-              <Text
-                style={[styles.fileName, item.duplicate ? onSurfaceVariant : onSurface]}
-                numberOfLines={1}
-              >
-                {item.file.originalname}
-              </Text>
-              {item.duplicate && (
-                <View style={[styles.dupBadge, { backgroundColor: theme.colors.secondaryContainer }]}>
-                  <Text style={[styles.dupBadgeText, { color: theme.colors.secondary }]}>
-                    {t('digital.import.duplicateBadge')}
-                  </Text>
-                </View>
-              )}
-            </View>
+        {/* Summary */}
+        <View style={[styles.card, surfaceBg]}>
+          <Text style={[styles.summaryTitle, onSurface]}>
+            {t('digital.import.summaryTotal', { count: preview?.total ?? 0 })}
+          </Text>
+          {duplicateCount > 0 && (
+            <Text style={[styles.summaryNote, { color: theme.colors.secondary }]}>
+              {t('digital.import.duplicatesNote', { count: duplicateCount })}
+            </Text>
           )}
-        />
-      </View>
+          {dateRange ? (
+            <Text style={[styles.summaryNote, onSurfaceVariant]}>
+              {t('digital.import.dateRange', {
+                start: formatDate(dateRange.start),
+                end: formatDate(dateRange.end),
+              })}
+            </Text>
+          ) : (
+            <Text style={[styles.summaryNote, onSurfaceVariant]}>
+              {t('digital.import.noExifDate')}
+            </Text>
+          )}
+        </View>
 
-      {/* Album + session */}
-      {renderAlbumSelector()}
+        {/* File list */}
+        <View style={[styles.card, surfaceBg, styles.fileListCard]}>
+          <FlatList
+            data={preview?.items ?? []}
+            keyExtractor={(item, i) => `${item.hash || i}`}
+            scrollEnabled={false}
+            renderItem={({ item }) => (
+              <View style={[styles.fileRow, { borderBottomColor: theme.colors.outline + '20' }]}>
+                <Icon
+                  name={item.duplicate ? 'check' : 'image'}
+                  size={16}
+                  color={item.duplicate ? theme.colors.secondary : theme.colors.onSurfaceVariant}
+                />
+                <Text
+                  style={[styles.fileName, item.duplicate ? onSurfaceVariant : onSurface]}
+                  numberOfLines={1}
+                >
+                  {item.file.originalname}
+                </Text>
+                {item.duplicate && (
+                  <View style={[styles.dupBadge, { backgroundColor: theme.colors.secondaryContainer }]}>
+                    <Text style={[styles.dupBadgeText, { color: theme.colors.secondary }]}>
+                      {t('digital.import.duplicateBadge')}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          />
+        </View>
 
-      <View style={[styles.card, surfaceBg]}>
-        <Text style={[styles.sectionLabel, onSurfaceVariant]}>
-          {t('digital.import.sessionTitle')}
-        </Text>
-        <TextInput
-          mode="outlined"
-          value={sessionTitle}
-          onChangeText={setSessionTitle}
-          placeholder={t('digital.import.sessionPlaceholder')}
-          style={styles.sessionInput}
-        />
-      </View>
+        {/* Album + session */}
+        {renderAlbumSelector()}
 
-      {/* Actions */}
-      <View style={styles.actionRow}>
-        <Button
-          mode="outlined"
-          onPress={handlePick}
-          disabled={busy}
-          style={styles.secondaryBtn}
-        >
-          {t('digital.import.pick')}
-        </Button>
-        <Button
-          mode="contained"
-          onPress={handleImport}
-          disabled={busy || importableCount === 0}
-          style={styles.primaryBtn}
-        >
-          {t('digital.import.submit', { count: importableCount })}
-        </Button>
-      </View>
-    </View>
+        <View style={[styles.card, surfaceBg]}>
+          <Text style={[styles.sectionLabel, onSurfaceVariant]}>
+            {t('digital.import.sessionTitle')}
+          </Text>
+          <TextInput
+            mode="outlined"
+            value={sessionTitle}
+            onChangeText={setSessionTitle}
+            placeholder={t('digital.import.sessionPlaceholder')}
+            style={styles.sessionInput}
+          />
+        </View>
+
+        {/* Actions */}
+        <View style={styles.actionRow}>
+          <Button
+            mode="outlined"
+            onPress={handlePick}
+            disabled={busy}
+            style={styles.secondaryBtn}
+            contentStyle={styles.actionBtnContent}
+          >
+            {t('digital.import.pick')}
+          </Button>
+          <Button
+            mode="contained"
+            onPress={handleImport}
+            disabled={busy || importableCount === 0}
+            style={styles.primaryBtn}
+            contentStyle={styles.actionBtnContent}
+          >
+            {t('digital.import.submit', { count: importableCount })}
+          </Button>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 
   const renderImporting = () => {
@@ -506,7 +537,7 @@ export default function DigitalImportScreen() {
         onPress={() => {
           if (navigation.canGoBack()) navigation.goBack();
         }}
-        style={[styles.primaryBtn, { marginTop: 24 }]}
+        style={styles.ctaBtn}
       >
         {t('digital.import.done')}
       </Button>
@@ -527,7 +558,7 @@ export default function DigitalImportScreen() {
         onPress={() => {
           if (navigation.canGoBack()) navigation.goBack();
         }}
-        style={[styles.primaryBtn, { marginTop: 24 }]}
+        style={styles.ctaBtn}
       >
         {t('digital.import.done')}
       </Button>
@@ -568,8 +599,11 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+  },
+  bodyContent: {
     padding: 12,
     gap: 12,
+    paddingBottom: 40,
   },
   centeredCard: {
     flex: 1,
@@ -594,9 +628,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
+  previewErrorText: {
+    fontSize: 13,
+    marginTop: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
   card: {
     borderRadius: 12,
     padding: 14,
+  },
+  fileListCard: {
+    maxHeight: 280,
   },
   summaryTitle: {
     fontSize: 17,
@@ -668,6 +711,16 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     flex: 1,
+  },
+  actionBtnContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaBtn: {
+    marginTop: 24,
+    width: 260,
+    maxWidth: '80%',
   },
   statusTitle: {
     fontSize: 16,

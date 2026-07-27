@@ -281,6 +281,13 @@ function createHttpHelpers({ getBaseUrl, setBaseUrl, primaryBaseUrl, backupUrl, 
           const xhr = new XMLHttpRequest();
           xhr.open('POST', `${getBaseUrl()}${path}`);
           if (authedHeaders) xhr.setRequestHeader('Authorization', authedHeaders.Authorization);
+          // Large multi-file uploads + server-side preview (hash + EXIF per
+          // file) can legitimately take minutes; set a generous ceiling so a
+          // hung connection surfaces as an error instead of leaving the UI
+          // spinning forever (the fetch path gets this via attempt()'s
+          // AbortController, but XHR is outside that loop).
+          xhr.timeout = 180000;
+          xhr.ontimeout = () => reject(new Error('Request timed out'));
           xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
               try { resolve(JSON.parse(xhr.responseText)); }
@@ -289,7 +296,21 @@ function createHttpHelpers({ getBaseUrl, setBaseUrl, primaryBaseUrl, backupUrl, 
               if (xhr.status === 401 && onUnauthorized) {
                 try { onUnauthorized({ status: 401 }); } catch { /* swallow */ }
               }
-              reject(new Error(xhr.statusText || 'Upload failed'));
+              // Mirror parseResponse so callers / React Query see the same
+              // contract as the fetch path: server's JSON error message +
+              // status + body. Previously this only surfaced statusText (often
+              // empty under HTTP/2) or a generic 'Upload failed', hiding the
+              // real cause of upload failures (e.g. multer limits, EXIF errors).
+              let parsed;
+              try { parsed = JSON.parse(xhr.responseText); } catch { parsed = undefined; }
+              const serverMsg = parsed && (parsed.error || parsed.message);
+              const msg = (typeof serverMsg === 'string' && serverMsg)
+                || xhr.statusText
+                || `HTTP ${xhr.status}`;
+              const err = new Error(msg);
+              err.status = xhr.status;
+              if (parsed !== undefined) err.body = parsed;
+              reject(err);
             }
           };
           xhr.onerror = () => reject(new Error('Network error'));
