@@ -27,6 +27,7 @@ export default function PhotoViewScreen({ route, navigation }: any) {
   const [photo, setPhoto] = useState(initialPhoto || photos[initialIndex] || null);
   const [loading, setLoading] = useState(!initialPhoto && !!photoId && !photosKey);
   const [index, setIndex] = useState(initialIndex);
+  const [startIndex] = useState(initialIndex);
   const [viewMode, setViewMode] = useState(initialViewMode);
   const [tagModalVisible, setTagModalVisible] = useState(false);
   const [noteModalVisible, setNoteModalVisible] = useState(false);
@@ -39,6 +40,13 @@ export default function PhotoViewScreen({ route, navigation }: any) {
   const [busy, setBusy] = useState(false);
   const photoRef = useRef(photo);
   useEffect(() => { photoRef.current = photo; }, [photo]);
+
+  const overlayRenderRef = useRef<{
+    header: (() => React.ReactNode) | null;
+    footer: (() => React.ReactNode) | null;
+  }>({ header: null, footer: null });
+  const HeaderComponent = useMemo(() => () => overlayRenderRef.current.header?.() ?? null, []);
+  const FooterComponent = useMemo(() => () => overlayRenderRef.current.footer?.() ?? null, []);
 
   const isDigital = photo?.source_type === 'digital';
 
@@ -66,7 +74,7 @@ export default function PhotoViewScreen({ route, navigation }: any) {
   // Prefetch adjacent full-resolution images for smoother swiping
   useEffect(() => {
     if (!baseUrl || photos.length < 2) return;
-    const targets = [index - 1, index + 1]
+    const targets = [index - 2, index - 1, index + 1, index + 2]
       .filter((i) => i >= 0 && i < photos.length)
       .map((i) => fullUrlFor(photos[i]))
       .filter(Boolean) as string[];
@@ -442,11 +450,13 @@ export default function PhotoViewScreen({ route, navigation }: any) {
     </View>
   );
 
+  overlayRenderRef.current = { header, footer };
+
   return (
     <View style={styles.container}>
       <ImageView
         images={images}
-        imageIndex={index}
+        imageIndex={startIndex}
         visible={true}
         onRequestClose={() => navigation.goBack()}
         onImageIndexChange={(i) => {
@@ -459,8 +469,8 @@ export default function PhotoViewScreen({ route, navigation }: any) {
         swipeToCloseEnabled={true}
         doubleTapToZoomEnabled={true}
         backgroundColor="black"
-        HeaderComponent={header}
-        FooterComponent={footer}
+        HeaderComponent={HeaderComponent}
+        FooterComponent={FooterComponent}
       />
 
       <TagEditModal

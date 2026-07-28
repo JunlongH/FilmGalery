@@ -52,6 +52,9 @@ const en: Record<TranslationKey, string> = {
 
   // Home / Timeline
   'timeline.unknownMonth': 'Unknown date',
+  'timeline.groupByDay': 'By Day',
+  'timeline.groupByMonth': 'By Month',
+  'timeline.filterEmpty': 'No photos match the current filter',
   'home.emptyTitle': 'No rolls yet',
   'home.emptySubtitle': 'Your film rolls will appear here once the server is connected.',
   'home.error': 'Failed to connect to server. Check Settings.',

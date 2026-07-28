@@ -6,9 +6,13 @@ import { BookMarked, Pencil, Trash2, ChevronLeft, Plus, Check, X, Square, CheckS
 import {
   getAlbum, getAlbumPhotos, deleteAlbum,
   removeAlbumPhoto, setAlbumCover, sortAlbumPhotos,
+  updatePhoto, getTags,
 } from '../../../api';
 import { getCacheStrategy } from '../../../lib';
 import PhotoGrid from '../../PhotoGrid';
+import PhotoItem from '../../PhotoItem';
+import TagEditModal from '../../TagEditModal';
+import ImageViewer from '../../common/LazyImageViewer';
 import PhotoDetailsSidebar from '../../PhotoDetailsSidebar';
 import AlbumEditModal from './AlbumEditModal';
 import AlbumAddPhotosModal from './AlbumAddPhotosModal';
@@ -27,6 +31,8 @@ export default function AlbumDetail() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selection, setSelection] = useState(new Set());
   const [batchEditPhotos, setBatchEditPhotos] = useState(null);
+  const [viewerIndex, setViewerIndex] = useState(null);
+  const [editingTagsPhoto, setEditingTagsPhoto] = useState(null);
   const dragIndexRef = useRef(null);
   const coverFeedbackTimer = useRef(null);
 
@@ -41,6 +47,7 @@ export default function AlbumDetail() {
   useEffect(() => {
     setLocalPhotos(null);
     setDropIndex(null);
+    setViewerIndex(null);
     dragIndexRef.current = null;
   }, [sortMode]);
 
@@ -56,11 +63,18 @@ export default function AlbumDetail() {
     ...getCacheStrategy('digitalPhotos'),
   });
 
+  const { data: allTags = [] } = useQuery({
+    queryKey: ['tags'],
+    queryFn: getTags,
+    ...getCacheStrategy('tags'),
+  });
+
   const displayPhotos = localPhotos || photos;
   const orderDirty = sortMode === 'manual' && localPhotos !== null;
   const existingIds = useMemo(() => new Set(photos.map(p => p.id)), [photos]);
   const photosRef = useRef(photos);
   photosRef.current = photos;
+  const dragEnabled = sortMode === 'manual' && !selectionMode;
 
   function invalidateAlbumQueries() {
     queryClient.invalidateQueries({ queryKey: ['albums'] });
@@ -118,7 +132,19 @@ export default function AlbumDetail() {
     mutationFn: (photoIds) => sortAlbumPhotos(id, photoIds),
     onSuccess: () => {
       setLocalPhotos(null);
+      setDropIndex(null);
       queryClient.invalidateQueries({ queryKey: ['album-photos', albumId] });
+    },
+  });
+
+  const updatePhotoMutation = useMutation({
+    mutationFn: ({ id: photoId, data }) => updatePhoto(photoId, data),
+    onSuccess: (_res, { data }) => {
+      if (data.tags) {
+        queryClient.invalidateQueries({ queryKey: ['tags'] });
+        window.dispatchEvent(new Event('refresh-tags'));
+      }
+      invalidateAlbumQueries();
     },
   });
 
@@ -133,11 +159,15 @@ export default function AlbumDetail() {
     queryClient.invalidateQueries({ queryKey: ['albums'] });
   }
 
-  const handleRemove = useCallback((photo) => {
+  const handleRemovePhoto = useCallback((photoId) => {
     if (window.confirm('Remove this photo from the album? The photo itself will not be deleted.')) {
-      removeMutation.mutate(photo.id);
+      removeMutation.mutate(photoId);
     }
   }, [removeMutation.mutate]);
+
+  const handleSetCover = useCallback((photoId) => {
+    coverMutation.mutate(photoId);
+  }, [coverMutation.mutate]);
 
   function toggleSelectionMode() {
     setSelectionMode(prev => !prev);
@@ -153,7 +183,9 @@ export default function AlbumDetail() {
   function handleBatchRemove() {
     const ids = [...selection];
     if (ids.length === 0) return;
-    if (window.confirm(`Remove ${ids.length} photo(s) from this album? The photos themselves will not be deleted.`)) {
+    let msg = `Remove ${ids.length} photo(s) from this album? The photos themselves will not be deleted.`;
+    if (orderDirty) msg += ' Unsaved order changes will also be discarded.';
+    if (window.confirm(msg)) {
       removeBatchMutation.mutate(ids);
     }
   }
@@ -169,10 +201,28 @@ export default function AlbumDetail() {
     dragIndexRef.current = null;
   }
 
-  const handleDrop = useCallback((e, idx) => {
+  function changeSortMode(next) {
+    if (next === sortMode) return;
+    if (orderDirty && !window.confirm('Discard unsaved order changes?')) return;
+    setSortMode(next);
+  }
+
+  const handleDragStart = useCallback((idx) => (e) => {
+    dragIndexRef.current = idx;
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
+
+  const handleDragOver = useCallback((idx) => (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropIndex(prev => prev === idx ? prev : idx);
+  }, []);
+
+  const handleDrop = useCallback((idx) => (e) => {
     e.preventDefault();
     const from = dragIndexRef.current;
     setDropIndex(null);
+    dragIndexRef.current = null;
     if (from == null || from === idx) return;
     setLocalPhotos(prev => {
       const base = (prev || photosRef.current).slice();
@@ -183,58 +233,10 @@ export default function AlbumDetail() {
     });
   }, []);
 
-  const renderTile = useCallback((photo, idx, defaultTile) => {
-    if (sortMode === 'date' || selectionMode) {
-      return (
-        <div className="group relative rounded">{defaultTile}</div>
-      );
-    }
-    return (
-      <div
-        className={`group relative rounded cursor-grab active:cursor-grabbing ${dropIndex === idx ? 'ring-2 ring-primary' : ''}`}
-        draggable
-        onDragStart={e => {
-          dragIndexRef.current = idx;
-          e.dataTransfer.effectAllowed = 'move';
-        }}
-        onDragOver={e => {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
-          if (dropIndex !== idx) setDropIndex(idx);
-        }}
-        onDrop={e => handleDrop(e, idx)}
-        onDragEnd={() => {
-          dragIndexRef.current = null;
-          setDropIndex(null);
-        }}
-      >
-        {defaultTile}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            type="button"
-            disabled={coverMutation.isPending}
-            className="pointer-events-auto rounded bg-white/20 px-2 py-1 text-[11px] text-white hover:bg-white/40 disabled:opacity-50"
-            onClick={e => {
-              e.stopPropagation();
-              coverMutation.mutate(photo.id);
-            }}
-          >
-            {coverMutation.isPending && coverMutation.variables === photo.id ? 'Setting…' : 'Set as cover'}
-          </button>
-          <button
-            type="button"
-            className="pointer-events-auto rounded bg-white/20 px-2 py-1 text-[11px] text-white hover:bg-red-500/80"
-            onClick={e => {
-              e.stopPropagation();
-              handleRemove(photo);
-            }}
-          >
-            From album remove
-          </button>
-        </div>
-      </div>
-    );
-  }, [dropIndex, handleDrop, handleRemove, coverMutation.mutate, coverMutation.isPending, coverMutation.variables, sortMode, selectionMode]);
+  const handleDragEnd = useCallback(() => {
+    dragIndexRef.current = null;
+    setDropIndex(null);
+  }, []);
 
   return (
     <div className="flex flex-col min-h-full bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-6 md:p-8">
@@ -259,7 +261,7 @@ export default function AlbumDetail() {
               radius="sm"
               variant={sortMode === 'manual' ? 'solid' : 'light'}
               color={sortMode === 'manual' ? 'primary' : 'default'}
-              onPress={() => setSortMode('manual')}
+              onPress={() => changeSortMode('manual')}
             >
               <ArrowDownUp className="w-3.5 h-3.5" /> Manual
             </Button>
@@ -268,7 +270,7 @@ export default function AlbumDetail() {
               radius="sm"
               variant={sortMode === 'date' ? 'solid' : 'light'}
               color={sortMode === 'date' ? 'primary' : 'default'}
-              onPress={() => setSortMode('date')}
+              onPress={() => changeSortMode('date')}
             >
               By date
             </Button>
@@ -336,13 +338,35 @@ export default function AlbumDetail() {
             </Button>
           </div>
         </div>
-      ) : (
+      ) : selectionMode ? (
         <PhotoGrid
           photos={displayPhotos}
-          renderTile={renderTile}
-          selection={selectionMode ? selection : null}
+          selection={selection}
           onSelectionChange={setSelection}
         />
+      ) : (
+        <div className="photo-grid">
+          {displayPhotos.map((p, idx) => (
+            <PhotoItem
+              key={p.id}
+              p={p}
+              index={idx}
+              viewMode="positive"
+              onSelect={(i) => setViewerIndex(i)}
+              onSetCover={handleSetCover}
+              onDeletePhoto={handleRemovePhoto}
+              onUpdatePhoto={(photoId, data) => updatePhotoMutation.mutate({ id: photoId, data })}
+              onEditTags={(photo) => setEditingTagsPhoto(photo)}
+              deleteLabel="Remove"
+              draggable={dragEnabled}
+              onDragStart={dragEnabled ? handleDragStart(idx) : undefined}
+              onDragOver={dragEnabled ? handleDragOver(idx) : undefined}
+              onDrop={dragEnabled ? handleDrop(idx) : undefined}
+              onDragEnd={dragEnabled ? handleDragEnd : undefined}
+              dragOver={dragEnabled && dropIndex === idx}
+            />
+          ))}
+        </div>
       )}
 
       {selectionMode && selection.size > 0 && (
@@ -388,6 +412,26 @@ export default function AlbumDetail() {
         isOpen={showAdd}
         onClose={() => setShowAdd(false)}
       />
+
+      {editingTagsPhoto && (
+        <TagEditModal
+          photo={editingTagsPhoto}
+          allTags={allTags}
+          onClose={() => setEditingTagsPhoto(null)}
+          onSave={async (photoId, newTags) => {
+            try {
+              await updatePhotoMutation.mutateAsync({ id: photoId, data: { tags: newTags } });
+            } catch (err) {
+              console.error('[AlbumDetail] Failed to save tags:', err);
+            }
+            setEditingTagsPhoto(null);
+          }}
+        />
+      )}
+
+      {viewerIndex !== null && (
+        <ImageViewer images={displayPhotos} index={viewerIndex} onClose={() => setViewerIndex(null)} />
+      )}
     </div>
   );
 }

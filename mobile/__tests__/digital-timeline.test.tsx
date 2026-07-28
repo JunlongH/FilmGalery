@@ -17,6 +17,9 @@ import {
   flattenPhotosToTimeline,
   getPhotoMonthKey,
   formatMonthLabel,
+  getPhotoGroupKey,
+  formatGroupLabel,
+  type GroupBy,
 } from '../src/screens/timeline/flattenTimeline';
 import {
   computeSectionLayouts,
@@ -65,6 +68,124 @@ describe('formatMonthLabel', () => {
   test('invalid month key falls back to unknownLabel', () => {
     expect(formatMonthLabel('garbage', 'en', '?')).toBe('?');
     expect(formatMonthLabel('2026-13', 'en', '?')).toBe('?');
+  });
+});
+
+describe('getPhotoGroupKey (generalized)', () => {
+  test('month mode matches getPhotoMonthKey', () => {
+    expect(getPhotoGroupKey(mk(1, '2026-07-15T10:00:00Z'), 'month')).toBe('2026-07');
+    expect(getPhotoGroupKey(mk(1, '2026-07-15T10:00:00Z'), 'month')).toBe(
+      getPhotoMonthKey(mk(1, '2026-07-15T10:00:00Z')),
+    );
+  });
+
+  test('day mode extracts YYYY-MM-DD', () => {
+    expect(getPhotoGroupKey(mk(1, '2026-07-15T10:00:00Z'), 'day')).toBe('2026-07-15');
+  });
+
+  test('day mode falls back to created_at', () => {
+    expect(getPhotoGroupKey(mk(1, undefined, '2025-12-03T08:30:00Z'), 'day')).toBe('2025-12-03');
+  });
+
+  test('day mode returns null when both dates missing', () => {
+    expect(getPhotoGroupKey(mk(1), 'day')).toBeNull();
+  });
+
+  test('day mode parses non-ISO date strings via Date fallback', () => {
+    expect(getPhotoGroupKey(mk(1, 'Jul 4 2026'), 'day')).toBe('2026-07-04');
+  });
+});
+
+describe('formatGroupLabel', () => {
+  test('month mode matches formatMonthLabel', () => {
+    expect(formatGroupLabel('2026-07', 'month', 'zh', '?')).toBe('2026年7月');
+    expect(formatGroupLabel('2026-07', 'month', 'en', '?')).toBe('July 2026');
+  });
+
+  test('day mode zh produces "2026年7月15日"', () => {
+    expect(formatGroupLabel('2026-07-15', 'day', 'zh', '?')).toBe('2026年7月15日');
+  });
+
+  test('day mode en includes year, month, and day', () => {
+    const label = formatGroupLabel('2026-07-15', 'day', 'en', '?');
+    expect(label).toContain('2026');
+    expect(label).toContain('15');
+  });
+
+  test('day mode invalid key falls back to unknownLabel', () => {
+    expect(formatGroupLabel('garbage', 'day', 'en', '?')).toBe('?');
+    expect(formatGroupLabel('2026-13-40', 'day', 'en', '?')).toBe('?');
+  });
+
+  test('month mode invalid key falls back to unknownLabel', () => {
+    expect(formatGroupLabel('garbage', 'month', 'en', '?')).toBe('?');
+    expect(formatGroupLabel('2026-13', 'month', 'en', '?')).toBe('?');
+  });
+});
+
+describe('flattenPhotosToTimeline (groupBy: day)', () => {
+  test('cross-day boundary inserts fresh headers per day', () => {
+    const photos = [
+      mk(1, '2026-07-15'),
+      mk(2, '2026-07-15'),
+      mk(3, '2026-07-16'),
+      mk(4, '2026-07-16'),
+      mk(5, '2026-07-16'),
+    ];
+    const out = flattenPhotosToTimeline(photos, { locale: 'en', groupBy: 'day' as GroupBy });
+    const headers = out.filter((it) => it.type === 'header') as any[];
+    expect(headers).toHaveLength(2);
+    expect(headers[0].monthKey).toBe('2026-07-15');
+    expect(headers[1].monthKey).toBe('2026-07-16');
+    expect(headers[0].key.startsWith('d-')).toBe(true);
+  });
+
+  test('same-day photos across the 3-photo row boundary share one header', () => {
+    const photos = [
+      mk(1, '2026-07-15'),
+      mk(2, '2026-07-15'),
+      mk(3, '2026-07-15'),
+      mk(4, '2026-07-15'),
+    ];
+    const out = flattenPhotosToTimeline(photos, { locale: 'en', groupBy: 'day' as GroupBy });
+    const headers = out.filter((it) => it.type === 'header');
+    expect(headers).toHaveLength(1);
+  });
+
+  test('day header keys do not collide with month header keys', () => {
+    const photos = [mk(1, '2026-07-15')];
+    const dayOut = flattenPhotosToTimeline(photos, { locale: 'en', groupBy: 'day' as GroupBy });
+    const monthOut = flattenPhotosToTimeline(photos, { locale: 'en', groupBy: 'month' as GroupBy });
+    const dayHeaderKey = (dayOut[0] as any).key;
+    const monthHeaderKey = (monthOut[0] as any).key;
+    expect(dayHeaderKey.startsWith('d-')).toBe(true);
+    expect(monthHeaderKey.startsWith('m-')).toBe(true);
+    expect(dayHeaderKey).not.toBe(monthHeaderKey);
+  });
+
+  test('unknown-date photos bucket identically under day mode', () => {
+    const photos = [mk(1), mk(2), mk(3)];
+    const out = flattenPhotosToTimeline(photos, {
+      locale: 'en',
+      unknownLabel: 'Unknown date',
+      groupBy: 'day' as GroupBy,
+    });
+    const headers = out.filter((it) => it.type === 'header') as any[];
+    expect(headers).toHaveLength(1);
+    expect(headers[0].monthKey).toBe('unknown');
+    expect(headers[0].label).toBe('Unknown date');
+  });
+
+  test('omitting groupBy defaults to month mode (regression)', () => {
+    const photos = [
+      mk(1, '2026-07-15'),
+      mk(2, '2026-07-16'),
+      mk(3, '2026-06-01'),
+    ];
+    const out = flattenPhotosToTimeline(photos, { locale: 'en' });
+    const headers = out.filter((it) => it.type === 'header') as any[];
+    expect(headers.map((h) => h.monthKey)).toEqual(['2026-07', '2026-06']);
+    expect(headers[0].key.startsWith('m-')).toBe(true);
   });
 });
 

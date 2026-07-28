@@ -49,6 +49,7 @@ jest.mock('../src/api/queryCache', () => ({
   fetchQuery: jest.fn(() => Promise.resolve([])),
   getQueryData: () => undefined,
   getQueryError: () => undefined,
+  hasQueryData: () => false,
   invalidateQueries: jest.fn(),
   setQueryData: jest.fn(),
   subscribeQuery: () => () => {},

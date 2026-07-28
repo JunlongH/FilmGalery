@@ -50,6 +50,9 @@ const zh = {
 
   // Home / Timeline
   'timeline.unknownMonth': '未知日期',
+  'timeline.groupByDay': '按日',
+  'timeline.groupByMonth': '按月',
+  'timeline.filterEmpty': '当前筛选下没有照片',
   'home.emptyTitle': '还没有胶卷',
   'home.emptySubtitle': '连接服务器后，你的胶卷会显示在这里。',
   'home.error': '无法连接服务器，请检查设置。',

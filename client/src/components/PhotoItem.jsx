@@ -79,7 +79,7 @@ function NoteEditModal({ initialValue, onSave, onClose }) {
   );
 }
 
-function PhotoItem({ p, index, onSelect, onSetCover, onDeletePhoto, onUpdatePhoto, filmName, onEditTags, viewMode = 'positive', multiSelect=false, selected=false, onToggleSelect }) {
+function PhotoItem({ p, index, onSelect, onSetCover, onDeletePhoto, onUpdatePhoto, filmName, onEditTags, viewMode = 'positive', multiSelect=false, selected=false, onToggleSelect, deleteLabel = 'Delete', draggable, onDragStart, onDragOver, onDrop, onDragEnd, dragOver }) {
   const navigate = useNavigate();
   const [liked, setLiked] = React.useState(p.rating === 1);
   const [editingNote, setEditingNote] = React.useState(false); // Add state for editing note
@@ -209,7 +209,16 @@ function PhotoItem({ p, index, onSelect, onSetCover, onDeletePhoto, onUpdatePhot
   };
 
   return (
-    <div className={`photo-item ${selected ? 'selected' : ''}`} onClick={handleRootClick} style={multiSelect ? { outline: selected ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', position:'relative', cursor:'pointer' } : {}}>
+    <div
+      className={`photo-item ${selected ? 'selected' : ''} ${dragOver ? 'ring-2 ring-blue-500 z-10' : ''}`}
+      onClick={handleRootClick}
+      style={multiSelect ? { outline: selected ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', position:'relative', cursor:'pointer' } : {}}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+    >
       {multiSelect && (
         <div style={{ position:'absolute', top:6, left:6, zIndex:10 }}>
           <input type="checkbox" checked={selected} onChange={(e)=>{ e.stopPropagation(); onToggleSelect && onToggleSelect(p); }} />
@@ -223,9 +232,11 @@ function PhotoItem({ p, index, onSelect, onSetCover, onDeletePhoto, onUpdatePhot
         onConfirm={dialog.onConfirm}
         onCancel={dialog.onCancel}
       />
-      <div className="photo-like-btn" onClick={multiSelect ? undefined : toggleLike} title={liked ? "Unlike" : "Like"} style={multiSelect ? { pointerEvents:'none', opacity:0.5 } : {}}>
-        <HeartIcon filled={liked} />
-      </div>
+      {onUpdatePhoto && (
+        <div className="photo-like-btn" onClick={multiSelect ? undefined : toggleLike} title={liked ? "Unlike" : "Like"} style={multiSelect ? { pointerEvents:'none', opacity:0.5 } : {}}>
+          <HeartIcon filled={liked} />
+        </div>
+      )}
       <div className="photo-tags-overlay" onClick={(e)=>e.stopPropagation()}>
         {tags && tags.length > 0 ? (
           <div className="photo-tag-inline-list">
@@ -240,13 +251,15 @@ function PhotoItem({ p, index, onSelect, onSetCover, onDeletePhoto, onUpdatePhot
                 >
                   {t.name || t}
                 </span>
-                <button 
-                  className="photo-tag-remove-btn" 
-                  onClick={(e) => { e.stopPropagation(); handleDeleteTag(t.id); }}
-                  title="Remove tag"
-                >
-                  ×
-                </button>
+                {onUpdatePhoto && (
+                  <button
+                    className="photo-tag-remove-btn"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteTag(t.id); }}
+                    title="Remove tag"
+                  >
+                    ×
+                  </button>
+                )}
                 {i < tags.length - 1 ? <span className="tag-separator">·</span> : ''}
               </span>
             ))}
@@ -259,9 +272,9 @@ function PhotoItem({ p, index, onSelect, onSetCover, onDeletePhoto, onUpdatePhot
       {!multiSelect && (
         <div className="photo-actions">
           {onSetCover && (<button onClick={(e)=>{e.stopPropagation(); onSetCover(p.id);}}>Set cover</button>)}
-          <button onClick={handleEditNote}>Note</button>
+          {onUpdatePhoto && (<button onClick={handleEditNote}>Note</button>)}
           {/* Edit Meta moved to fullscreen ImageViewer sidebar */}
-          <button onClick={(e)=>{e.stopPropagation(); onDeletePhoto(p.id);}}>Delete</button>
+          {onDeletePhoto && (<button onClick={(e)=>{e.stopPropagation(); onDeletePhoto(p.id);}}>{deleteLabel}</button>)}
         </div>
       )}
       {p.caption && (
