@@ -7,9 +7,11 @@ const https = require('https');
 
 const isDev = process.env.ELECTRON_DEV === 'true' || !app.isPackaged;
 
-// Ensure Windows uses our packaged icon for taskbar/start shortcuts
+// Windows taskbar / Linux dock pinning identity
 // Must be set before any BrowserWindow is created
 try { app.setAppUserModelId('com.yourorg.filmgallery'); } catch (_) {}
+try { app.setName('FilmGallery'); } catch (_) {}
+try { app.setDesktopName('filmgallery'); } catch (_) {}
 
 // Q2: Enable WebGL / GPU acceleration under Windows Remote Desktop (RDP).
 // RDP uses the "Microsoft Remote Display Adapter" (software driver) which
