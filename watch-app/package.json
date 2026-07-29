@@ -1,6 +1,6 @@
 {
   "name": "WatchApp",
-  "version": "4.0.9",
+  "version": "4.0.10",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
