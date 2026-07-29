@@ -67,6 +67,7 @@ function extractExifFields(tags) {
   if (tags.Make) out.make = String(tags.Make).trim();
   if (tags.Model) out.model = String(tags.Model).trim();
   if (tags.LensModel) out.lensModel = String(tags.LensModel).trim();
+  if (tags.Software) out.software = String(tags.Software).trim();
   if (tags.FocalLength != null) out.focalLength = Number(tags.FocalLength);
   if (tags.FNumber != null) out.fNumber = Number(tags.FNumber);
   if (tags.ExposureTime != null) out.exposureTime = Number(tags.ExposureTime);
@@ -240,8 +241,8 @@ async function processOne(item, sessionId) {
        source_type, session_id, content_hash, filename, original_filename,
        date_taken, focal_length, aperture, shutter_speed, iso,
        white_balance, color_space, latitude, longitude,
-       camera, lens
-     ) VALUES ('digital', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       camera, lens, source_make, source_model, source_software, source_lens
+     ) VALUES ('digital', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       sessionId,
       item.hash,
@@ -257,6 +258,10 @@ async function processOne(item, sessionId) {
       exif.gpsLatitude || null,
       exif.gpsLongitude || null,
       [exif.make, exif.model].filter(Boolean).join(' ') || null,
+      exif.lensModel || null,
+      exif.make || null,
+      exif.model || null,
+      exif.software || null,
       exif.lensModel || null,
     ]
   );

@@ -210,7 +210,9 @@ router.get('/', async (req, res, next) => {
   }
 
   // Album filter (M2M via album_photos)
-  if (album_id) {
+  if (album_id === 'none' || album_id === 'uncategorized') {
+    sql += ` AND NOT EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id)`;
+  } else if (album_id) {
     const aid = parseInt(album_id, 10);
     if (Number.isNaN(aid)) return res.status(400).json({ error: 'Invalid album_id' });
     sql += ` AND EXISTS (SELECT 1 FROM album_photos ap WHERE ap.album_id = ? AND ap.photo_id = p.id)`;

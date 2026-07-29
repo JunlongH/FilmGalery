@@ -204,10 +204,9 @@ function Layout() {
   }, [refreshTags]);
 
   const handleHardRefresh = useCallback(() => {
-    console.log('[App] Hard refresh: busting image cache + clearing query cache');
+    console.log('[App] Hard refresh: busting image cache + invalidating queries');
     try {
       bustImageCache();
-      queryClient.clear();
       refreshTags();
       queryClient.invalidateQueries();
     } catch (e) {

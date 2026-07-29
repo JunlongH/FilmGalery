@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Modal, ModalContent, ModalHeader, ModalBody, ModalFooter,
-  Button, Input, Spinner,
+  Button, Input, Spinner, Checkbox,
 } from '@heroui/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Check, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -26,6 +26,7 @@ export default function AlbumAddPhotosModal({ albumId, existingIds, isOpen, onCl
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(new Set());
+  const [onlyUncategorized, setOnlyUncategorized] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -33,6 +34,7 @@ export default function AlbumAddPhotosModal({ albumId, existingIds, isOpen, onCl
       setSearch('');
       setPage(1);
       setSelected(new Set());
+      setOnlyUncategorized(false);
     }
   }, [isOpen]);
 
@@ -46,8 +48,14 @@ export default function AlbumAddPhotosModal({ albumId, existingIds, isOpen, onCl
   }, [keyword, isOpen]);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['album-photo-picker', search, page],
-    queryFn: () => searchPhotos({ mode: 'digital', page, pageSize: PAGE_SIZE, q: search || undefined }),
+    queryKey: ['album-photo-picker', search, page, onlyUncategorized],
+    queryFn: () => searchPhotos({
+      mode: 'digital',
+      page,
+      pageSize: PAGE_SIZE,
+      q: search || undefined,
+      album_id: onlyUncategorized ? 'none' : undefined,
+    }),
     enabled: isOpen,
     ...getCacheStrategy('digitalPhotos'),
   });
@@ -97,6 +105,14 @@ export default function AlbumAddPhotosModal({ albumId, existingIds, isOpen, onCl
             isClearable
             className="mb-3"
           />
+          <Checkbox
+            size="sm"
+            isSelected={onlyUncategorized}
+            onValueChange={(v) => { setOnlyUncategorized(v); setPage(1); setSelected(new Set()); }}
+            className="mb-3"
+          >
+            Only show photos not in any album
+          </Checkbox>
           {isLoading ? (
             <div className="flex justify-center py-16">
               <Spinner size="lg" color="primary" />
