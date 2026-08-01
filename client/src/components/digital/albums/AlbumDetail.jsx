@@ -4,11 +4,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@heroui/react';
 import { BookMarked, Pencil, Trash2, ChevronLeft, Plus, Check, X, Square, CheckSquare, ArrowDownUp, Upload } from 'lucide-react';
 import {
-  getAlbum, getAlbumPhotos, deleteAlbum,
+  getAlbum, getAlbums, getAlbumPhotos, deleteAlbum,
   removeAlbumPhoto, setAlbumCover, sortAlbumPhotos,
   updatePhoto, getTags,
 } from '../../../api';
 import { getCacheStrategy } from '../../../lib';
+import { groupPhotosByDate } from '../../../lib/dateGroups';
 import PhotoGrid from '../../PhotoGrid';
 import PhotoItem from '../../PhotoItem';
 import TagEditModal from '../../TagEditModal';
@@ -16,6 +17,7 @@ import ImageViewer from '../../common/LazyImageViewer';
 import PhotoDetailsSidebar from '../../PhotoDetailsSidebar';
 import AlbumEditModal from './AlbumEditModal';
 import AlbumAddPhotosModal from './AlbumAddPhotosModal';
+import AlbumCard from './AlbumCard';
 
 export default function AlbumDetail() {
   const { id } = useParams();
@@ -27,7 +29,8 @@ export default function AlbumDetail() {
   const [localPhotos, setLocalPhotos] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
   const [coverFeedback, setCoverFeedback] = useState(null);
-  const [sortMode, setSortMode] = useState('manual');
+  const [sortMode, setSortMode] = useState('date');
+  const [groupBy, setGroupBy] = useState('month');
   const [selectionMode, setSelectionMode] = useState(false);
   const [selection, setSelection] = useState(new Set());
   const [batchEditPhotos, setBatchEditPhotos] = useState(null);
@@ -69,12 +72,34 @@ export default function AlbumDetail() {
     ...getCacheStrategy('tags'),
   });
 
+  const { data: albums = [] } = useQuery({
+    queryKey: ['albums'],
+    queryFn: () => getAlbums(),
+    ...getCacheStrategy('digitalAlbums'),
+  });
+
   const displayPhotos = localPhotos || photos;
   const orderDirty = sortMode === 'manual' && localPhotos !== null;
   const existingIds = useMemo(() => new Set(photos.map(p => p.id)), [photos]);
   const photosRef = useRef(photos);
   photosRef.current = photos;
   const dragEnabled = sortMode === 'manual' && !selectionMode;
+
+  const children = useMemo(
+    () => albums.filter(a => Number(a.parent_id) === albumId),
+    [albums, albumId],
+  );
+
+  const dateSections = useMemo(() => {
+    if (sortMode !== 'date') return [];
+    const raw = groupPhotosByDate(displayPhotos, groupBy, 'Unknown date');
+    let offset = 0;
+    return raw.map(s => {
+      const out = { ...s, startIndex: offset };
+      offset += s.photos.length;
+      return out;
+    });
+  }, [displayPhotos, groupBy, sortMode]);
 
   function invalidateAlbumQueries() {
     queryClient.invalidateQueries({ queryKey: ['albums'] });
@@ -275,6 +300,28 @@ export default function AlbumDetail() {
               By date
             </Button>
           </div>
+          {sortMode === 'date' && (
+            <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-0.5">
+              <Button
+                size="sm"
+                radius="sm"
+                variant={groupBy === 'month' ? 'solid' : 'light'}
+                color={groupBy === 'month' ? 'primary' : 'default'}
+                onPress={() => setGroupBy('month')}
+              >
+                Month
+              </Button>
+              <Button
+                size="sm"
+                radius="sm"
+                variant={groupBy === 'day' ? 'solid' : 'light'}
+                color={groupBy === 'day' ? 'primary' : 'default'}
+                onPress={() => setGroupBy('day')}
+              >
+                Day
+              </Button>
+            </div>
+          )}
           {orderDirty && (
             <>
               <Button color="primary" size="sm" onPress={handleSaveOrder} isLoading={sortMutation.isPending}>
@@ -320,6 +367,22 @@ export default function AlbumDetail() {
         </div>
       )}
 
+      {children.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold text-zinc-600 dark:text-zinc-300 mb-3">
+            Sub-albums
+            <span className="ml-1.5 text-zinc-400 dark:text-zinc-500 font-normal">· {children.length}</span>
+          </h3>
+          <div className="flex gap-4 overflow-x-auto pb-2">
+            {children.map(child => (
+              <div key={child.id} className="w-40 shrink-0">
+                <AlbumCard album={child} onClick={() => navigate(`/albums/${child.id}`)} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {!isLoading && photos.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center">
           <div className="w-24 h-24 rounded-full bg-zinc-100/50 dark:bg-zinc-800/50 flex items-center justify-center mb-6">
@@ -344,6 +407,34 @@ export default function AlbumDetail() {
           selection={selection}
           onSelectionChange={setSelection}
         />
+      ) : sortMode === 'date' ? (
+        <div>
+          {dateSections.flatMap(section => [
+            <h3
+              key={`${section.key}-h`}
+              className="text-sm font-semibold text-zinc-600 dark:text-zinc-300 mt-6 mb-3 first:mt-0"
+            >
+              {section.label}
+              <span className="ml-1.5 text-zinc-400 dark:text-zinc-500 font-normal">· {section.photos.length}</span>
+            </h3>,
+            <div key={`${section.key}-g`} className="photo-grid mb-6">
+              {section.photos.map((p, i) => (
+                <PhotoItem
+                  key={p.id}
+                  p={p}
+                  index={section.startIndex + i}
+                  viewMode="positive"
+                  onSelect={(idx) => setViewerIndex(idx)}
+                  onSetCover={handleSetCover}
+                  onDeletePhoto={handleRemovePhoto}
+                  onUpdatePhoto={(photoId, data) => updatePhotoMutation.mutate({ id: photoId, data })}
+                  onEditTags={(photo) => setEditingTagsPhoto(photo)}
+                  deleteLabel="Remove"
+                />
+              ))}
+            </div>,
+          ])}
+        </div>
       ) : (
         <div className="photo-grid">
           {displayPhotos.map((p, idx) => (

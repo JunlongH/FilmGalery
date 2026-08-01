@@ -8,12 +8,14 @@ import {
 import {
   Images, Search, Heart, ChevronDown, ChevronRight, X,
   History, CheckSquare, Square, BookMarked, Trash2,
+  CalendarDays, LayoutGrid,
 } from 'lucide-react';
 import {
   searchPhotos, getPhotoFacets, getDigitalSessions,
   getAlbums, addAlbumPhotos, updatePhoto, deletePhoto, getTags,
 } from '../../api';
 import { getCacheStrategy } from '../../lib';
+import { groupPhotosByDate } from '../../lib/dateGroups';
 import PhotoGrid from '../PhotoGrid';
 import PhotoItem from '../PhotoItem';
 import TagEditModal from '../TagEditModal';
@@ -27,6 +29,22 @@ const SORT_OPTIONS = [
   { key: 'import_desc', label: 'Import time', sort: 'id', order: 'desc' },
 ];
 
+const VIEW_MODE_KEY = 'libraryViewMode';
+const GROUP_BY_KEY = 'libraryGroupBy';
+
+function readPref(key, fallback) {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v;
+  } catch {
+    return fallback;
+  }
+}
+
+function writePref(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* ignore */ }
+}
+
 export default function LibraryView() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -35,6 +53,14 @@ export default function LibraryView() {
   const [keyword, setKeyword] = useState('');
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState('date_desc');
+  const [viewMode, setViewMode] = useState(() => {
+    const v = readPref(VIEW_MODE_KEY, 'date');
+    return v === 'grid' || v === 'date' ? v : 'date';
+  });
+  const [groupBy, setGroupBy] = useState(() => {
+    const v = readPref(GROUP_BY_KEY, 'month');
+    return v === 'month' || v === 'day' ? v : 'month';
+  });
   const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [yearsSel, setYearsSel] = useState([]);
   const [monthsSel, setMonthsSel] = useState([]);
@@ -53,6 +79,14 @@ export default function LibraryView() {
   const [editingTagsPhoto, setEditingTagsPhoto] = useState(null);
 
   const searchRef = useRef('');
+
+  useEffect(() => {
+    writePref(VIEW_MODE_KEY, viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    writePref(GROUP_BY_KEY, groupBy);
+  }, [groupBy]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -76,7 +110,19 @@ export default function LibraryView() {
     setList(list.includes(value) ? list.filter(v => v !== value) : [...list, value]);
   }
 
-  const sortSpec = SORT_OPTIONS.find(o => o.key === sortKey) || SORT_OPTIONS[0];
+  function changeViewMode(next) {
+    if (next === viewMode) return;
+    setViewMode(next);
+    if (next === 'date' && sortKey === 'import_desc') {
+      resetPages();
+      setSortKey('date_desc');
+    }
+  }
+
+  const effectiveSortKey = (viewMode === 'date' && sortKey === 'import_desc')
+    ? 'date_desc'
+    : sortKey;
+  const sortSpec = SORT_OPTIONS.find(o => o.key === effectiveSortKey) || SORT_OPTIONS[0];
   const monthParams = useMemo(
     () => [...new Set(monthsSel.map(k => k.split('-')[1]))],
     [monthsSel]
@@ -153,6 +199,17 @@ export default function LibraryView() {
     }
     return arr;
   }, [pagesMap]);
+
+  const dateSections = useMemo(() => {
+    if (viewMode !== 'date') return [];
+    const raw = groupPhotosByDate(photos, groupBy, 'Unknown date');
+    let offset = 0;
+    return raw.map(s => {
+      const out = { ...s, startIndex: offset };
+      offset += s.photos.length;
+      return out;
+    });
+  }, [photos, groupBy, viewMode]);
 
   const total = data?.total ?? 0;
   const hasMore = data?.hasMore ?? false;
@@ -310,6 +367,48 @@ export default function LibraryView() {
           <p className="text-zinc-500 dark:text-zinc-400 mt-1">{total} photos</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
+          <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-0.5">
+            <Button
+              size="sm"
+              radius="sm"
+              variant={viewMode === 'date' ? 'solid' : 'light'}
+              color={viewMode === 'date' ? 'primary' : 'default'}
+              onPress={() => changeViewMode('date')}
+            >
+              <CalendarDays className="w-3.5 h-3.5" /> By date
+            </Button>
+            <Button
+              size="sm"
+              radius="sm"
+              variant={viewMode === 'grid' ? 'solid' : 'light'}
+              color={viewMode === 'grid' ? 'primary' : 'default'}
+              onPress={() => changeViewMode('grid')}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" /> Grid
+            </Button>
+          </div>
+          {viewMode === 'date' && (
+            <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-0.5">
+              <Button
+                size="sm"
+                radius="sm"
+                variant={groupBy === 'month' ? 'solid' : 'light'}
+                color={groupBy === 'month' ? 'primary' : 'default'}
+                onPress={() => setGroupBy('month')}
+              >
+                Month
+              </Button>
+              <Button
+                size="sm"
+                radius="sm"
+                variant={groupBy === 'day' ? 'solid' : 'light'}
+                color={groupBy === 'day' ? 'primary' : 'default'}
+                onPress={() => setGroupBy('day')}
+              >
+                Day
+              </Button>
+            </div>
+          )}
           <Input
             value={keyword}
             onValueChange={setKeyword}
@@ -332,7 +431,13 @@ export default function LibraryView() {
             }}
           >
             {SORT_OPTIONS.map(o => (
-              <SelectItem key={o.key} textValue={o.label}>{o.label}</SelectItem>
+              <SelectItem
+                key={o.key}
+                textValue={o.label}
+                isDisabled={viewMode === 'date' && o.key === 'import_desc'}
+              >
+                {o.label}
+              </SelectItem>
             ))}
           </Select>
           <Button
@@ -446,6 +551,32 @@ export default function LibraryView() {
                   selection={selection}
                   onSelectionChange={setSelection}
                 />
+              ) : viewMode === 'date' ? (
+                <div>
+                  {dateSections.flatMap(section => [
+                    <h3
+                      key={`${section.key}-h`}
+                      className="text-sm font-semibold text-zinc-600 dark:text-zinc-300 mt-6 mb-3 first:mt-0"
+                    >
+                      {section.label}
+                      <span className="ml-1.5 text-zinc-400 dark:text-zinc-500 font-normal">· {section.photos.length}</span>
+                    </h3>,
+                    <div key={`${section.key}-g`} className="photo-grid mb-6">
+                      {section.photos.map((p, i) => (
+                        <PhotoItem
+                          key={p.id}
+                          p={p}
+                          index={section.startIndex + i}
+                          viewMode="positive"
+                          onSelect={(idx) => setViewerIndex(idx)}
+                          onUpdatePhoto={(photoId, data) => updatePhotoMutation.mutate({ id: photoId, data })}
+                          onEditTags={(photo) => setEditingTagsPhoto(photo)}
+                          onDeletePhoto={handleDeleteOne}
+                        />
+                      ))}
+                    </div>,
+                  ])}
+                </div>
               ) : (
                 <div className="photo-grid">
                   {photos.map((p, idx) => (

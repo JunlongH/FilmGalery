@@ -58,7 +58,21 @@ export default function DigitalAlbumListScreen() {
 
   const albums = useMemo(() => albumsQuery.data ?? [], [albumsQuery.data]);
 
-  const flatTree = useMemo<FlatAlbumNode[]>(() => {
+  const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
+
+  const toggleCollapse = useCallback((id: number) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const { flatTree, childCountByAlbum } = useMemo<{
+    flatTree: FlatAlbumNode[];
+    childCountByAlbum: Map<number, number>;
+  }>(() => {
     const ids = new Set(albums.map((a) => a.id));
     const childrenByParent = new Map<number, AlbumRow[]>();
     const roots: AlbumRow[] = [];
@@ -71,15 +85,20 @@ export default function DigitalAlbumListScreen() {
         roots.push(a);
       }
     }
+    const childCountByAlbum = new Map<number, number>();
+    for (const [parentId, list] of childrenByParent.entries()) {
+      childCountByAlbum.set(parentId, list.length);
+    }
     const out: FlatAlbumNode[] = [];
     const walk = (album: AlbumRow, depth: number) => {
       out.push({ album, depth });
+      if (collapsedIds.has(album.id)) return;
       const children = childrenByParent.get(album.id) ?? [];
       for (const c of children) walk(c, depth + 1);
     };
     for (const r of roots) walk(r, 0);
-    return out;
-  }, [albums]);
+    return { flatTree: out, childCountByAlbum };
+  }, [albums, collapsedIds]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -128,23 +147,70 @@ export default function DigitalAlbumListScreen() {
   const renderItem = ({ item }: { item: FlatAlbumNode }) => {
     const { album, depth } = item;
     const cover = coverUrl(album);
+    const childCount = childCountByAlbum.get(album.id) ?? 0;
+    const isChild = depth > 0;
+    const isCollapsed = collapsedIds.has(album.id);
     return (
       <TouchableOpacity
         onPress={() => openAlbum(album)}
         activeOpacity={0.85}
-        style={[styles.row, { paddingLeft: 16 + depth * 20, backgroundColor: theme.colors.surface }]}
+        style={[
+          styles.row,
+          {
+            paddingLeft: 16 + depth * 20,
+            backgroundColor: theme.colors.surface,
+          },
+        ]}
       >
-        <View style={[styles.cover, { backgroundColor: theme.colors.surfaceVariant }]}>
-          {cover ? (
-            <CachedImage uri={cover} style={styles.coverImg} contentFit="cover" />
-          ) : (
-            <View style={[styles.coverImg, styles.coverPlaceholder]}>
-              <Icon name="folder" size={22} color={theme.colors.onSurfaceVariant} />
+        {isChild ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.guide,
+              {
+                left: 16 + (depth - 1) * 20 + 9,
+                backgroundColor: theme.colors.outlineVariant,
+              },
+            ]}
+          />
+        ) : null}
+        <View style={styles.coverWrap}>
+          <View
+            style={[
+              styles.cover,
+              { backgroundColor: theme.colors.surfaceVariant },
+              isChild && styles.coverChild,
+            ]}
+          >
+            {cover ? (
+              <CachedImage uri={cover} style={styles.coverImg} contentFit="cover" />
+            ) : (
+              <View style={[styles.coverImg, styles.coverPlaceholder]}>
+                <Icon name="folder" size={isChild ? 18 : 22} color={theme.colors.onSurfaceVariant} />
+              </View>
+            )}
+          </View>
+          {childCount > 0 ? (
+            <View
+              style={[styles.childBadge, { backgroundColor: theme.colors.primaryContainer }]}
+            >
+              <Text
+                style={[styles.childBadgeText, { color: theme.colors.onPrimaryContainer }]}
+              >
+                {childCount}
+              </Text>
             </View>
-          )}
+          ) : null}
         </View>
         <View style={styles.body}>
-          <Text style={[styles.title, { color: theme.colors.onSurface }]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.title,
+              { color: theme.colors.onSurface },
+              isChild && styles.titleChild,
+            ]}
+            numberOfLines={1}
+          >
             {album.title}
           </Text>
           <Text style={[styles.meta, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
@@ -153,7 +219,22 @@ export default function DigitalAlbumListScreen() {
               : ''}
           </Text>
         </View>
-        <Icon name="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />
+        {childCount > 0 ? (
+          <TouchableOpacity
+            onPress={() => toggleCollapse(album.id)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.toggle}
+            activeOpacity={0.6}
+          >
+            <Icon
+              name={isCollapsed ? 'chevron-right' : 'chevron-down'}
+              size={20}
+              color={theme.colors.onSurfaceVariant}
+            />
+          </TouchableOpacity>
+        ) : (
+          <Icon name="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />
+        )}
       </TouchableOpacity>
     );
   };
@@ -412,11 +493,25 @@ const styles = StyleSheet.create({
     paddingRight: 12,
     borderRadius: 12,
   },
+  guide: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+  },
+  coverWrap: {
+    position: 'relative',
+  },
   cover: {
     width: 56,
     height: 56,
     borderRadius: 10,
     overflow: 'hidden',
+  },
+  coverChild: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
   },
   coverImg: {
     width: '100%',
@@ -426,12 +521,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  childBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    height: 16,
+    minWidth: 16,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  childBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  toggle: {
+    padding: 8,
+  },
   body: {
     flex: 1,
   },
   title: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  titleChild: {
+    fontSize: 14,
   },
   meta: {
     fontSize: 12,

@@ -13,6 +13,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import {
   useTheme,
@@ -27,6 +28,7 @@ import { useApiQuery } from '../../hooks/useApiQuery';
 import { getQueryData, invalidateQueries, setQueryData } from '../../api/queryCache';
 import { useT } from '../../i18n';
 import { Icon } from '../../components/ui';
+import CachedImage from '../../components/CachedImage';
 import DigitalPhotoGrid, { type DigitalPhoto } from '../../components/digital/DigitalPhotoGrid';
 import AlbumPickerSheet, { type AlbumPickerAlbum } from '../../components/digital/AlbumPickerSheet';
 
@@ -36,6 +38,8 @@ interface AlbumMeta {
   description?: string | null;
   parent_id?: number | null;
   cover_photo_id?: number | null;
+  cover_thumb?: string | null;
+  photo_count?: number;
 }
 
 type ActionKind = 'add' | 'remove' | 'cover' | null;
@@ -52,6 +56,7 @@ export default function DigitalAlbumDetailScreen() {
 
   const photosKey = baseUrl ? `digitalAlbumPhotos@${baseUrl}.${albumId}` : null;
   const albumKey = baseUrl ? `digitalAlbum@${baseUrl}.${albumId}` : null;
+  const albumsKey = baseUrl ? `digitalAlbums@${baseUrl}` : null;
 
   const photosQuery = useApiQuery<DigitalPhoto[]>(
     photosKey,
@@ -61,8 +66,34 @@ export default function DigitalAlbumDetailScreen() {
     albumKey,
     () => api.http.get(`/api/albums/${albumId}`),
   );
+  const albumsQuery = useApiQuery<AlbumMeta[]>(
+    albumsKey,
+    () => api.http.get('/api/albums', { include_deleted: false }),
+  );
 
   const photos = useMemo(() => photosQuery.data ?? [], [photosQuery.data]);
+
+  const children = useMemo(
+    () => (albumsQuery.data ?? []).filter(
+      (a) => a.parent_id != null && Number(a.parent_id) === Number(albumId),
+    ),
+    [albumsQuery.data, albumId],
+  );
+
+  const childCoverUrl = useCallback(
+    (album: AlbumMeta): string | null => {
+      if (!baseUrl || !album.cover_thumb) return null;
+      return `${baseUrl}/uploads/${album.cover_thumb}`;
+    },
+    [baseUrl],
+  );
+
+  const openChild = useCallback(
+    (album: AlbumMeta) => {
+      navigation.push('DigitalAlbumDetail', { id: album.id, title: album.title });
+    },
+    [navigation],
+  );
 
   const [activePhoto, setActivePhoto] = useState<DigitalPhoto | null>(null);
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -153,13 +184,14 @@ export default function DigitalAlbumDetailScreen() {
         );
       }
       invalidateQueries(`digitalAlbums@`);
+      invalidateQueries(`digitalAlbum@${baseUrl}.${albumId}`);
       setSnack(t('digital.removedFromAlbum'));
     } catch {
       /* surfaced via ApiErrorSnackbar */
     } finally {
       setBusy(false);
     }
-  }, [activePhoto, albumId, photosKey, t]);
+  }, [activePhoto, albumId, baseUrl, photosKey, t]);
 
   const handleSetCover = useCallback(async () => {
     const photo = activePhoto;
@@ -186,6 +218,63 @@ export default function DigitalAlbumDetailScreen() {
       <Text style={[styles.albumMeta, { color: theme.colors.onSurfaceVariant }]}>
         {t('digital.albumPhotosCount', { count: photoCount })}
       </Text>
+      {children.length > 0 ? (
+        <View style={styles.subAlbumsSection}>
+          <Text style={[styles.subAlbumsTitle, { color: theme.colors.onSurfaceVariant }]}>
+            {t('digital.subAlbums')}
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.subAlbumsList}
+          >
+            {children.map((child) => {
+              const childCover = childCoverUrl(child);
+              return (
+                <TouchableOpacity
+                  key={child.id}
+                  style={styles.subAlbumCard}
+                  activeOpacity={0.85}
+                  onPress={() => openChild(child)}
+                >
+                  <View
+                    style={[
+                      styles.subAlbumCover,
+                      { backgroundColor: theme.colors.surfaceVariant },
+                    ]}
+                  >
+                    {childCover ? (
+                      <CachedImage
+                        uri={childCover}
+                        style={styles.subAlbumCoverImg}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View style={styles.subAlbumCoverPlaceholder}>
+                        <Icon name="folder" size={26} color={theme.colors.onSurfaceVariant} />
+                      </View>
+                    )}
+                  </View>
+                  <Text
+                    style={[styles.subAlbumTitle, { color: theme.colors.onSurface }]}
+                    numberOfLines={1}
+                  >
+                    {child.title}
+                  </Text>
+                  <Text
+                    style={[styles.subAlbumMeta, { color: theme.colors.onSurfaceVariant }]}
+                    numberOfLines={1}
+                  >
+                    {typeof child.photo_count === 'number'
+                      ? t('digital.albumPhotosCount', { count: child.photo_count })
+                      : ''}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -220,7 +309,7 @@ export default function DigitalAlbumDetailScreen() {
         onPhotoLongPress={onPhotoLongPress}
         refreshing={photosQuery.refreshing}
         onRefresh={() => photosQuery.refresh()}
-        ListHeaderComponent={photos.length > 0 ? header : null}
+        ListHeaderComponent={photos.length > 0 || children.length > 0 ? header : null}
         ListEmptyComponent={empty}
       />
 
@@ -316,6 +405,48 @@ const styles = StyleSheet.create({
   albumMeta: {
     fontSize: 13,
     marginTop: 4,
+  },
+  subAlbumsSection: {
+    marginTop: 16,
+  },
+  subAlbumsTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+    paddingHorizontal: 8,
+  },
+  subAlbumsList: {
+    paddingHorizontal: 8,
+    paddingBottom: 4,
+  },
+  subAlbumCard: {
+    width: 96,
+    marginRight: 12,
+  },
+  subAlbumCover: {
+    width: 96,
+    height: 96,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  subAlbumCoverImg: {
+    width: '100%',
+    height: '100%',
+  },
+  subAlbumCoverPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subAlbumTitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 6,
+  },
+  subAlbumMeta: {
+    fontSize: 11,
+    marginTop: 2,
   },
   empty: {
     alignItems: 'center',

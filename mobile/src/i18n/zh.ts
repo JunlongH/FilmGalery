@@ -431,6 +431,7 @@ const zh = {
   'digital.albumsEmptyTitle': '还没有数码相册',
   'digital.albumsEmptyBody': '点击右上角的 + 创建一个相册',
   'digital.albumPhotosCount': '{count} 张照片',
+  'digital.subAlbums': '子相册',
   'digital.albumsLoadFailed': '加载相册失败',
   'digital.createAlbum': '新建相册',
   'digital.createAlbumTitle': '新建相册',

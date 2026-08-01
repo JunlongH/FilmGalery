@@ -433,6 +433,7 @@ const en: Record<TranslationKey, string> = {
   'digital.albumsEmptyTitle': 'No albums yet',
   'digital.albumsEmptyBody': 'Tap + in the top right to create one',
   'digital.albumPhotosCount': '{count} photos',
+  'digital.subAlbums': 'Sub-albums',
   'digital.albumsLoadFailed': 'Failed to load albums',
   'digital.createAlbum': 'New album',
   'digital.createAlbumTitle': 'New Album',

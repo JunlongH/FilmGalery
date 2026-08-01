@@ -27,6 +27,7 @@ import {
   getQueryError,
   hasQueryData,
   invalidateQueries,
+  removeQueryData,
   setQueryData,
   subscribeQuery,
 } from '../../api/queryCache';
@@ -87,6 +88,7 @@ export default function DigitalTimelineScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const loadingMoreRef = useRef(false);
   const generationRef = useRef(0);
+  const lastFilteredKeyRef = useRef<string | null>(null);
   const [autoLoadBlocked, setAutoLoadBlocked] = useState(false);
 
   const [groupBy, setGroupBy] = useState<GroupBy>('month');
@@ -256,6 +258,12 @@ export default function DigitalTimelineScreen() {
     return out;
   }, [derived.items, isFiltering, filterYear, filterMonth]);
 
+  const viewerPhotosKey = useMemo(() => {
+    if (!baseUrl) return null;
+    if (!isFiltering) return aggregateKey;
+    return `digitalPhotosFiltered@${baseUrl}?y=${filterYear ?? ''}&m=${filterMonth ?? ''}`;
+  }, [baseUrl, aggregateKey, isFiltering, filterYear, filterMonth]);
+
   const sections = useMemo(
     () =>
       flattenPhotosToTimeline(filteredItems, {
@@ -326,6 +334,10 @@ export default function DigitalTimelineScreen() {
     setAutoLoadBlocked(false);
   }, [filterYear, filterMonth]);
 
+  useEffect(() => () => {
+    if (lastFilteredKeyRef.current) removeQueryData(lastFilteredKeyRef.current);
+  }, []);
+
   useEffect(() => {
     if (!isFiltering) return;
     if (filteredItems.length > 0) return;
@@ -339,15 +351,22 @@ export default function DigitalTimelineScreen() {
     (photo: DigitalPhoto) => {
       const flat: DigitalPhoto[] = filteredItems;
       const idx = flat.findIndex((p) => p.id === photo.id);
+      if (isFiltering && viewerPhotosKey) {
+        if (lastFilteredKeyRef.current && lastFilteredKeyRef.current !== viewerPhotosKey) {
+          removeQueryData(lastFilteredKeyRef.current);
+        }
+        lastFilteredKeyRef.current = viewerPhotosKey;
+        setQueryData<DigitalPhoto[]>(viewerPhotosKey, flat);
+      }
       navigation.navigate('PhotoView', {
         photo,
-        photosKey: aggregateKey,
+        photosKey: viewerPhotosKey,
         initialIndex: idx >= 0 ? idx : 0,
         viewMode: 'positive',
         source_type: 'digital',
       });
     },
-    [navigation, aggregateKey, filteredItems],
+    [navigation, viewerPhotosKey, filteredItems, isFiltering],
   );
 
   const renderItem: ListRenderItem<TimelineSectionItem> = ({ item }) => {

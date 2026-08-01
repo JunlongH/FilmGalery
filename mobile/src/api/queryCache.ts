@@ -66,6 +66,11 @@ export function setQueryData<T>(key: string, data: T): void {
   setEntry(key, { data, error: undefined, updatedAt: Date.now() });
 }
 
+export function removeQueryData(key: string): void {
+  store.delete(key);
+  emit(key);
+}
+
 export async function fetchQuery<T>(
   key: string,
   fetcher: Fetcher<T>,

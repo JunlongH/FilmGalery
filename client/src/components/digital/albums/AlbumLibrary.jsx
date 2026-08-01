@@ -77,26 +77,14 @@ export default function AlbumLibrary() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        {roots.map(album => {
-          const children = childrenByParent.get(album.id) || [];
-          return (
-            <React.Fragment key={album.id}>
-              <AlbumCard album={album} onClick={() => navigate(`/albums/${album.id}`)} />
-              {children.length > 0 && (
-                <div className="col-span-full ml-2 pl-4 border-l-2 border-zinc-200 dark:border-zinc-700">
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">
-                    Sub-albums · {album.title} ({children.length})
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                    {children.map(child => (
-                      <AlbumCard key={child.id} album={child} onClick={() => navigate(`/albums/${child.id}`)} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </React.Fragment>
-          );
-        })}
+        {roots.map(album => (
+          <AlbumCard
+            key={album.id}
+            album={album}
+            subCount={childrenByParent.get(album.id)?.length || 0}
+            onClick={() => navigate(`/albums/${album.id}`)}
+          />
+        ))}
       </div>
 
       <DeletedAlbumsSection />
