@@ -13,6 +13,7 @@ const sqlite3 = require('sqlite3');
 const path = require('path');
 const fs = require('fs');
 const { getDbPath } = require('../config/db-config');
+const { parseCameraString, parseLensString } = require('./equipment-parse');
 
 function log(msg) {
   const logPath = path.join(path.dirname(getDbPath()), 'equipment-migration.log');
@@ -470,48 +471,6 @@ function runEquipmentMigration() {
       // ========================================
 
       log('Starting data migration...');
-
-      // Helper to parse camera string and extract brand/model
-      const parseCameraString = (str) => {
-        if (!str) return null;
-        str = str.trim();
-        // Common patterns: "Brand Model", "Brand Model TTL", etc.
-        const parts = str.split(/\s+/);
-        if (parts.length === 0) return null;
-        const brand = parts[0];
-        const model = parts.slice(1).join(' ') || parts[0];
-        return { name: str, brand, model };
-      };
-
-      // Helper to parse lens string
-      const parseLensString = (str) => {
-        if (!str) return null;
-        str = str.trim();
-        
-        // Skip fixed lens descriptions (e.g., "32mm f/11", "28mm f/2.8", "Fixed")
-        // These are auto-generated from fixed-lens cameras and should not create lens records
-        const fixedLensPattern = /^\d+(?:\.\d+)?mm\s+f\/[\d.?]+$/i;
-        if (fixedLensPattern.test(str) || str.toLowerCase() === 'fixed') {
-          return null;
-        }
-        
-        // Try to extract focal length and aperture from common patterns
-        // e.g., "Pentax M 50mm f/1.7", "Zeiss 50/1.4", "Canon 50mm F1.8"
-        const focalMatch = str.match(/(\d+)(?:\s*-\s*(\d+))?\s*mm/i);
-        const apertureMatch = str.match(/[fF][\s\/]?(\d+\.?\d*)/);
-        
-        const parts = str.split(/\s+/);
-        const brand = parts[0];
-        
-        return {
-          name: str,
-          brand,
-          model: str,
-          focal_length_min: focalMatch ? parseInt(focalMatch[1]) : null,
-          focal_length_max: focalMatch && focalMatch[2] ? parseInt(focalMatch[2]) : (focalMatch ? parseInt(focalMatch[1]) : null),
-          max_aperture: apertureMatch ? parseFloat(apertureMatch[1]) : null
-        };
-      };
 
       // 4a. Migrate cameras from rolls
       const rollCameras = await all(`SELECT DISTINCT camera FROM rolls WHERE camera IS NOT NULL AND camera != '' AND camera_equip_id IS NULL`);

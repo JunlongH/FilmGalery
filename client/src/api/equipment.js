@@ -16,6 +16,14 @@ export async function getEquipmentSuggestions() {
   return jsonFetch('/api/equipment/suggestions');
 }
 
+export async function getUnregisteredDevices() {
+  return jsonFetch('/api/equipment/unregistered-devices');
+}
+
+export async function registerFromPhotos(payload) {
+  return postJson('/api/equipment/register-from-photos', payload);
+}
+
 export async function getCompatibleLenses(cameraId, mode = null) {
   const qs = mode ? `?mode=${encodeURIComponent(mode)}` : '';
   return jsonFetch(`/api/equipment/compatible-lenses/${cameraId}${qs}`);

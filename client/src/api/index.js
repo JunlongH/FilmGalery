@@ -86,6 +86,8 @@ export {
 export {
   getEquipmentConstants,
   getEquipmentSuggestions,
+  getUnregisteredDevices,
+  registerFromPhotos,
   getCompatibleLenses,
   getEquipmentRelatedRolls,
   getFilmFormats,

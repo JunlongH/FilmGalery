@@ -9,14 +9,19 @@ export default function AlbumEditModal({ album, parentAlbum, isOpen, onClose, on
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [parentId, setParentId] = useState(null);
+  const [initialParentId, setInitialParentId] = useState(null);
   const [parentOptions, setParentOptions] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (isOpen) {
       setTitle(album?.title || '');
       setDescription(album?.description || '');
-      setParentId(album?.parent_id ?? parentAlbum?.id ?? null);
+      const initial = album?.parent_id ?? parentAlbum?.id ?? null;
+      setParentId(initial);
+      setInitialParentId(initial);
+      setError(null);
     }
   }, [isOpen, album, parentAlbum]);
 
@@ -24,8 +29,27 @@ export default function AlbumEditModal({ album, parentAlbum, isOpen, onClose, on
     if (!isOpen) return;
     getAlbums({ includeDeleted: false })
       .then(list => {
-        const filtered = (Array.isArray(list) ? list : []).filter(a => a.id !== album?.id);
-        setParentOptions(filtered);
+        const arr = Array.isArray(list) ? list : [];
+        const excluded = new Set();
+        if (album?.id) {
+          const byParent = new Map();
+          for (const a of arr) {
+            const pid = a.parent_id;
+            if (pid == null) continue;
+            const l = byParent.get(pid) || [];
+            l.push(a.id);
+            byParent.set(pid, l);
+          }
+          const stack = [album.id];
+          while (stack.length) {
+            const cur = stack.pop();
+            if (excluded.has(cur)) continue;
+            excluded.add(cur);
+            const kids = byParent.get(cur);
+            if (kids) for (const k of kids) stack.push(k);
+          }
+        }
+        setParentOptions(arr.filter(a => !excluded.has(a.id)));
       })
       .catch(() => {});
   }, [isOpen, album]);
@@ -33,17 +57,24 @@ export default function AlbumEditModal({ album, parentAlbum, isOpen, onClose, on
   async function handleSave() {
     if (!title.trim()) return;
     setSaving(true);
+    setError(null);
     try {
-      const data = { title: title.trim(), description: description.trim(), parent_id: parentId };
+      const norm = (v) => (v == null || v === '' ? null : Number(v));
+      const data = { title: title.trim(), description: description.trim() };
       if (album?.id) {
-        await updateAlbum(album.id, data);
+        const payload = { ...data };
+        if (norm(parentId) !== norm(initialParentId)) {
+          payload.parent_id = norm(parentId);
+        }
+        await updateAlbum(album.id, payload);
       } else {
-        await createAlbum(data);
+        await createAlbum({ ...data, parent_id: norm(parentId) });
       }
       onSaved?.();
       onClose();
     } catch (err) {
       console.error('[AlbumEdit] Save failed:', err);
+      setError(err?.message || 'Failed to save album');
     } finally {
       setSaving(false);
     }
@@ -81,6 +112,9 @@ export default function AlbumEditModal({ album, parentAlbum, isOpen, onClose, on
                 <option key={a.id} value={a.id}>{a.title}</option>
               ))}
             </select>
+          )}
+          {error && (
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           )}
         </ModalBody>
         <ModalFooter>

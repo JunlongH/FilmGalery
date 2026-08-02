@@ -456,6 +456,18 @@ const en: Record<TranslationKey, string> = {
   'digital.newAlbumQuick': 'New album…',
   'digital.quickCreate': 'Quick create',
   'digital.orPickExisting': 'Or pick an existing album below',
+  'digital.searchAlbums': 'Search albums',
+  'digital.editAlbum': 'Edit album',
+  'digital.editAlbumTitle': 'Edit Album',
+  'digital.albumDescription': 'Description',
+  'digital.albumDescriptionPlaceholder': 'Enter description',
+  'digital.editAlbumFailed': 'Failed to save album',
+  'digital.deleteAlbum': 'Delete album',
+  'digital.deleteAlbumConfirm': 'Delete this album? Photos will be kept.',
+  'digital.deleteAlbumFailed': 'Failed to delete album',
+  'digital.newSubAlbum': 'New sub-album',
+  'digital.reverseOrder': 'Reverse order',
+  'digital.noParent': 'None (top level)',
 
   // PhotoView digital branch (M2-C)
   'digital.photoView.addToAlbum': 'Add to album',
@@ -479,6 +491,11 @@ const en: Record<TranslationKey, string> = {
   'digital.exif.gps': 'GPS',
   'digital.exif.filename': 'Filename',
   'digital.exif.fileSize': 'File size',
+  'digital.exif.dimensions': 'Dimensions',
+  'digital.exif.altitude': 'Altitude',
+  'digital.exif.whiteBalance': 'White balance',
+  'digital.exif.colorSpace': 'Color space',
+  'digital.exif.software': 'Software',
   'digital.exif.close': 'Close',
 
   // Digital import (mobile upload)

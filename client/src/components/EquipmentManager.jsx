@@ -16,7 +16,8 @@ import { Button } from '@heroui/react';
 import ModalDialog from './ModalDialog';
 import SearchInput from './shared/SearchInput';
 import { EquipmentEditModal } from './EquipmentManager/index';
-import { Camera, Aperture, Zap, Box, Scan, Film, Plus, Edit2, Trash2, Upload, Package, ImageIcon } from 'lucide-react';
+import EquipmentImportModal from './EquipmentManager/EquipmentImportModal';
+import { Camera, Aperture, Zap, Box, Scan, Film, Plus, Edit2, Trash2, Upload, Package, ImageIcon, Download } from 'lucide-react';
 import '../styles/forms.css';
 
 const TABS = [
@@ -55,6 +56,7 @@ export default function EquipmentManager() {
   const [selectedId, setSelectedId] = useState(null);
   const [editItem, setEditItem] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [relatedRolls, setRelatedRolls] = useState([]);
@@ -235,13 +237,24 @@ export default function EquipmentManager() {
              <h2 className="text-3xl font-bold tracking-tight">Equipment Library</h2>
              <p className="text-zinc-500 dark:text-zinc-400 mt-1">Manage your cameras, lenses, flashes, and film formats</p>
           </div>
-          <Button 
-             color="primary"
-             onPress={() => setShowAddModal(true)}
-             startContent={<Plus className="w-5 h-5" />}
-          >
-             Add {TABS.find(t => t.key === activeTab)?.label.slice(0, -1) || 'Item'}
-          </Button>
+           <div className="flex items-center gap-2">
+             {(activeTab === 'cameras' || activeTab === 'lenses') && (
+               <Button
+                 variant="flat"
+                 onPress={() => setShowImportModal(true)}
+                 startContent={<Download className="w-5 h-5" />}
+               >
+                 从照片导入
+               </Button>
+             )}
+             <Button
+               color="primary"
+               onPress={() => setShowAddModal(true)}
+               startContent={<Plus className="w-5 h-5" />}
+             >
+               Add {TABS.find(t => t.key === activeTab)?.label.slice(0, -1) || 'Item'}
+             </Button>
+           </div>
         </header>
 
         <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl mb-6 flex-shrink-0">
@@ -483,6 +496,12 @@ export default function EquipmentManager() {
       {confirmDelete && (
         <ModalDialog isOpen title="Delete Item" message={`Are you sure you want to delete "${confirmDelete.name}"?`} type="confirm" onConfirm={() => handleDelete(confirmDelete.id)} onCancel={() => setConfirmDelete(null)} />
       )}
+
+      <EquipmentImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onInvalidate={invalidateItems}
+      />
     </div>
   );
 }

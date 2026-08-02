@@ -7,13 +7,12 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  ScrollView,
+  Alert,
 } from 'react-native';
 import {
   useTheme,
   Modal,
-  TextInput,
-  Button,
+  Searchbar,
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { ApiContext } from '../../context/ApiContext';
@@ -23,19 +22,11 @@ import { invalidateQueries } from '../../api/queryCache';
 import { useT } from '../../i18n';
 import { Icon } from '../../components/ui';
 import CachedImage from '../../components/CachedImage';
-
-interface AlbumRow {
-  id: number;
-  title: string;
-  description?: string | null;
-  parent_id?: number | null;
-  cover_photo_id?: number | null;
-  cover_thumb?: string | null;
-  photo_count?: number;
-  sort_order?: number;
-  created_at?: string;
-  updated_at?: string;
-}
+import CreateAlbumModal, {
+  type AlbumRow,
+} from '../../components/library/CreateAlbumModal';
+import EditAlbumModal from '../../components/library/EditAlbumModal';
+import { computeDepth } from '../../components/library/parentTree';
 
 interface FlatAlbumNode {
   album: AlbumRow;
@@ -59,6 +50,12 @@ export default function DigitalAlbumListScreen() {
   const albums = useMemo(() => albumsQuery.data ?? [], [albumsQuery.data]);
 
   const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [actionTarget, setActionTarget] = useState<AlbumRow | null>(null);
+  const [editTarget, setEditTarget] = useState<AlbumRow | null>(null);
+
+  const searching = searchQuery.trim().length > 0;
+  const normalizedSearch = searchQuery.trim().toLowerCase();
 
   const toggleCollapse = useCallback((id: number) => {
     setCollapsedIds((prev) => {
@@ -89,6 +86,16 @@ export default function DigitalAlbumListScreen() {
     for (const [parentId, list] of childrenByParent.entries()) {
       childCountByAlbum.set(parentId, list.length);
     }
+    if (searching) {
+      const matched = albums.filter((a) =>
+        (a.title ?? '').toLowerCase().includes(normalizedSearch),
+      );
+      const out: FlatAlbumNode[] = matched.map((album) => ({
+        album,
+        depth: computeDepth(album, albums),
+      }));
+      return { flatTree: out, childCountByAlbum };
+    }
     const out: FlatAlbumNode[] = [];
     const walk = (album: AlbumRow, depth: number) => {
       out.push({ album, depth });
@@ -98,7 +105,7 @@ export default function DigitalAlbumListScreen() {
     };
     for (const r of roots) walk(r, 0);
     return { flatTree: out, childCountByAlbum };
-  }, [albums, collapsedIds]);
+  }, [albums, collapsedIds, searching, normalizedSearch]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -136,6 +143,40 @@ export default function DigitalAlbumListScreen() {
     [navigation],
   );
 
+  const handleRowLongPress = useCallback((album: AlbumRow) => {
+    setActionTarget(album);
+  }, []);
+
+  const closeActionSheet = useCallback(() => setActionTarget(null), []);
+
+  const openEditor = useCallback(() => {
+    if (!actionTarget) return;
+    setEditTarget(actionTarget);
+    setActionTarget(null);
+  }, [actionTarget]);
+
+  const handleDelete = useCallback(() => {
+    const target = actionTarget;
+    if (!target) return;
+    setActionTarget(null);
+    Alert.alert(t('digital.deleteAlbum'), t('digital.deleteAlbumConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.http.delete(`/api/albums/${target.id}`);
+            invalidateQueries(`digitalAlbums@`);
+            refreshAlbums();
+          } catch {
+            /* surfaced via ApiErrorSnackbar */
+          }
+        },
+      },
+    ]);
+  }, [actionTarget, refreshAlbums, t]);
+
   const coverUrl = useCallback(
     (album: AlbumRow): string | null => {
       if (!baseUrl || !album.cover_thumb) return null;
@@ -150,9 +191,11 @@ export default function DigitalAlbumListScreen() {
     const childCount = childCountByAlbum.get(album.id) ?? 0;
     const isChild = depth > 0;
     const isCollapsed = collapsedIds.has(album.id);
+    const showChildren = !searching && childCount > 0;
     return (
       <TouchableOpacity
         onPress={() => openAlbum(album)}
+        onLongPress={() => handleRowLongPress(album)}
         activeOpacity={0.85}
         style={[
           styles.row,
@@ -190,7 +233,7 @@ export default function DigitalAlbumListScreen() {
               </View>
             )}
           </View>
-          {childCount > 0 ? (
+          {showChildren ? (
             <View
               style={[styles.childBadge, { backgroundColor: theme.colors.primaryContainer }]}
             >
@@ -219,7 +262,7 @@ export default function DigitalAlbumListScreen() {
               : ''}
           </Text>
         </View>
-        {childCount > 0 ? (
+        {showChildren ? (
           <TouchableOpacity
             onPress={() => toggleCollapse(album.id)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -285,6 +328,14 @@ export default function DigitalAlbumListScreen() {
         }
         ListHeaderComponent={
           <>
+            <Searchbar
+              placeholder={t('digital.searchAlbums')}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={[styles.searchbar, { backgroundColor: theme.colors.surface }]}
+              inputStyle={{ color: theme.colors.onSurface }}
+            />
+
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={() => setCreateOpen(true)}
@@ -330,156 +381,78 @@ export default function DigitalAlbumListScreen() {
         submitting={submitting}
         onSubmit={handleCreate}
       />
+
+      <EditAlbumModal
+        visible={!!editTarget}
+        album={editTarget}
+        albums={albums}
+        onDismiss={() => setEditTarget(null)}
+        onSaved={() => refreshAlbums()}
+      />
+
+      <Modal
+        visible={!!actionTarget}
+        onDismiss={closeActionSheet}
+        contentContainerStyle={[styles.actionSheet, { backgroundColor: theme.colors.surface }]}
+      >
+        <Text style={[styles.actionTitle, { color: theme.colors.onSurfaceVariant }]}>
+          {actionTarget?.title ?? ''}
+        </Text>
+        <ActionButton
+          label={t('digital.editAlbum')}
+          icon="edit"
+          iconColor={theme.colors.onSurface}
+          onPress={openEditor}
+        />
+        <ActionButton
+          label={t('digital.deleteAlbum')}
+          icon="trash-2"
+          iconColor={theme.colors.error}
+          textColor={theme.colors.error}
+          onPress={handleDelete}
+        />
+        <View style={[styles.actionDivider, { backgroundColor: theme.colors.outline }]} />
+        <ActionButton label={t('common.cancel')} onPress={closeActionSheet} />
+      </Modal>
     </View>
   );
 }
 
-interface CreateAlbumModalProps {
-  visible: boolean;
-  onDismiss: () => void;
-  albums: AlbumRow[];
-  title: string;
-  onTitleChange: (v: string) => void;
-  parentId: number | null;
-  onParentChange: (v: number | null) => void;
-  submitting: boolean;
-  onSubmit: () => void;
-}
-
-function CreateAlbumModal({
-  visible,
-  onDismiss,
-  albums,
-  title,
-  onTitleChange,
-  parentId,
-  onParentChange,
-  submitting,
-  onSubmit,
-}: CreateAlbumModalProps) {
-  const theme = useTheme();
-  const t = useT();
-
-  const candidates = useMemo(
-    () => albums.filter((a) => a.id !== parentId),
-    [albums, parentId],
-  );
-
-  return (
-    <Modal
-      visible={visible}
-      onDismiss={onDismiss}
-      contentContainerStyle={[styles.modal, { backgroundColor: theme.colors.surface }]}
-    >
-        <Text style={[styles.modalTitle, { color: theme.colors.onSurface }]}>
-          {t('digital.createAlbumTitle')}
-        </Text>
-        <TextInput
-          mode="outlined"
-          label={t('digital.albumName')}
-          placeholder={t('digital.albumNamePlaceholder')}
-          value={title}
-          onChangeText={onTitleChange}
-          autoFocus
-          style={styles.modalInput}
-          onSubmitEditing={onSubmit}
-        />
-        <Text style={[styles.parentLabel, { color: theme.colors.onSurfaceVariant }]}>
-          {t('digital.parentAlbumOptional')}
-        </Text>
-        <View style={[styles.parentList, { borderColor: theme.colors.outline }]}>
-          <ScrollView style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled">
-            <ParentChoiceRow
-              label={t('digital.parentNone')}
-              depth={0}
-              selected={parentId == null}
-              onSelect={() => onParentChange(null)}
-            />
-            {candidates.map((album) => {
-              const depth = computeParentDepth(album, albums);
-              return (
-                <ParentChoiceRow
-                  key={album.id}
-                  label={album.title}
-                  depth={depth}
-                  selected={parentId === album.id}
-                  onSelect={() => onParentChange(album.id)}
-                />
-              );
-            })}
-          </ScrollView>
-        </View>
-        <View style={styles.modalActions}>
-          <Button onPress={onDismiss} textColor={theme.colors.onSurfaceVariant}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            mode="contained"
-            onPress={onSubmit}
-            loading={submitting}
-            disabled={!title.trim() || submitting}
-          >
-            {t('digital.create')}
-          </Button>
-        </View>
-    </Modal>
-  );
-}
-
-interface ParentChoiceRowProps {
+interface ActionButtonProps {
   label: string;
-  depth: number;
-  selected: boolean;
-  onSelect: () => void;
+  icon?: string;
+  iconColor?: string;
+  textColor?: string;
+  onPress: () => void;
 }
 
-function ParentChoiceRow({ label, depth, selected, onSelect }: ParentChoiceRowProps) {
+function ActionButton({ label, icon, iconColor, textColor, onPress }: ActionButtonProps) {
   const theme = useTheme();
+  const color = textColor ?? theme.colors.onSurface;
   return (
     <TouchableOpacity
-      onPress={onSelect}
-      style={[
-        styles.parentRow,
-        { paddingLeft: 12 + depth * 16, backgroundColor: selected ? theme.colors.primaryContainer : 'transparent' },
-      ]}
+      onPress={onPress}
+      style={[styles.actionBtn, { borderBottomColor: theme.colors.outline + '20' }]}
     >
-      <Icon
-        name={selected ? 'check' : 'folder'}
-        size={16}
-        color={selected ? theme.colors.primary : theme.colors.onSurfaceVariant}
-      />
-      <Text
-        style={[
-          styles.parentRowText,
-          { color: selected ? theme.colors.primary : theme.colors.onSurface },
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
+      {icon ? (
+        <Icon name={icon} size={20} color={iconColor ?? color} />
+      ) : (
+        <View style={{ width: 20 }} />
+      )}
+      <Text style={[styles.actionBtnText, { color }]}>{label}</Text>
     </TouchableOpacity>
   );
-}
-
-function computeParentDepth(album: AlbumRow, albums: AlbumRow[]): number {
-  const ids = new Set(albums.map((a) => a.id));
-  let depth = 0;
-  let cur: number | null | undefined = album.parent_id;
-  const seen = new Set<number>();
-  while (cur != null && ids.has(cur) && !seen.has(cur)) {
-    seen.add(cur);
-    depth++;
-    if (depth > 16) break;
-    const parent = albums.find((a) => a.id === cur);
-    cur = parent?.parent_id;
-  }
-  return depth;
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center', padding: 24 },
   listContent: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 24 },
+  searchbar: {
+    marginHorizontal: 4,
+    marginBottom: 12,
+    borderRadius: 12,
+  },
   headerCount: {
     fontSize: 12,
     paddingHorizontal: 4,
@@ -569,47 +542,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: 'center',
   },
-  modal: {
-    margin: 20,
-    borderRadius: 14,
-    padding: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  modalInput: {
-    backgroundColor: 'transparent',
-    marginBottom: 8,
-  },
-  parentLabel: {
-    fontSize: 12,
-    marginTop: 8,
-    marginBottom: 4,
-    paddingHorizontal: 4,
-  },
-  parentList: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  parentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingRight: 12,
-  },
-  parentRowText: {
-    fontSize: 14,
-    flex: 1,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
   createEntry: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -635,5 +567,34 @@ const styles = StyleSheet.create({
   createEntryHint: {
     fontSize: 12,
     marginTop: 2,
+  },
+  actionSheet: {
+    margin: 24,
+    borderRadius: 14,
+    paddingVertical: 8,
+  },
+  actionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    textTransform: 'uppercase',
+    opacity: 0.7,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  actionBtnText: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  actionDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 4,
   },
 });

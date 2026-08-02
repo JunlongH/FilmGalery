@@ -432,15 +432,15 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
         <div className="fg-sidepanel-groupGrid cols-2">
           <div className="fg-field">
             <label className="fg-label">Camera</label>
-            <EquipmentSelector 
-              type="camera" 
+            <EquipmentSelector
+              type="camera"
               mode={photo?.source_type === 'digital' ? 'digital' : 'film'}
-              value={cameraEquipId} 
+              value={cameraEquipId}
               onChange={(id, item) => {
                 setCameraEquipId(id);
                 setSelectedCamera(item);
                 setCamera(item ? `${item.brand} ${item.model}` : '');
-                
+
                 const dirtyList = ['camera_equip_id', 'camera'];
                 // If camera has fixed lens, clear lens selection
                 if (item?.has_fixed_lens) {
@@ -452,6 +452,9 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
               }}
               placeholder={roll?.camera ? `Default: ${roll.camera}` : 'Select camera...'}
             />
+            {!cameraEquipId && camera && (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">EXIF: {camera}</p>
+            )}
           </div>
           <div className="fg-field">
             <label className="fg-label">Lens</label>
@@ -461,11 +464,11 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
                 {selectedCamera.fixed_lens_max_aperture ? ` f/${selectedCamera.fixed_lens_max_aperture}` : ''}
               </div>
             ) : (
-              <EquipmentSelector 
-                type="lens" 
+              <EquipmentSelector
+                type="lens"
                 mode={photo?.source_type === 'digital' ? 'digital' : 'film'}
-                value={lensEquipId} 
-                cameraId={cameraEquipId} 
+                value={lensEquipId}
+                cameraId={cameraEquipId}
                 onChange={(id, item) => {
                   setLensEquipId(id);
                   setLens(item ? `${item.brand} ${item.model}` : '');
@@ -473,6 +476,9 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
                 }}
                 placeholder={roll?.lens ? `Default: ${roll.lens}` : 'Select lens...'}
               />
+            )}
+            {!lensEquipId && lens && !selectedCamera?.has_fixed_lens && (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">EXIF: {lens}</p>
             )}
           </div>
         </div>
@@ -830,6 +836,35 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
             <label className="fg-label">White Balance</label>
             <input className="fg-input" placeholder="—" value={base?.white_balance || ''} readOnly />
           </div>
+          {base?.width != null && base?.height != null && (
+            <div className="fg-field">
+              <label className="fg-label">尺寸</label>
+              <input className="fg-input" placeholder="—" value={`${base.width}×${base.height} px`} readOnly />
+            </div>
+          )}
+          {base?.file_size != null && (
+            <div className="fg-field">
+              <label className="fg-label">文件大小</label>
+              <input
+                className="fg-input"
+                placeholder="—"
+                value={
+                  base.file_size < 1024
+                    ? `${base.file_size} B`
+                    : base.file_size < 1024 * 1024
+                      ? `${(base.file_size / 1024).toFixed(1)} KB`
+                      : `${(base.file_size / (1024 * 1024)).toFixed(1)} MB`
+                }
+                readOnly
+              />
+            </div>
+          )}
+          {base?.altitude != null && (
+            <div className="fg-field">
+              <label className="fg-label">海拔</label>
+              <input className="fg-input" placeholder="—" value={`${base.altitude} m`} readOnly />
+            </div>
+          )}
         </div>
       </section>
       )}

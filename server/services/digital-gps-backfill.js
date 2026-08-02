@@ -46,25 +46,20 @@ async function backfillDigitalGps() {
     );
 
     let updated = 0;
-    try {
-      for (const p of photos) {
-        const rel = p.original_rel_path || p.positive_rel_path;
-        if (!rel) continue;
-        try {
-          const tags = await et.read(toUploadAbsPath(rel));
-          const lat = tags.GPSLatitude != null ? Number(tags.GPSLatitude) : null;
-          const lng = tags.GPSLongitude != null ? Number(tags.GPSLongitude) : null;
-          if (Number.isFinite(lat) && Number.isFinite(lng)) {
-            await runAsync('UPDATE photos SET latitude = ?, longitude = ? WHERE id = ?', [lat, lng, p.id]);
-            updated += 1;
-          }
-        } catch (e) {
-          console.warn(`[DigitalGpsBackfill] photo ${p.id}: ${e.message}`);
+    for (const p of photos) {
+      const rel = p.original_rel_path || p.positive_rel_path;
+      if (!rel) continue;
+      try {
+        const tags = await et.read(toUploadAbsPath(rel));
+        const lat = tags.GPSLatitude != null ? Number(tags.GPSLatitude) : null;
+        const lng = tags.GPSLongitude != null ? Number(tags.GPSLongitude) : null;
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          await runAsync('UPDATE photos SET latitude = ?, longitude = ? WHERE id = ?', [lat, lng, p.id]);
+          updated += 1;
         }
+      } catch (e) {
+        console.warn(`[DigitalGpsBackfill] photo ${p.id}: ${e.message}`);
       }
-    } finally {
-      try { await et.end(); } catch { /* already ended */ }
-      _exiftool = null;
     }
     console.log(`[DigitalGpsBackfill] Done — updated GPS for ${updated}/${photos.length} photo(s).`);
   } catch (e) {

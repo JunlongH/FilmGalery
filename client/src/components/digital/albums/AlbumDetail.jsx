@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@heroui/react';
-import { BookMarked, Pencil, Trash2, ChevronLeft, Plus, Check, X, Square, CheckSquare, ArrowDownUp, Upload } from 'lucide-react';
+import { BookMarked, Pencil, Trash2, ChevronLeft, Plus, Check, X, Square, CheckSquare, ArrowDownUp, Upload, ChevronRight } from 'lucide-react';
 import {
   getAlbum, getAlbums, getAlbumPhotos, deleteAlbum,
   removeAlbumPhoto, setAlbumCover, sortAlbumPhotos,
@@ -25,12 +25,14 @@ export default function AlbumDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showEdit, setShowEdit] = useState(false);
+  const [showCreateSub, setShowCreateSub] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [localPhotos, setLocalPhotos] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
   const [coverFeedback, setCoverFeedback] = useState(null);
   const [sortMode, setSortMode] = useState('date');
   const [groupBy, setGroupBy] = useState('month');
+  const [reversed, setReversed] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selection, setSelection] = useState(new Set());
   const [batchEditPhotos, setBatchEditPhotos] = useState(null);
@@ -79,27 +81,50 @@ export default function AlbumDetail() {
   });
 
   const displayPhotos = localPhotos || photos;
+  const orderedPhotos = useMemo(
+    () => reversed ? [...displayPhotos].reverse() : displayPhotos,
+    [displayPhotos, reversed],
+  );
   const orderDirty = sortMode === 'manual' && localPhotos !== null;
   const existingIds = useMemo(() => new Set(photos.map(p => p.id)), [photos]);
   const photosRef = useRef(photos);
   photosRef.current = photos;
-  const dragEnabled = sortMode === 'manual' && !selectionMode;
+  const dragEnabled = sortMode === 'manual' && !selectionMode && !reversed;
 
   const children = useMemo(
     () => albums.filter(a => Number(a.parent_id) === albumId),
     [albums, albumId],
   );
 
+  const ancestors = useMemo(() => {
+    const byId = new Map(albums.map(a => [a.id, a]));
+    const chain = [];
+    let cur = byId.get(albumId);
+    while (cur && cur.parent_id != null) {
+      const parent = byId.get(cur.parent_id);
+      if (!parent) break;
+      chain.unshift(parent);
+      cur = parent;
+      if (chain.length > 32) break;
+    }
+    return chain;
+  }, [albums, albumId]);
+
+  function handleBack() {
+    if (album?.parent_id != null) navigate(`/albums/${album.parent_id}`);
+    else navigate('/albums');
+  }
+
   const dateSections = useMemo(() => {
     if (sortMode !== 'date') return [];
-    const raw = groupPhotosByDate(displayPhotos, groupBy, 'Unknown date');
+    const raw = groupPhotosByDate(orderedPhotos, groupBy, 'Unknown date');
     let offset = 0;
     return raw.map(s => {
       const out = { ...s, startIndex: offset };
       offset += s.photos.length;
       return out;
     });
-  }, [displayPhotos, groupBy, sortMode]);
+  }, [orderedPhotos, groupBy, sortMode]);
 
   function invalidateAlbumQueries() {
     queryClient.invalidateQueries({ queryKey: ['albums'] });
@@ -266,11 +291,33 @@ export default function AlbumDetail() {
   return (
     <div className="flex flex-col min-h-full bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-6 md:p-8">
       <button
-        onClick={() => navigate('/albums')}
+        onClick={handleBack}
         className="inline-flex items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 mb-4"
       >
         <ChevronLeft className="w-4 h-4" /> Albums
       </button>
+
+      {ancestors.length > 0 && (
+        <nav className="flex items-center flex-wrap gap-1 text-sm text-zinc-500 dark:text-zinc-400 mb-2">
+          <button
+            onClick={() => navigate('/albums')}
+            className="hover:text-zinc-700 dark:hover:text-zinc-200"
+          >
+            相册
+          </button>
+          {ancestors.map(a => (
+            <React.Fragment key={a.id}>
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
+              <button
+                onClick={() => navigate(`/albums/${a.id}`)}
+                className="hover:text-zinc-700 dark:hover:text-zinc-200 truncate max-w-[12rem]"
+              >
+                {a.title}
+              </button>
+            </React.Fragment>
+          ))}
+        </nav>
+      )}
 
       <div className="flex items-start justify-between mb-6">
         <div>
@@ -300,6 +347,16 @@ export default function AlbumDetail() {
               By date
             </Button>
           </div>
+          <Button
+            size="sm"
+            variant="flat"
+            color={reversed ? 'primary' : 'default'}
+            isIconOnly
+            onPress={() => setReversed(v => !v)}
+            title="逆序"
+          >
+            <ArrowDownUp className="w-4 h-4" />
+          </Button>
           {sortMode === 'date' && (
             <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-0.5">
               <Button
@@ -367,19 +424,31 @@ export default function AlbumDetail() {
         </div>
       )}
 
-      {children.length > 0 && (
+      {album && (
         <div className="mb-6">
-          <h3 className="text-sm font-semibold text-zinc-600 dark:text-zinc-300 mb-3">
+          <h3 className="text-sm font-semibold text-zinc-600 dark:text-zinc-300 mb-3 flex items-center gap-2">
             Sub-albums
-            <span className="ml-1.5 text-zinc-400 dark:text-zinc-500 font-normal">· {children.length}</span>
+            {children.length > 0 && (
+              <span className="text-zinc-400 dark:text-zinc-500 font-normal">· {children.length}</span>
+            )}
+            <Button
+              size="sm"
+              variant="flat"
+              onPress={() => setShowCreateSub(true)}
+              className="ml-2 h-6 px-2 text-xs"
+            >
+              <Plus className="w-3.5 h-3.5" /> 新建子相册
+            </Button>
           </h3>
-          <div className="flex gap-4 overflow-x-auto pb-2">
-            {children.map(child => (
-              <div key={child.id} className="w-40 shrink-0">
-                <AlbumCard album={child} onClick={() => navigate(`/albums/${child.id}`)} />
-              </div>
-            ))}
-          </div>
+          {children.length > 0 && (
+            <div className="flex gap-4 overflow-x-auto pb-2">
+              {children.map(child => (
+                <div key={child.id} className="w-40 shrink-0">
+                  <AlbumCard album={child} onClick={() => navigate(`/albums/${child.id}`)} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -403,7 +472,7 @@ export default function AlbumDetail() {
         </div>
       ) : selectionMode ? (
         <PhotoGrid
-          photos={displayPhotos}
+          photos={orderedPhotos}
           selection={selection}
           onSelectionChange={setSelection}
         />
@@ -437,7 +506,7 @@ export default function AlbumDetail() {
         </div>
       ) : (
         <div className="photo-grid">
-          {displayPhotos.map((p, idx) => (
+          {orderedPhotos.map((p, idx) => (
             <PhotoItem
               key={p.id}
               p={p}
@@ -497,6 +566,12 @@ export default function AlbumDetail() {
       {album && (
         <AlbumEditModal album={album} isOpen={showEdit} onClose={() => setShowEdit(false)} onSaved={handleSaved} />
       )}
+      <AlbumEditModal
+        parentAlbum={album}
+        isOpen={showCreateSub}
+        onClose={() => setShowCreateSub(false)}
+        onSaved={handleSaved}
+      />
       <AlbumAddPhotosModal
         albumId={albumId}
         existingIds={existingIds}
@@ -521,7 +596,7 @@ export default function AlbumDetail() {
       )}
 
       {viewerIndex !== null && (
-        <ImageViewer images={displayPhotos} index={viewerIndex} onClose={() => setViewerIndex(null)} />
+        <ImageViewer images={orderedPhotos} index={viewerIndex} onClose={() => setViewerIndex(null)} />
       )}
     </div>
   );

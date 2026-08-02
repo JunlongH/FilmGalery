@@ -200,6 +200,18 @@ router.get('/suggestions', asyncHandler(async (req, res) => {
   res.json(suggestions);
 }));
 
+// Scan digital photos for camera/lens strings not yet linked to the equipment library
+router.get('/unregistered-devices', asyncHandler(async (req, res) => {
+  const result = await equipmentService.getUnregisteredDevices();
+  res.json(result);
+}));
+
+// Register equipment entities from photo-derived names and backfill photo links
+router.post('/register-from-photos', asyncHandler(async (req, res) => {
+  const result = await equipmentService.registerFromPhotos(req.body);
+  res.json(result);
+}));
+
 // Compatible lenses for a camera
 router.get('/compatible-lenses/:cameraId', asyncHandler(async (req, res) => {
   const result = await equipmentService.getCompatibleLenses(req.params.cameraId, req.query.mode || null);

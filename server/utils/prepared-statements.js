@@ -91,8 +91,8 @@ const STATEMENTS = {
     LEFT JOIN album_photos ap ON ap.album_id = a.id
     LEFT JOIN photos p ON p.id = ap.photo_id AND p.deleted_at IS NULL
     WHERE (? = 1 OR a.deleted_at IS NULL) AND (? IS NULL OR a.parent_id = ?)
-    GROUP BY a.id
-    ORDER BY a.sort_order, a.updated_at DESC`,
+     GROUP BY a.id
+     ORDER BY a.sort_order, a.title COLLATE NOCASE, a.id`,
 
   'albums.getById': `
     SELECT a.*

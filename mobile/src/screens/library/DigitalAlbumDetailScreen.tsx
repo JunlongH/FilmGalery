@@ -31,6 +31,10 @@ import { Icon } from '../../components/ui';
 import CachedImage from '../../components/CachedImage';
 import DigitalPhotoGrid, { type DigitalPhoto } from '../../components/digital/DigitalPhotoGrid';
 import AlbumPickerSheet, { type AlbumPickerAlbum } from '../../components/digital/AlbumPickerSheet';
+import CreateAlbumModal, {
+  type AlbumRow,
+} from '../../components/library/CreateAlbumModal';
+import { computeAncestorChain } from '../../components/library/parentTree';
 
 interface AlbumMeta {
   id: number;
@@ -71,12 +75,22 @@ export default function DigitalAlbumDetailScreen() {
     () => api.http.get('/api/albums', { include_deleted: false }),
   );
 
-  const photos = useMemo(() => photosQuery.data ?? [], [photosQuery.data]);
+  const [reversed, setReversed] = useState(false);
+
+  const photos = useMemo(() => {
+    const base = photosQuery.data ?? [];
+    return reversed ? [...base].reverse() : base;
+  }, [photosQuery.data, reversed]);
 
   const children = useMemo(
     () => (albumsQuery.data ?? []).filter(
       (a) => a.parent_id != null && Number(a.parent_id) === Number(albumId),
     ),
+    [albumsQuery.data, albumId],
+  );
+
+  const breadcrumb = useMemo(
+    () => computeAncestorChain(albumsQuery.data ?? [], albumId),
     [albumsQuery.data, albumId],
   );
 
@@ -99,29 +113,65 @@ export default function DigitalAlbumDetailScreen() {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newParentId, setNewParentId] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const headerTitle = albumQuery.data?.title || routeTitle || t('digital.albumDetailTitle');
   const photoCount = photos.length;
+
+  const handleCreateSubAlbum = useCallback(async () => {
+    const title = newTitle.trim();
+    if (!title || submitting) return;
+    setSubmitting(true);
+    try {
+      const payload: { title: string; parent_id?: number } = { title };
+      if (newParentId != null) payload.parent_id = newParentId;
+      await api.http.post('/api/albums', payload);
+      invalidateQueries(`digitalAlbums@`);
+      setCreateOpen(false);
+      setNewTitle('');
+      setNewParentId(null);
+    } catch {
+      /* surfaced via ApiErrorSnackbar */
+    } finally {
+      setSubmitting(false);
+    }
+  }, [newTitle, submitting, newParentId]);
 
   useEffect(() => {
     navigation.setOptions({
       title: headerTitle,
       headerRight: () => (
-        <IconButton
-          icon="upload"
-          iconColor={theme.colors.primary}
-          size={22}
-          accessibilityLabel={t('digital.import.title')}
-          onPress={() =>
-            navigation.navigate('DigitalImport', {
-              albumId,
-              albumTitle: headerTitle,
-            })
-          }
-        />
+        <View style={styles.headerActions}>
+          <IconButton
+            icon={() => (
+              <Icon
+                name="swap-vertical"
+                size={22}
+                color={reversed ? theme.colors.primary : theme.colors.onSurfaceVariant}
+              />
+            )}
+            accessibilityLabel={t('digital.reverseOrder')}
+            onPress={() => setReversed((v) => !v)}
+          />
+          <IconButton
+            icon="upload"
+            iconColor={theme.colors.primary}
+            size={22}
+            accessibilityLabel={t('digital.import.title')}
+            onPress={() =>
+              navigation.navigate('DigitalImport', {
+                albumId,
+                albumTitle: headerTitle,
+              })
+            }
+          />
+        </View>
       ),
     });
-  }, [navigation, headerTitle, theme, albumId, t]);
+  }, [navigation, headerTitle, theme, albumId, t, reversed]);
 
   const onPhotoPress = useCallback(
     (photo: DigitalPhoto, index: number) => {
@@ -215,14 +265,37 @@ export default function DigitalAlbumDetailScreen() {
       <Text style={[styles.albumTitle, { color: theme.colors.onSurface }]} numberOfLines={2}>
         {headerTitle}
       </Text>
+      {breadcrumb.length > 1 ? (
+        <Text
+          style={[styles.breadcrumb, { color: theme.colors.onSurfaceVariant }]}
+          numberOfLines={1}
+        >
+          {breadcrumb.map((a) => a.title).join(' / ')}
+        </Text>
+      ) : null}
       <Text style={[styles.albumMeta, { color: theme.colors.onSurfaceVariant }]}>
         {t('digital.albumPhotosCount', { count: photoCount })}
       </Text>
-      {children.length > 0 ? (
-        <View style={styles.subAlbumsSection}>
+      <View style={styles.subAlbumsSection}>
+        <View style={styles.subAlbumsHeader}>
           <Text style={[styles.subAlbumsTitle, { color: theme.colors.onSurfaceVariant }]}>
             {t('digital.subAlbums')}
           </Text>
+          <TouchableOpacity
+            onPress={() => {
+              setNewParentId(albumId);
+              setCreateOpen(true);
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.subAlbumAddBtn}
+          >
+            <Icon name="plus" size={16} color={theme.colors.primary} />
+            <Text style={[styles.subAlbumAddText, { color: theme.colors.primary }]}>
+              {t('digital.newSubAlbum')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {children.length > 0 ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -273,8 +346,8 @@ export default function DigitalAlbumDetailScreen() {
               );
             })}
           </ScrollView>
-        </View>
-      ) : null}
+        ) : null}
+      </View>
     </View>
   );
 
@@ -309,7 +382,7 @@ export default function DigitalAlbumDetailScreen() {
         onPhotoLongPress={onPhotoLongPress}
         refreshing={photosQuery.refreshing}
         onRefresh={() => photosQuery.refresh()}
-        ListHeaderComponent={photos.length > 0 || children.length > 0 ? header : null}
+        ListHeaderComponent={header}
         ListEmptyComponent={empty}
       />
 
@@ -349,6 +422,23 @@ export default function DigitalAlbumDetailScreen() {
         }}
         onSelect={handlePickerSelect}
         excludeAlbumId={albumId}
+      />
+
+      <CreateAlbumModal
+        visible={createOpen}
+        onDismiss={() => {
+          setCreateOpen(false);
+          setNewTitle('');
+          setNewParentId(null);
+        }}
+        albums={(albumsQuery.data as AlbumRow[] | undefined) ?? []}
+        title={newTitle}
+        onTitleChange={setNewTitle}
+        parentId={newParentId}
+        onParentChange={setNewParentId}
+        submitting={submitting}
+        onSubmit={handleCreateSubAlbum}
+        initialParentId={albumId}
       />
 
       <Snackbar
@@ -402,18 +492,43 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
   },
+  breadcrumb: {
+    fontSize: 12,
+    marginTop: 4,
+  },
   albumMeta: {
     fontSize: 13,
     marginTop: 4,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   subAlbumsSection: {
     marginTop: 16,
+  },
+  subAlbumsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    marginBottom: 8,
   },
   subAlbumsTitle: {
     fontSize: 13,
     fontWeight: '600',
-    marginBottom: 8,
+  },
+  subAlbumAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
     paddingHorizontal: 8,
+    borderRadius: 10,
+  },
+  subAlbumAddText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   subAlbumsList: {
     paddingHorizontal: 8,

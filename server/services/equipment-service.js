@@ -8,6 +8,8 @@
  */
 
 const { runAsync, allAsync, getAsync } = require('../utils/db-helpers');
+const { parseCameraString, parseLensString, isFixedLensString } = require('../utils/equipment-parse');
+const { ValidationError } = require('../middleware/error-handler');
 
 /**
  * Equipment type configurations
@@ -533,6 +535,174 @@ async function getRelatedRolls(type, equipId, limit = 20) {
   }
 }
 
+// ========================================
+// UNREGISTERED DEVICE SCAN + REGISTER FROM PHOTOS
+// ========================================
+
+function normalizeName(s) {
+  return String(s).trim().replace(/\s+/g, ' ');
+}
+
+async function getUnregisteredDevices() {
+  const cameraRows = await allAsync(
+    `SELECT camera AS raw, COUNT(*) AS photoCount,
+            MAX(source_make) AS make, MAX(source_model) AS model
+     FROM photos
+     WHERE source_type = 'digital' AND deleted_at IS NULL
+       AND camera IS NOT NULL AND camera != ''
+       AND camera_equip_id IS NULL
+     GROUP BY camera
+     ORDER BY photoCount DESC`
+  );
+
+  const lensRowsRaw = await allAsync(
+    `SELECT lens AS raw, COUNT(*) AS photoCount
+     FROM photos
+     WHERE source_type = 'digital' AND deleted_at IS NULL
+       AND lens IS NOT NULL AND lens != ''
+       AND lens_equip_id IS NULL
+     GROUP BY lens
+     ORDER BY photoCount DESC`
+  );
+  const lensRows = lensRowsRaw.filter((r) => !isFixedLensString(r.raw));
+
+  const [existingCameras, existingLenses] = await Promise.all([
+    allAsync(`SELECT id, name FROM equip_cameras WHERE deleted_at IS NULL`),
+    allAsync(`SELECT id, name FROM equip_lenses WHERE deleted_at IS NULL`),
+  ]);
+  const cameraMap = new Map();
+  for (const c of existingCameras) cameraMap.set(String(c.name).toLowerCase(), c.id);
+  const lensMap = new Map();
+  for (const l of existingLenses) lensMap.set(String(l.name).toLowerCase(), l.id);
+
+  const cameras = [];
+  for (const r of cameraRows) {
+    const name = normalizeName(r.raw);
+    const parsed = parseCameraString(r.raw);
+    const brand = r.make || (parsed && parsed.brand) || null;
+    const model = r.model || (parsed && parsed.model) || null;
+    cameras.push({
+      name,
+      brand,
+      model,
+      photoCount: r.photoCount,
+      existingId: cameraMap.has(name.toLowerCase()) ? cameraMap.get(name.toLowerCase()) : null,
+      raw: r.raw,
+    });
+  }
+
+  const lenses = [];
+  for (const r of lensRows) {
+    const name = normalizeName(r.raw);
+    const parsed = parseLensString(r.raw);
+    const brand = (parsed && parsed.brand) || null;
+    const model = (parsed && parsed.model) || null;
+    lenses.push({
+      name,
+      brand,
+      model,
+      photoCount: r.photoCount,
+      existingId: lensMap.has(name.toLowerCase()) ? lensMap.get(name.toLowerCase()) : null,
+      raw: r.raw,
+    });
+  }
+
+  return { cameras, lenses };
+}
+
+function _validateItemArray(items, label) {
+  if (!Array.isArray(items)) {
+    throw new ValidationError(`${label} must be an array`);
+  }
+  for (const item of items) {
+    if (!item || typeof item !== 'object') {
+      throw new ValidationError(`${label} entries must be objects`);
+    }
+    if (typeof item.name !== 'string' || item.name.trim() === '') {
+      throw new ValidationError(`${label} entry name is required`);
+    }
+  }
+}
+
+async function registerFromPhotos(body) {
+  const cameras = (body && body.cameras) || [];
+  const lenses = (body && body.lenses) || [];
+  _validateItemArray(cameras, 'cameras');
+  _validateItemArray(lenses, 'lenses');
+
+  const camResult = { created: 0, reused: 0, linked: 0 };
+  const lensResult = { created: 0, reused: 0, linked: 0 };
+
+  for (const c of cameras) {
+    const name = normalizeName(c.name);
+    const existing = await getAsync(
+      `SELECT id FROM equip_cameras WHERE LOWER(name) = LOWER(?) AND deleted_at IS NULL`,
+      [name]
+    );
+    let id;
+    if (existing) {
+      id = existing.id;
+      camResult.reused += 1;
+    } else {
+      const res = await runAsync(
+        `INSERT INTO equip_cameras (name, brand, model, is_digital, status, updated_at)
+         VALUES (?, ?, ?, 1, 'owned', CURRENT_TIMESTAMP)`,
+        [name, c.brand != null ? c.brand : null, c.model != null ? c.model : null]
+      );
+      id = res.lastID;
+      camResult.created += 1;
+    }
+
+    const raw = typeof c.raw === 'string' && c.raw.trim() !== '' ? c.raw : name;
+    const r1 = await runAsync(
+      `UPDATE photos SET camera_equip_id = ?
+       WHERE source_type = 'digital' AND deleted_at IS NULL
+         AND camera_equip_id IS NULL AND camera = ?`,
+      [id, raw]
+    );
+    camResult.linked += r1.changes || 0;
+  }
+
+  for (const l of lenses) {
+    const name = normalizeName(l.name);
+    const existing = await getAsync(
+      `SELECT id FROM equip_lenses WHERE LOWER(name) = LOWER(?) AND deleted_at IS NULL`,
+      [name]
+    );
+    let id;
+    if (existing) {
+      id = existing.id;
+      lensResult.reused += 1;
+    } else {
+      const res = await runAsync(
+        `INSERT INTO equip_lenses (name, brand, model, is_digital, status, updated_at)
+         VALUES (?, ?, ?, 1, 'owned', CURRENT_TIMESTAMP)`,
+        [name, l.brand != null ? l.brand : null, l.model != null ? l.model : null]
+      );
+      id = res.lastID;
+      lensResult.created += 1;
+    }
+
+    const raw = typeof l.raw === 'string' && l.raw.trim() !== '' ? l.raw : name;
+    const r1 = await runAsync(
+      `UPDATE photos SET lens_equip_id = ?
+       WHERE source_type = 'digital' AND deleted_at IS NULL
+         AND lens_equip_id IS NULL AND lens = ?`,
+      [id, raw]
+    );
+    lensResult.linked += r1.changes || 0;
+    const r2 = await runAsync(
+      `UPDATE photos SET lens_equip_id = ?
+       WHERE source_type = 'digital' AND deleted_at IS NULL
+         AND lens_equip_id IS NULL AND source_lens = ?`,
+      [id, raw]
+    );
+    lensResult.linked += r2.changes || 0;
+  }
+
+  return { cameras: camResult, lenses: lensResult };
+}
+
 module.exports = {
   EQUIPMENT_CONFIG,
   listEquipment,
@@ -544,5 +714,7 @@ module.exports = {
   getEquipmentSuggestions,
   getCompatibleLenses,
   getLensesByCamera,
-  getRelatedRolls
+  getRelatedRolls,
+  getUnregisteredDevices,
+  registerFromPhotos
 };

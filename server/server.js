@@ -745,6 +745,7 @@ const seedLocations = async () => {
 		}
 
 		require('./services/digital-gps-backfill').scheduleDigitalGpsBackfill();
+		require('./services/digital-fileinfo-backfill').scheduleDigitalFileinfoBackfill();
 		require('./services/digital-thumb-regen').scheduleDigitalThumbRegen();
 		
 		// Graceful shutdown on signals

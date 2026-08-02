@@ -166,6 +166,9 @@ function runDigitalModeMigration(dbPathOverride) {
         { col: 'original_filename', type: 'TEXT' },
         { col: 'develop_params_json', type: 'TEXT' },
         { col: 'scene_id', type: 'TEXT' },
+        { col: 'width', type: 'INTEGER' },
+        { col: 'height', type: 'INTEGER' },
+        { col: 'file_size', type: 'INTEGER' },
       ];
 
       // equip_cameras.is_digital — BINARY (NOT NULL DEFAULT 0):
@@ -227,7 +230,7 @@ function runDigitalModeMigration(dbPathOverride) {
           throw new Error(`Failed adding app_config.${col}: ${err.message}`);
         }
       }
-      log('Columns ensured: photos (+12), equip_cameras (+7), equip_lenses (+1), app_config (+5).');
+      log('Columns ensured: photos (+15), equip_cameras (+7), equip_lenses (+1), app_config (+5).');
 
       // ================================================================
       // 3. Indexes

@@ -159,10 +159,22 @@ router.put('/:id', async (req, res, next) => {
     const existing = await getAsync('SELECT * FROM albums WHERE id = ? AND deleted_at IS NULL', [albumId]);
     if (!existing) return res.status(404).json({ error: 'Album not found' });
 
-    const { title, description, parent_id, date_start, date_end, sort_order } = req.body;
-    const pid = parent_id != null ? Number(parent_id) : existing.parent_id;
+    const { title, description, date_start, date_end, sort_order } = req.body;
+    let pid;
+    if (!Object.prototype.hasOwnProperty.call(req.body, 'parent_id')) {
+      pid = existing.parent_id;
+    } else if (req.body.parent_id === null) {
+      pid = null;
+    } else {
+      pid = Number(req.body.parent_id);
+      if (!Number.isFinite(pid)) {
+        return res.status(400).json({ error: 'parent_id must be a number or null' });
+      }
+    }
 
     if (pid != null && pid !== existing.parent_id) {
+      const exists = await getAsync('SELECT id FROM albums WHERE id = ? AND deleted_at IS NULL', [pid]);
+      if (!exists) return res.status(400).json({ error: 'Parent album not found' });
       if (await detectCycle(albumId, pid)) {
         return res.status(400).json({ error: 'Circular parent reference detected' });
       }

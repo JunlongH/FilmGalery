@@ -23,7 +23,14 @@ function formatFileSize(bytes: any): string | null {
   if (!isFinite(n) || n < 0) return null;
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDimensions(w: any, h: any): string | null {
+  const wn = Number(w);
+  const hn = Number(h);
+  if (!isFinite(wn) || !isFinite(hn) || wn <= 0 || hn <= 0) return null;
+  return `${wn}×${hn} px`;
 }
 
 export default function ExifSheet({ visible, onDismiss, photo }: ExifSheetProps) {
@@ -54,6 +61,18 @@ export default function ExifSheet({ visible, onDismiss, photo }: ExifSheetProps)
         label: t('digital.exif.iso'),
         value: photo?.iso != null && photo.iso !== '' ? `ISO ${photo.iso}` : null,
       },
+      {
+        label: t('digital.exif.whiteBalance'),
+        value: photo?.white_balance || null,
+      },
+      {
+        label: t('digital.exif.colorSpace'),
+        value: photo?.color_space || null,
+      },
+      {
+        label: t('digital.exif.software'),
+        value: photo?.source_software || null,
+      },
       { label: t('digital.exif.dateTaken'), value: formatDate(photo?.date_taken) },
       {
         label: t('digital.exif.gps'),
@@ -62,7 +81,17 @@ export default function ExifSheet({ visible, onDismiss, photo }: ExifSheetProps)
             ? `${Number(photo.latitude).toFixed(6)}, ${Number(photo.longitude).toFixed(6)}`
             : null,
       },
+      {
+        label: t('digital.exif.altitude'),
+        value: photo?.altitude != null && photo?.altitude !== ''
+          ? `${Number(photo.altitude).toFixed(1)} m`
+          : null,
+      },
       { label: t('digital.exif.filename'), value: photo?.filename || null },
+      {
+        label: t('digital.exif.dimensions'),
+        value: formatDimensions(photo?.width, photo?.height),
+      },
       { label: t('digital.exif.fileSize'), value: formatFileSize(photo?.file_size) },
     ];
     return list.filter((r) => r.value !== null && r.value !== '');

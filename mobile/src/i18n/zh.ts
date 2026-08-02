@@ -454,6 +454,18 @@ const zh = {
   'digital.newAlbumQuick': '新建相册…',
   'digital.quickCreate': '快速创建',
   'digital.orPickExisting': '或从下方选择一个相册',
+  'digital.searchAlbums': '搜索相册',
+  'digital.editAlbum': '编辑相册',
+  'digital.editAlbumTitle': '编辑相册',
+  'digital.albumDescription': '描述',
+  'digital.albumDescriptionPlaceholder': '输入描述',
+  'digital.editAlbumFailed': '保存相册失败',
+  'digital.deleteAlbum': '删除相册',
+  'digital.deleteAlbumConfirm': '确定删除该相册吗？照片会被保留。',
+  'digital.deleteAlbumFailed': '删除相册失败',
+  'digital.newSubAlbum': '新建子相册',
+  'digital.reverseOrder': '逆序',
+  'digital.noParent': '无（顶层）',
 
   // PhotoView digital branch (M2-C)
   'digital.photoView.addToAlbum': '加入相册',
@@ -477,6 +489,11 @@ const zh = {
   'digital.exif.gps': 'GPS',
   'digital.exif.filename': '文件名',
   'digital.exif.fileSize': '文件大小',
+  'digital.exif.dimensions': '尺寸',
+  'digital.exif.altitude': '海拔',
+  'digital.exif.whiteBalance': '白平衡',
+  'digital.exif.colorSpace': '色彩空间',
+  'digital.exif.software': '软件',
   'digital.exif.close': '关闭',
 
   // Digital import (mobile upload)

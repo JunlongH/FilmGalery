@@ -74,6 +74,7 @@ function extractExifFields(tags) {
   if (tags.ISO != null) out.iso = Number(tags.ISO);
   if (tags.GPSLatitude != null) out.gpsLatitude = Number(tags.GPSLatitude);
   if (tags.GPSLongitude != null) out.gpsLongitude = Number(tags.GPSLongitude);
+  if (tags.GPSAltitude != null) out.altitude = Number(tags.GPSAltitude);
   if (tags.ImageWidth != null) out.width = Number(tags.ImageWidth);
   if (tags.ImageHeight != null) out.height = Number(tags.ImageHeight);
   if (tags.Orientation != null) out.orientation = Number(tags.Orientation);
@@ -235,14 +236,18 @@ async function processOne(item, sessionId) {
     sourceBuf = await fsp.readFile(item.file.path);
   }
 
+  let fileSize = null;
+  try { fileSize = fs.statSync(item.file.path).size; } catch (_) { fileSize = null; }
+
   // INSERT photo first to obtain an id for file naming
   const ins = await runAsync(
     `INSERT INTO photos (
        source_type, session_id, content_hash, filename, original_filename,
        date_taken, focal_length, aperture, shutter_speed, iso,
-       white_balance, color_space, latitude, longitude,
-       camera, lens, source_make, source_model, source_software, source_lens
-     ) VALUES ('digital', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       white_balance, color_space, latitude, longitude, altitude,
+       camera, lens, source_make, source_model, source_software, source_lens,
+       width, height, file_size
+     ) VALUES ('digital', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       sessionId,
       item.hash,
@@ -257,12 +262,16 @@ async function processOne(item, sessionId) {
       exif.colorSpace || null,
       exif.gpsLatitude || null,
       exif.gpsLongitude || null,
+      exif.altitude || null,
       [exif.make, exif.model].filter(Boolean).join(' ') || null,
       exif.lensModel || null,
       exif.make || null,
       exif.model || null,
       exif.software || null,
       exif.lensModel || null,
+      exif.width || null,
+      exif.height || null,
+      fileSize,
     ]
   );
   const photoId = ins.lastID;
