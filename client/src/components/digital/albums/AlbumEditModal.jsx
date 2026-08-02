@@ -49,7 +49,28 @@ export default function AlbumEditModal({ album, parentAlbum, isOpen, onClose, on
             if (kids) for (const k of kids) stack.push(k);
           }
         }
-        setParentOptions(arr.filter(a => !excluded.has(a.id)));
+        const remaining = arr.filter(a => !excluded.has(a.id));
+        const byId = new Map(remaining.map(a => [a.id, a]));
+        const children = new Map();
+        const roots = [];
+        for (const a of remaining) {
+          const pid = a.parent_id;
+          if (pid != null && byId.has(pid)) {
+            const l = children.get(pid) || [];
+            l.push(a);
+            children.set(pid, l);
+          } else {
+            roots.push(a);
+          }
+        }
+        const ordered = [];
+        const walk = (node, depth) => {
+          ordered.push({ ...node, _depth: depth });
+          const kids = children.get(node.id);
+          if (kids) for (const k of kids) walk(k, depth + 1);
+        };
+        for (const r of roots) walk(r, 0);
+        setParentOptions(ordered);
       })
       .catch(() => {});
   }, [isOpen, album]);
@@ -109,7 +130,9 @@ export default function AlbumEditModal({ album, parentAlbum, isOpen, onClose, on
             >
               <option value="">No parent (top-level)</option>
               {parentOptions.map(a => (
-                <option key={a.id} value={a.id}>{a.title}</option>
+                <option key={a.id} value={a.id}>
+                  {a._depth > 0 ? '\u00A0\u00A0'.repeat(a._depth) + '└ ' + a.title : a.title}
+                </option>
               ))}
             </select>
           )}

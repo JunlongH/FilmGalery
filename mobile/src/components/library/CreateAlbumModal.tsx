@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { Modal, TextInput, Button, useTheme } from 'react-native-paper';
 import { useT } from '../../i18n';
 import { Icon } from '../ui';
-import { computeDepth, type AlbumTreeNode } from './parentTree';
+import { buildParentOptions, type AlbumTreeNode } from './parentTree';
 
 export interface AlbumRow extends AlbumTreeNode {
   id: number;
@@ -13,6 +13,7 @@ export interface AlbumRow extends AlbumTreeNode {
   cover_photo_id?: number | null;
   cover_thumb?: string | null;
   photo_count?: number;
+  total_photo_count?: number;
   sort_order?: number;
   created_at?: string;
   updated_at?: string;
@@ -58,6 +59,8 @@ export default function CreateAlbumModal({
     [albums, parentId],
   );
 
+  const parentOptions = useMemo(() => buildParentOptions(candidates), [candidates]);
+
   return (
     <Modal
       visible={visible}
@@ -88,18 +91,15 @@ export default function CreateAlbumModal({
             selected={parentId == null}
             onSelect={() => onParentChange(null)}
           />
-          {candidates.map((album) => {
-            const depth = computeDepth(album, albums);
-            return (
-              <ParentChoiceRow
-                key={album.id}
-                label={album.title}
-                depth={depth}
-                selected={parentId === album.id}
-                onSelect={() => onParentChange(album.id)}
-              />
-            );
-          })}
+          {parentOptions.map(({ album, depth }) => (
+            <ParentChoiceRow
+              key={album.id}
+              label={album.title}
+              depth={depth}
+              selected={parentId === album.id}
+              onSelect={() => onParentChange(album.id)}
+            />
+          ))}
         </ScrollView>
       </View>
       <View style={styles.modalActions}>

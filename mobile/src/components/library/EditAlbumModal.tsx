@@ -4,7 +4,7 @@ import { Modal, TextInput, Button, useTheme } from 'react-native-paper';
 import { api } from '../../api/client';
 import { invalidateQueries } from '../../api/queryCache';
 import { useT } from '../../i18n';
-import { computeDepth, computeDescendantIds } from './parentTree';
+import { buildParentOptions, computeDescendantIds } from './parentTree';
 import { ParentChoiceRow, type AlbumRow } from './CreateAlbumModal';
 
 export interface EditAlbumModalProps {
@@ -43,11 +43,11 @@ export default function EditAlbumModal({
     }
   }, [visible, album]);
 
-  const candidates = useMemo(() => {
+  const parentOptions = useMemo(() => {
     if (!album) return [];
     const excluded = computeDescendantIds(albums, album.id);
     excluded.add(album.id);
-    return albums.filter((a) => !excluded.has(a.id));
+    return buildParentOptions(albums, excluded);
   }, [albums, album]);
 
   const handleSave = async () => {
@@ -119,18 +119,15 @@ export default function EditAlbumModal({
             selected={parentId == null}
             onSelect={() => setParentId(null)}
           />
-          {candidates.map((a) => {
-            const depth = computeDepth(a, albums);
-            return (
-              <ParentChoiceRow
-                key={a.id}
-                label={a.title}
-                depth={depth}
-                selected={parentId === a.id}
-                onSelect={() => setParentId(a.id)}
-              />
-            );
-          })}
+          {parentOptions.map(({ album: a, depth }) => (
+            <ParentChoiceRow
+              key={a.id}
+              label={a.title}
+              depth={depth}
+              selected={parentId === a.id}
+              onSelect={() => setParentId(a.id)}
+            />
+          ))}
         </ScrollView>
       </View>
       {error ? (

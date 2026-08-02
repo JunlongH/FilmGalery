@@ -63,3 +63,36 @@ export function computeDescendantIds<T extends AlbumTreeNode>(
   }
   return out;
 }
+
+export function buildParentOptions<T extends { id: number; parent_id?: number | null }>(
+  albums: T[],
+  excludeIds?: Set<number>,
+): Array<{ album: T; depth: number }> {
+  const byId = new Map<number, T>();
+  const childrenByParent = new Map<number, T[]>();
+  for (const a of albums) {
+    byId.set(a.id, a);
+    if (a.parent_id != null) {
+      const list = childrenByParent.get(a.parent_id) ?? [];
+      list.push(a);
+      childrenByParent.set(a.parent_id, list);
+    }
+  }
+  const out: Array<{ album: T; depth: number }> = [];
+  const visited = new Set<number>();
+  const walk = (node: T, depth: number) => {
+    if (excludeIds?.has(node.id)) return;
+    if (visited.has(node.id)) return;
+    visited.add(node.id);
+    out.push({ album: node, depth });
+    for (const child of childrenByParent.get(node.id) ?? []) {
+      walk(child, depth + 1);
+    }
+  };
+  for (const a of albums) {
+    if (a.parent_id == null || !byId.has(a.parent_id)) {
+      walk(a, 0);
+    }
+  }
+  return out;
+}

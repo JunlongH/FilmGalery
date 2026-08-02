@@ -192,6 +192,7 @@ export default function DigitalAlbumListScreen() {
     const isChild = depth > 0;
     const isCollapsed = collapsedIds.has(album.id);
     const showChildren = !searching && childCount > 0;
+    const photoCount = album.total_photo_count ?? album.photo_count;
     return (
       <TouchableOpacity
         onPress={() => openAlbum(album)}
@@ -257,8 +258,8 @@ export default function DigitalAlbumListScreen() {
             {album.title}
           </Text>
           <Text style={[styles.meta, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
-            {typeof album.photo_count === 'number'
-              ? t('digital.albumPhotosCount', { count: album.photo_count })
+            {typeof photoCount === 'number'
+              ? t('digital.albumPhotosCount', { count: photoCount })
               : ''}
           </Text>
         </View>

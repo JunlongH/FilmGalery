@@ -82,14 +82,27 @@ const STATEMENTS = {
   // Albums
   // Params: [includeDeleted(0|1), parentId, parentId]
   'albums.list': `
+    WITH RECURSIVE tree(ancestor_id, album_id) AS (
+      SELECT id, id FROM albums
+      UNION
+      SELECT tree.ancestor_id, a.id FROM albums a JOIN tree ON a.parent_id = tree.album_id
+    )
     SELECT a.*,
            (SELECT thumb_rel_path FROM photos WHERE id = a.cover_photo_id) AS cover_thumb,
            COUNT(p.id) AS photo_count,
+           COALESCE(t.total, 0) AS total_photo_count,
            MIN(p.date_taken) AS date_range_start,
            MAX(p.date_taken) AS date_range_end
     FROM albums a
     LEFT JOIN album_photos ap ON ap.album_id = a.id
     LEFT JOIN photos p ON p.id = ap.photo_id AND p.deleted_at IS NULL
+    LEFT JOIN (
+      SELECT tree.ancestor_id, COUNT(DISTINCT ap2.photo_id) AS total
+      FROM tree
+      JOIN album_photos ap2 ON ap2.album_id = tree.album_id
+      JOIN photos p2 ON p2.id = ap2.photo_id AND p2.deleted_at IS NULL
+      GROUP BY tree.ancestor_id
+    ) t ON t.ancestor_id = a.id
     WHERE (? = 1 OR a.deleted_at IS NULL) AND (? IS NULL OR a.parent_id = ?)
      GROUP BY a.id
      ORDER BY a.sort_order, a.title COLLATE NOCASE, a.id`,

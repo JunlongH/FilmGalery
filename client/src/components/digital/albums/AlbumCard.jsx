@@ -32,7 +32,7 @@ export default function AlbumCard({ album, onClick, subCount = 0 }) {
       <div className="p-3">
         <h3 className="font-semibold text-sm truncate">{album.title}</h3>
         <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-          {album.photo_count || 0} photos
+          {album.total_photo_count ?? album.photo_count ?? 0} photos
           {album.date_range_start && ` · ${album.date_range_start.slice(0, 7)}`}
         </p>
       </div>
