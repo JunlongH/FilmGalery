@@ -78,6 +78,15 @@ export default function EquipmentManager() {
     [queryClient, activeTab, effectiveFilter]
   );
 
+  // 从照片导入注册设备后，全量刷新所有 tab/筛选 + 未注册设备列表
+  const invalidateAllEquipment = useCallback(
+    () => {
+      queryClient.invalidateQueries({ queryKey: ['equipment'] });
+      queryClient.invalidateQueries({ queryKey: ['unregistered-devices'] });
+    },
+    [queryClient],
+  );
+
   // Tab 切换时重置选择/搜索/子筛选（数据加载由 useQuery 自动处理）
   useEffect(() => {
     setSelectedId(null);
@@ -500,7 +509,7 @@ export default function EquipmentManager() {
       <EquipmentImportModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
-        onInvalidate={invalidateItems}
+        onInvalidate={invalidateAllEquipment}
       />
     </div>
   );

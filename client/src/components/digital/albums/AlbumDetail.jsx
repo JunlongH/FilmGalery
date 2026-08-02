@@ -62,9 +62,31 @@ export default function AlbumDetail() {
     ...getCacheStrategy('digitalAlbums'),
   });
 
+  const { data: albums = [] } = useQuery({
+    queryKey: ['albums'],
+    queryFn: () => getAlbums(),
+    ...getCacheStrategy('digitalAlbums'),
+  });
+
+  const children = useMemo(
+    () => albums.filter(a => Number(a.parent_id) === albumId),
+    [albums, albumId],
+  );
+  const isAggregate = children.length > 0;
+  const effectiveSortMode = isAggregate ? 'date' : sortMode;
+
+  useEffect(() => {
+    if (!isAggregate) return;
+    setLocalPhotos(null);
+    setDropIndex(null);
+    dragIndexRef.current = null;
+  }, [isAggregate]);
+
   const { data: photos = [], isLoading } = useQuery({
-    queryKey: ['album-photos', albumId, sortMode],
-    queryFn: () => getAlbumPhotos(id, sortMode === 'date' ? { sort: 'date_taken' } : undefined),
+    queryKey: ['album-photos', albumId, effectiveSortMode, isAggregate ? 'recursive' : 'direct'],
+    queryFn: () => isAggregate
+      ? getAlbumPhotos(id, { recursive: 1 })
+      : getAlbumPhotos(id, effectiveSortMode === 'date' ? { sort: 'date_taken' } : undefined),
     ...getCacheStrategy('digitalPhotos'),
   });
 
@@ -74,27 +96,16 @@ export default function AlbumDetail() {
     ...getCacheStrategy('tags'),
   });
 
-  const { data: albums = [] } = useQuery({
-    queryKey: ['albums'],
-    queryFn: () => getAlbums(),
-    ...getCacheStrategy('digitalAlbums'),
-  });
-
   const displayPhotos = localPhotos || photos;
   const orderedPhotos = useMemo(
     () => reversed ? [...displayPhotos].reverse() : displayPhotos,
     [displayPhotos, reversed],
   );
-  const orderDirty = sortMode === 'manual' && localPhotos !== null;
+  const orderDirty = !isAggregate && sortMode === 'manual' && localPhotos !== null;
   const existingIds = useMemo(() => new Set(photos.map(p => p.id)), [photos]);
   const photosRef = useRef(photos);
   photosRef.current = photos;
-  const dragEnabled = sortMode === 'manual' && !selectionMode && !reversed;
-
-  const children = useMemo(
-    () => albums.filter(a => Number(a.parent_id) === albumId),
-    [albums, albumId],
-  );
+  const dragEnabled = !isAggregate && sortMode === 'manual' && !selectionMode && !reversed;
 
   const ancestors = useMemo(() => {
     const byId = new Map(albums.map(a => [a.id, a]));
@@ -116,7 +127,7 @@ export default function AlbumDetail() {
   }
 
   const dateSections = useMemo(() => {
-    if (sortMode !== 'date') return [];
+    if (effectiveSortMode !== 'date') return [];
     const raw = groupPhotosByDate(orderedPhotos, groupBy, 'Unknown date');
     let offset = 0;
     return raw.map(s => {
@@ -124,7 +135,7 @@ export default function AlbumDetail() {
       offset += s.photos.length;
       return out;
     });
-  }, [orderedPhotos, groupBy, sortMode]);
+  }, [orderedPhotos, groupBy, effectiveSortMode]);
 
   function invalidateAlbumQueries() {
     queryClient.invalidateQueries({ queryKey: ['albums'] });
@@ -325,28 +336,32 @@ export default function AlbumDetail() {
           {album?.description && (
             <p className="text-zinc-500 dark:text-zinc-400 mt-1 max-w-xl">{album.description}</p>
           )}
-          <p className="text-zinc-400 dark:text-zinc-500 mt-1">{displayPhotos.length} photos</p>
+          <p className="text-zinc-400 dark:text-zinc-500 mt-1">
+            {displayPhotos.length} photos{isAggregate && <span className="ml-1">（含子相册）</span>}
+          </p>
         </div><div className="flex items-center gap-2 flex-wrap justify-end">
-          <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-0.5">
-            <Button
-              size="sm"
-              radius="sm"
-              variant={sortMode === 'manual' ? 'solid' : 'light'}
-              color={sortMode === 'manual' ? 'primary' : 'default'}
-              onPress={() => changeSortMode('manual')}
-            >
-              <ArrowDownUp className="w-3.5 h-3.5" /> Manual
-            </Button>
-            <Button
-              size="sm"
-              radius="sm"
-              variant={sortMode === 'date' ? 'solid' : 'light'}
-              color={sortMode === 'date' ? 'primary' : 'default'}
-              onPress={() => changeSortMode('date')}
-            >
-              By date
-            </Button>
-          </div>
+          {!isAggregate && (
+            <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-0.5">
+              <Button
+                size="sm"
+                radius="sm"
+                variant={sortMode === 'manual' ? 'solid' : 'light'}
+                color={sortMode === 'manual' ? 'primary' : 'default'}
+                onPress={() => changeSortMode('manual')}
+              >
+                <ArrowDownUp className="w-3.5 h-3.5" /> Manual
+              </Button>
+              <Button
+                size="sm"
+                radius="sm"
+                variant={sortMode === 'date' ? 'solid' : 'light'}
+                color={sortMode === 'date' ? 'primary' : 'default'}
+                onPress={() => changeSortMode('date')}
+              >
+                By date
+              </Button>
+            </div>
+          )}
           <Button
             size="sm"
             variant="flat"
@@ -357,7 +372,7 @@ export default function AlbumDetail() {
           >
             <ArrowDownUp className="w-4 h-4" />
           </Button>
-          {sortMode === 'date' && (
+          {effectiveSortMode === 'date' && (
             <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-0.5">
               <Button
                 size="sm"
@@ -476,7 +491,7 @@ export default function AlbumDetail() {
           selection={selection}
           onSelectionChange={setSelection}
         />
-      ) : sortMode === 'date' ? (
+      ) : effectiveSortMode === 'date' ? (
         <div>
           {dateSections.flatMap(section => [
             <h3
@@ -495,7 +510,7 @@ export default function AlbumDetail() {
                   viewMode="positive"
                   onSelect={(idx) => setViewerIndex(idx)}
                   onSetCover={handleSetCover}
-                  onDeletePhoto={handleRemovePhoto}
+                  onDeletePhoto={!isAggregate ? handleRemovePhoto : undefined}
                   onUpdatePhoto={(photoId, data) => updatePhotoMutation.mutate({ id: photoId, data })}
                   onEditTags={(photo) => setEditingTagsPhoto(photo)}
                   deleteLabel="Remove"
@@ -514,7 +529,7 @@ export default function AlbumDetail() {
               viewMode="positive"
               onSelect={(i) => setViewerIndex(i)}
               onSetCover={handleSetCover}
-              onDeletePhoto={handleRemovePhoto}
+              onDeletePhoto={!isAggregate ? handleRemovePhoto : undefined}
               onUpdatePhoto={(photoId, data) => updatePhotoMutation.mutate({ id: photoId, data })}
               onEditTags={(photo) => setEditingTagsPhoto(photo)}
               deleteLabel="Remove"
@@ -535,15 +550,17 @@ export default function AlbumDetail() {
           <Button size="sm" variant="flat" onPress={handleBatchEdit}>
             <Pencil className="w-4 h-4" /> Edit info
           </Button>
-          <Button
-            size="sm"
-            variant="flat"
-            color="danger"
-            isLoading={removeBatchMutation.isPending}
-            onPress={handleBatchRemove}
-          >
-            <Trash2 className="w-4 h-4" /> Remove from album
-          </Button>
+          {!isAggregate && (
+            <Button
+              size="sm"
+              variant="flat"
+              color="danger"
+              isLoading={removeBatchMutation.isPending}
+              onPress={handleBatchRemove}
+            >
+              <Trash2 className="w-4 h-4" /> Remove from album
+            </Button>
+          )}
           <Button size="sm" variant="light" onPress={clearSelection}>
             Cancel
           </Button>

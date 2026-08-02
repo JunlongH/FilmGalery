@@ -489,6 +489,8 @@ const en: Record<TranslationKey, string> = {
   'digital.exif.iso': 'ISO',
   'digital.exif.dateTaken': 'Date taken',
   'digital.exif.gps': 'GPS',
+  'digital.exif.country': 'Country',
+  'digital.exif.city': 'City',
   'digital.exif.filename': 'Filename',
   'digital.exif.fileSize': 'File size',
   'digital.exif.dimensions': 'Dimensions',

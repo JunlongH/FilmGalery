@@ -498,13 +498,27 @@ router.get('/single/:id', async (req, res, next) => {
   const { id } = req.params;
   console.log('[GET] /api/photos/single/' + id);
   try {
-    const sql = `
-      SELECT p.*, COALESCE(f.name, r.film_type) AS film_name, r.title AS roll_title
-      FROM photos p
-      LEFT JOIN rolls r ON r.id = p.roll_id
-      LEFT JOIN films f ON f.id = r.filmId
-      WHERE p.id = ?
-    `;
+    // Mirror the list endpoint's locations guard: the table is added by a
+    // migration, so older DBs (and tests) may not have it. Always surface
+    // city_name / country_name keys so the desktop sidebar doesn't flicker
+    // blank after a reload.
+    const locationsTableExists = await getAsync(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='locations'", []
+    );
+    const sql = locationsTableExists
+      ? `SELECT p.*, COALESCE(f.name, r.film_type) AS film_name, r.title AS roll_title,
+                l.city_name, l.country_name
+         FROM photos p
+         LEFT JOIN rolls r ON r.id = p.roll_id
+         LEFT JOIN films f ON f.id = r.filmId
+         LEFT JOIN locations l ON p.location_id = l.id
+         WHERE p.id = ?`
+      : `SELECT p.*, COALESCE(f.name, r.film_type) AS film_name, r.title AS roll_title,
+                NULL AS city_name, NULL AS country_name
+         FROM photos p
+         LEFT JOIN rolls r ON r.id = p.roll_id
+         LEFT JOIN films f ON f.id = r.filmId
+         WHERE p.id = ?`;
     const photo = await getAsync(sql, [id]);
     if (!photo) {
       return res.status(404).json({ error: 'Photo not found' });

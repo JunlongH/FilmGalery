@@ -71,8 +71,8 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
   const [detailLocation, setDetailLocation] = useState(base?.detail_location || '');
   const [location, setLocation] = useState({
     location_id: base?.location_id || null,
-    country_name: base?.country_name || null,
-    city_name: base?.city_name || null,
+    country_name: base?.country_name || base?.country || null,
+    city_name: base?.city_name || base?.city || null,
     latitude: base?.latitude,
     longitude: base?.longitude,
   });
@@ -130,8 +130,8 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
     setDetailLocation(currentBase.detail_location || '');
     setLocation({
       location_id: currentBase.location_id || null,
-      country_name: currentBase.country_name || null,
-      city_name: currentBase.city_name || null,
+      country_name: currentBase.country_name || currentBase.country || null,
+      city_name: currentBase.city_name || currentBase.city || null,
       latitude: currentBase.latitude,
       longitude: currentBase.longitude,
     });

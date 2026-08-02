@@ -58,14 +58,9 @@ export default function DigitalAlbumDetailScreen() {
   const albumId: number = route.params?.id;
   const routeTitle: string | undefined = route.params?.title;
 
-  const photosKey = baseUrl ? `digitalAlbumPhotos@${baseUrl}.${albumId}` : null;
   const albumKey = baseUrl ? `digitalAlbum@${baseUrl}.${albumId}` : null;
   const albumsKey = baseUrl ? `digitalAlbums@${baseUrl}` : null;
 
-  const photosQuery = useApiQuery<DigitalPhoto[]>(
-    photosKey,
-    () => api.http.get(`/api/albums/${albumId}/photos`),
-  );
   const albumQuery = useApiQuery<AlbumMeta>(
     albumKey,
     () => api.http.get(`/api/albums/${albumId}`),
@@ -77,17 +72,30 @@ export default function DigitalAlbumDetailScreen() {
 
   const [reversed, setReversed] = useState(false);
 
-  const photos = useMemo(() => {
-    const base = photosQuery.data ?? [];
-    return reversed ? [...base].reverse() : base;
-  }, [photosQuery.data, reversed]);
-
   const children = useMemo(
     () => (albumsQuery.data ?? []).filter(
       (a) => a.parent_id != null && Number(a.parent_id) === Number(albumId),
     ),
     [albumsQuery.data, albumId],
   );
+
+  const hasChildren = children.length > 0;
+  const photosKey = baseUrl
+    ? `digitalAlbumPhotos@${baseUrl}.${albumId}${hasChildren ? '.recursive' : ''}`
+    : null;
+
+  const photosQuery = useApiQuery<DigitalPhoto[]>(
+    photosKey,
+    () =>
+      api.http.get(
+        `/api/albums/${albumId}/photos${hasChildren ? '?recursive=1' : ''}`,
+      ),
+  );
+
+  const photos = useMemo(() => {
+    const base = photosQuery.data ?? [];
+    return reversed ? [...base].reverse() : base;
+  }, [photosQuery.data, reversed]);
 
   const breadcrumb = useMemo(
     () => computeAncestorChain(albumsQuery.data ?? [], albumId),
@@ -404,12 +412,14 @@ export default function DigitalAlbumDetailScreen() {
           icon="image"
           onPress={handleSetCover}
         />
-        <ActionButton
-          label={t('digital.removeFromAlbum')}
-          icon="trash-2"
-          destructive
-          onPress={handleRemoveFromAlbum}
-        />
+        {!hasChildren && (
+          <ActionButton
+            label={t('digital.removeFromAlbum')}
+            icon="trash-2"
+            destructive
+            onPress={handleRemoveFromAlbum}
+          />
+        )}
         <View style={[styles.actionDivider, { backgroundColor: theme.colors.outline }]} />
         <ActionButton label={t('common.cancel')} onPress={closeAction} />
       </Modal>

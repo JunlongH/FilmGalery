@@ -103,7 +103,34 @@ router.get('/:id', async (req, res, next) => {
 router.get('/:id/photos', async (req, res, next) => {
   try {
     let rows;
-    if (req.query.sort === 'date_taken') {
+    if (req.query.recursive === '1') {
+      // Aggregated photos from this album AND all descendants (parent_id tree).
+      // Depth cap (32) defends against legacy cycles; deleted descendants are
+      // pruned. DISTINCT because a photo may belong to multiple sub-albums.
+      // Note: ap columns are intentionally NOT selected — they would break
+      // dedup (same photo, different per-album sort_order/added_at).
+      rows = await allAsync(
+        `WITH RECURSIVE sub(id, depth) AS (
+            SELECT ?, 0
+            UNION
+            SELECT a.id, sub.depth + 1
+            FROM albums a JOIN sub ON a.parent_id = sub.id
+            WHERE sub.depth < 31 AND a.deleted_at IS NULL
+         )
+         SELECT DISTINCT p.*,
+                r.title AS roll_title,
+                ds.label AS session_label, ds.session_date
+         FROM sub
+         JOIN album_photos ap ON ap.album_id = sub.id
+         JOIN photos p ON ap.photo_id = p.id
+         LEFT JOIN rolls r ON p.roll_id = r.id
+         LEFT JOIN digital_sessions ds
+           ON p.session_id = ds.id AND ds.deleted_at IS NULL
+         WHERE p.deleted_at IS NULL
+         ORDER BY p.date_taken ASC NULLS LAST, p.id ASC`,
+        [req.params.id]
+      );
+    } else if (req.query.sort === 'date_taken') {
       rows = await allAsync(
         `SELECT p.*, ap.sort_order AS album_sort_order, ap.added_at AS album_added_at,
                 r.title AS roll_title,
@@ -298,10 +325,11 @@ router.post('/:id/photos', async (req, res, next) => {
 
 router.delete('/:id/photos/:photoId', async (req, res, next) => {
   try {
-    await runAsync(
+    const result = await runAsync(
       'DELETE FROM album_photos WHERE album_id = ? AND photo_id = ?',
       [Number(req.params.id), Number(req.params.photoId)]
     );
+    if (result.changes === 0) return res.status(404).json({ error: 'Photo not in album' });
     res.json({ ok: true });
   } catch (err) {
     next(err);

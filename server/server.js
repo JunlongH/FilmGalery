@@ -244,7 +244,7 @@ const mountRoutes = () => {
   app.use('/api/tags', cacheSeconds(120), require('./routes/tags'));
   app.use('/api/locations', cacheSeconds(300), require('./routes/locations'));
   app.use('/api/stats', cacheSeconds(60), require('./routes/stats'));
-  app.use('/api/equipment', cacheSeconds(120), require('./routes/equipment')); // Equipment management
+  app.use('/api/equipment', cacheSeconds(0), require('./routes/equipment')); // Equipment management — revalidate each request (mutations must be visible immediately; weak ETag yields 304 when unchanged)
   // rolls/photos change more often; keep very short cache to help bursts
   app.use('/api/rolls', cacheSeconds(10), require('./routes/rolls'));
   app.use('/api/photos', cacheSeconds(10), require('./routes/photos'));

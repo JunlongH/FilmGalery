@@ -87,6 +87,14 @@ export default function ExifSheet({ visible, onDismiss, photo }: ExifSheetProps)
           ? `${Number(photo.altitude).toFixed(1)} m`
           : null,
       },
+      {
+        label: t('digital.exif.country'),
+        value: photo?.country_name || photo?.country || null,
+      },
+      {
+        label: t('digital.exif.city'),
+        value: photo?.city_name || photo?.city || null,
+      },
       { label: t('digital.exif.filename'), value: photo?.filename || null },
       {
         label: t('digital.exif.dimensions'),

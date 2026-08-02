@@ -487,6 +487,8 @@ const zh = {
   'digital.exif.iso': 'ISO',
   'digital.exif.dateTaken': '拍摄时间',
   'digital.exif.gps': 'GPS',
+  'digital.exif.country': '国家',
+  'digital.exif.city': '城市',
   'digital.exif.filename': '文件名',
   'digital.exif.fileSize': '文件大小',
   'digital.exif.dimensions': '尺寸',
