@@ -254,8 +254,13 @@ describe('AlbumDetail — query, sort mode, and album mutations', () => {
   test('fetches album + photos via getAlbum/getAlbumPhotos with manual/date sort toggle', () => {
     const src = readClientSrc('components/digital/albums/AlbumDetail.jsx');
     // WHY: sortMode='date' must pass sort=date_taken to match the server's
-    // expected query param; otherwise the toggle would silently noop.
-    expect(src).toMatch(/getAlbumPhotos\(\s*id,\s*sortMode\s*===\s*['"]date['"]\s*\?\s*\{\s*sort:\s*['"]date_taken['"]\s*\}/);
+    // expected query param; otherwise the toggle would silently noop. The
+    // predicate runs through effectiveSortMode because aggregate mode (album
+    // has children) forces date order and disables manual sort.
+    expect(src).toMatch(/getAlbumPhotos\(\s*id,\s*effectiveSortMode\s*===\s*['"]date['"]\s*\?\s*\{\s*sort:\s*['"]date_taken['"]\s*\}\s*:\s*undefined\s*\)/);
+    // WHY: an album with children must aggregate descendant photos via the
+    // server's recursive CTE branch (?recursive=1), not just direct members.
+    expect(src).toMatch(/getAlbumPhotos\(\s*id,\s*\{\s*recursive:\s*1\s*\}\s*\)/);
     // WHY: album metadata (title/description) is a separate fetch keyed by
     // albumId — invalidations must use the same key to refresh.
     expect(src).toMatch(/queryKey:\s*\['album',\s*albumId\]/);
