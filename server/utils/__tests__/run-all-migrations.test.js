@@ -84,6 +84,7 @@ describe('runAllMigrations — fresh DB integration', () => {
       '20260726_digital_rating_like_only',
       '20260726_normalize_photo_path_separators',
       '20260726_relax_photos_roll_id',
+      '20260807_photos_fileinfo_columns',
     ];
     expect(result.total).toBe(expectedNames.length);
     expect(result.executed).toBe(expectedNames.length);

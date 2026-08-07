@@ -29,6 +29,7 @@ const REGISTERED_MIGRATIONS = [
   '20260726_relax_photos_roll_id',
   '20260726_normalize_photo_path_separators',
   '20260726_digital_rating_like_only',
+  '20260807_photos_fileinfo_columns',
 ];
 
 /**
@@ -140,6 +141,14 @@ async function runAllMigrations() {
     );
   });
 
+  // 8. Repair: photos.width/height/file_size were added to the digital-mode
+  //    migration after some DBs had already recorded it as successful, so
+  //    those DBs never got the columns and digital import fails.
+  runner.add('20260807_photos_fileinfo_columns', async () => {
+    const { runPhotosFileinfoColumns } = require('./photos-fileinfo-columns-migration');
+    await runPhotosFileinfoColumns();
+  });
+
   const results = await runner.runAll();
   console.log('[MIGRATIONS] Unified migration complete:', results);
   return results;
@@ -155,7 +164,7 @@ async function getMigrationStatus() {
   return {
     executed,
     summary: {
-      total: 7,
+      total: 8,
       executed: executed.filter(m => m.success).length,
       failed: executed.filter(m => !m.success).length,
     },
