@@ -355,7 +355,9 @@ export default function PhotoViewScreen({ route, navigation }: any) {
 
   const dateTakenText = useMemo(() => {
     if (!photo?.date_taken) return '';
-    const d = new Date(photo.date_taken);
+    const raw = String(photo.date_taken);
+    const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+    const d = new Date(normalized);
     if (isNaN(d.getTime())) return '';
     return d.toLocaleString();
   }, [photo?.date_taken]);

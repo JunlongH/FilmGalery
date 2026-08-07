@@ -583,7 +583,9 @@ export default function DigitalImportScreen() {
 function formatDate(value: string): string {
   const locale = getLanguage() === 'en' ? 'en-US' : 'zh-CN';
   try {
-    return new Date(value).toLocaleDateString(locale, {
+    const s = String(value);
+    const normalized = s.includes('T') ? s : s.replace(' ', 'T');
+    return new Date(normalized).toLocaleDateString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

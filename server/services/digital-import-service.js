@@ -59,10 +59,21 @@ function extractExifFields(tags) {
   if (!tags) return null;
   const out = {};
   if (tags.DateTimeOriginal) {
-    const d = tags.DateTimeOriginal instanceof Date
-      ? tags.DateTimeOriginal
-      : new Date(tags.DateTimeOriginal);
-    if (!isNaN(d.getTime())) out.dateTimeOriginal = d.toISOString();
+    const v = tags.DateTimeOriginal;
+    const p = (n) => String(n).padStart(2, '0');
+    let s = null;
+    if (typeof v === 'string') {
+      const m = v.match(/(\d{4})[-:]?(\d{2})[-:]?(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+      if (m) s = `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6] || '00'}`;
+    } else if (v instanceof Date) {
+      if (!isNaN(v.getTime())) {
+        s = `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())} ${p(v.getHours())}:${p(v.getMinutes())}:${p(v.getSeconds())}`;
+      }
+    } else if (typeof v === 'object' && v.year != null) {
+      // exiftool-vendored ExifDateTime: use wall-clock components as-is (EXIF has no timezone)
+      s = `${v.year}-${p(v.month)}-${p(v.day)} ${p(v.hour || 0)}:${p(v.minute || 0)}:${p(v.second || 0)}`;
+    }
+    if (s) out.dateTimeOriginal = s;
   }
   if (tags.Make) out.make = String(tags.Make).trim();
   if (tags.Model) out.model = String(tags.Model).trim();

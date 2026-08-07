@@ -362,7 +362,8 @@ export default function MapScreen() {
                     ? (() => {
                         const raw = selectedPhoto.date_taken || selectedPhoto.taken_at;
                         try { 
-                          const d = new Date(raw);
+                          const norm = String(raw).includes('T') ? raw : String(raw).replace(' ', 'T');
+                          const d = new Date(norm);
                           if (!isNaN(d.getTime())) {
                             return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                           }

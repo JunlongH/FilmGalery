@@ -12,7 +12,9 @@ export interface ExifSheetProps {
 
 function formatDate(value: any): string | null {
   if (value == null || value === '') return null;
-  const d = new Date(value);
+  const s = String(value);
+  const normalized = s.includes('T') ? s : s.replace(' ', 'T');
+  const d = new Date(normalized);
   if (isNaN(d.getTime())) return null;
   return d.toLocaleString();
 }

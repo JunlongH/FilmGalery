@@ -212,18 +212,33 @@ function parseFocalLength(focalLength) {
 function formatExifDateTime(dateTaken, timeTaken) {
   if (!dateTaken) return null;
   
+  const str = String(dateTaken);
+  
+  if (/Z$/i.test(str)) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      const p = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}:${p(d.getMonth() + 1)}:${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    }
+  }
+  
   // 标准化日期
-  const dateMatch = dateTaken.match(/(\d{4})-?(\d{2})-?(\d{2})/);
+  const dateMatch = str.match(/(\d{4})-?(\d{2})-?(\d{2})/);
   if (!dateMatch) return null;
   
   const year = dateMatch[1];
   const month = dateMatch[2];
   const day = dateMatch[3];
   
-  // 标准化时间
+  // 标准化时间: 优先使用 dateTaken 内嵌时间, 回退到 timeTaken
   let hour = '00', minute = '00', second = '00';
-  if (timeTaken) {
-    const timeMatch = timeTaken.match(/(\d{2}):?(\d{2}):?(\d{2})?/);
+  const embedded = str.match(/[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (embedded) {
+    hour = embedded[1];
+    minute = embedded[2];
+    second = embedded[3] || '00';
+  } else if (timeTaken) {
+    const timeMatch = String(timeTaken).match(/(\d{2}):?(\d{2}):?(\d{2})?/);
     if (timeMatch) {
       hour = timeMatch[1];
       minute = timeMatch[2];
@@ -356,7 +371,7 @@ function buildExifData(photo, roll, options = {}) {
   
   // 日期时间
   if (opts.datetime) {
-    const datetime = formatExifDateTime(photo.date_taken, photo.time_taken);
+    const datetime = formatExifDateTime(photo.date_taken, photo.time_taken || '12:00:00');
     if (datetime) {
       exif.DateTimeOriginal = datetime;
       exif.DateTimeDigitized = datetime;

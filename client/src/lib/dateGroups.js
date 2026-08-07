@@ -16,7 +16,7 @@ export function getPhotoGroupKey(photo, groupBy) {
     if (match) return `${match[1]}-${match[2]}-${match[3]}`;
     const parsed = new Date(ds);
     if (!isNaN(parsed.getTime())) {
-      return `${parsed.getUTCFullYear()}-${pad2(parsed.getUTCMonth() + 1)}-${pad2(parsed.getUTCDate())}`;
+      return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`;
     }
     return null;
   }
@@ -24,7 +24,7 @@ export function getPhotoGroupKey(photo, groupBy) {
   if (match) return `${match[1]}-${match[2]}`;
   const parsed = new Date(ds);
   if (!isNaN(parsed.getTime())) {
-    return `${parsed.getUTCFullYear()}-${pad2(parsed.getUTCMonth() + 1)}`;
+    return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}`;
   }
   return null;
 }

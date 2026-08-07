@@ -30,6 +30,7 @@ const REGISTERED_MIGRATIONS = [
   '20260726_normalize_photo_path_separators',
   '20260726_digital_rating_like_only',
   '20260807_photos_fileinfo_columns',
+  '20260807_digital_date_wallclock',
 ];
 
 /**
@@ -149,6 +150,16 @@ async function runAllMigrations() {
     await runPhotosFileinfoColumns();
   });
 
+  // 9. Repair: digital photos imported before this fix stored date_taken as
+  //    UTC ISO instead of camera wall clock. Convert to local wall clock
+  //    "YYYY-MM-DD HH:MM:SS" via strftime 'localtime'. Only rows from
+  //    August 2026 onwards are touched. Idempotent: converted values no
+  //    longer match the `date_taken LIKE '%Z'` filter.
+  runner.add('20260807_digital_date_wallclock', async () => {
+    const { runDigitalDateWallclock } = require('./photos-digital-date-wallclock-migration');
+    await runDigitalDateWallclock();
+  });
+
   const results = await runner.runAll();
   console.log('[MIGRATIONS] Unified migration complete:', results);
   return results;
@@ -164,7 +175,7 @@ async function getMigrationStatus() {
   return {
     executed,
     summary: {
-      total: 8,
+      total: REGISTERED_MIGRATIONS.length,
       executed: executed.filter(m => m.success).length,
       failed: executed.filter(m => !m.success).length,
     },

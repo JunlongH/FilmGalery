@@ -25,6 +25,7 @@ const { moveFileSync } = require('../utils/file-helpers');
 const PreparedStmt = require('../utils/prepared-statements');
 const { generatePositiveThumb, cleanupOldThumb } = require('../services/thumb-service');
 const { isValidLatLng } = require('@filmgallery/shared/mapUtils');
+const { formatExifDateTime } = require('../services/exif-service');
 const renderPool = require('../services/render-worker-pool');
 
 // Film Curve support
@@ -1560,11 +1561,11 @@ router.post('/:id/download-with-exif', async (req, res, next) => {
     
     // Date/Time (format: YYYY:MM:DD HH:mm:ss)
     if (photo.date_taken) {
-      const dateStr = photo.date_taken;
-      const timeStr = photo.time_taken || '12:00:00';
-      const formatted = `${dateStr.replace(/-/g, ':')} ${timeStr}`;
-      exifData.DateTimeOriginal = formatted;
-      exifData.CreateDate = formatted;
+      const formatted = formatExifDateTime(photo.date_taken, photo.time_taken || '12:00:00');
+      if (formatted) {
+        exifData.DateTimeOriginal = formatted;
+        exifData.CreateDate = formatted;
+      }
     }
     
     // GPS Location

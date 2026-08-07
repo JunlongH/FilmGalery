@@ -49,7 +49,7 @@ export function getPhotoGroupKey(photo: DigitalPhoto, groupBy: GroupBy): string 
   if (groupBy === 'day') {
     const match = ds.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (match) return `${match[1]}-${match[2]}-${match[3]}`;
-    const parsed = new Date(ds);
+    const parsed = new Date(ds.includes('T') ? ds : ds.replace(' ', 'T'));
     if (!isNaN(parsed.getTime())) {
       return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`;
     }
@@ -57,7 +57,7 @@ export function getPhotoGroupKey(photo: DigitalPhoto, groupBy: GroupBy): string 
   }
   const match = ds.match(/^(\d{4})-(\d{2})/);
   if (match) return `${match[1]}-${match[2]}`;
-  const parsed = new Date(ds);
+  const parsed = new Date(ds.includes('T') ? ds : ds.replace(' ', 'T'));
   if (!isNaN(parsed.getTime())) {
     return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}`;
   }

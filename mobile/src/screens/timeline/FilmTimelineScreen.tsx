@@ -80,7 +80,8 @@ export default function FilmTimelineScreen({ navigation }: any) {
     rolls.forEach((r: any) => {
       const dateStr = r.start_date || r.startDate || r.shot_date || r.created_at || r.createdAt || r.date || r.end_date || r.endDate;
       if (!dateStr) return;
-      const d = new Date(dateStr);
+      const s = String(dateStr);
+      const d = new Date(s.includes('T') ? s : s.replace(' ', 'T'));
       if (!isNaN(d.getTime())) set.add(d.getFullYear());
     });
     return Array.from(set).sort((a, b) => b - a); // desc
@@ -95,7 +96,8 @@ export default function FilmTimelineScreen({ navigation }: any) {
       const dates = [sStr, eStr].filter(Boolean);
       if (dates.length === 0) return false;
       return dates.some((ds: any) => {
-        const d = new Date(ds);
+        const s = String(ds);
+        const d = new Date(s.includes('T') ? s : s.replace(' ', 'T'));
         return !isNaN(d.getTime()) && d.getFullYear() === selectedYear;
       });
     });
