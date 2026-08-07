@@ -31,6 +31,7 @@ const REGISTERED_MIGRATIONS = [
   '20260726_digital_rating_like_only',
   '20260807_photos_fileinfo_columns',
   '20260807_digital_date_wallclock',
+  '20260807_photo_datetime_split',
 ];
 
 /**
@@ -158,6 +159,11 @@ async function runAllMigrations() {
   runner.add('20260807_digital_date_wallclock', async () => {
     const { runDigitalDateWallclock } = require('./photos-digital-date-wallclock-migration');
     await runDigitalDateWallclock();
+  });
+
+  runner.add('20260807_photo_datetime_split', async () => {
+    const { runPhotoDatetimeSplit } = require('./photos-datetime-split-migration');
+    await runPhotoDatetimeSplit();
   });
 
   const results = await runner.runAll();

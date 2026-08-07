@@ -9,6 +9,7 @@ import EquipmentSelector from './EquipmentSelector';
 import { lazyModal } from './common/lazyModal';
 import { reverseGeocode } from '../utils/geocoding';
 import { isValidLatitude, isValidLongitude } from '@filmgallery/shared/mapUtils';
+import { splitDateTime } from '../lib/dateGroups';
 import '../styles/forms.css';
 import '../styles/sidebar.css';
 
@@ -53,8 +54,9 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
   rollRef.current = roll;
 
   // Form States
-  const [dateTaken, setDateTaken] = useState(base?.date_taken || '');
-  const [timeTaken, setTimeTaken] = useState(base?.time_taken || '');
+  const baseDt = splitDateTime(base?.date_taken);
+  const [dateTaken, setDateTaken] = useState(baseDt.date);
+  const [timeTaken, setTimeTaken] = useState(base?.time_taken || baseDt.time);
   
   const [camera, setCamera] = useState(base?.camera || roll?.camera || '');
   const [lens, setLens] = useState(base?.lens || roll?.lens || '');
@@ -116,8 +118,9 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
     // Reset dirty fields when switching base photo
     setDirtyFields(new Set());
 
-    setDateTaken(currentBase.date_taken || '');
-    setTimeTaken(currentBase.time_taken || '');
+    const dt = splitDateTime(currentBase.date_taken);
+    setDateTaken(dt.date);
+    setTimeTaken(currentBase.time_taken || dt.time);
     setCamera(currentBase.camera || currentRoll?.camera || '');
     setLens(currentBase.lens || currentRoll?.lens || '');
     setCameraEquipId(currentBase.camera_equip_id || currentRoll?.camera_equip_id || null);

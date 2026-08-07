@@ -8,6 +8,7 @@ import { Icon } from '../../components/ui';
 import { ApiContext } from '../../context/ApiContext';
 import { api } from '../../api/client';
 import { format } from 'date-fns';
+import { parseLocalDate } from '../../utils/date';
 import { getPhotoUrl } from '../../utils/urls';
 import { useApiQuery } from '../../hooks/useApiQuery';
 import { useT } from '../../i18n';
@@ -99,8 +100,8 @@ export default function RollDetailScreen({ route, navigation }: any) {
           </View>
 
           <Text style={[styles.date, { color: theme.colors.onSurfaceVariant }]}>
-            {roll.start_date ? format(new Date(roll.start_date), 'MMMM d, yyyy') : t('common.noDate')}
-            {roll.end_date ? ` - ${format(new Date(roll.end_date), 'MMMM d, yyyy')}` : ''}
+            {roll.start_date ? format(parseLocalDate(roll.start_date)!, 'MMMM d, yyyy') : t('common.noDate')}
+            {roll.end_date ? ` - ${format(parseLocalDate(roll.end_date)!, 'MMMM d, yyyy')}` : ''}
           </Text>
 
           {expanded && (

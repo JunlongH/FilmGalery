@@ -8,6 +8,13 @@ function pad2(n) {
   return String(n).padStart(2, '0');
 }
 
+export function splitDateTime(ds) {
+  if (!ds || typeof ds !== 'string') return { date: '', time: '' };
+  const m = ds.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2})?)/);
+  if (m) return { date: m[1], time: m[2] };
+  return { date: ds, time: '' };
+}
+
 export function getPhotoGroupKey(photo, groupBy) {
   const ds = readDateString(photo);
   if (!ds) return null;

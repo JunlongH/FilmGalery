@@ -30,6 +30,7 @@ import { useApiQuery } from '../../hooks/useApiQuery';
 import { invalidateQueries } from '../../api/queryCache';
 import { useT, getLanguage } from '../../i18n';
 import { Icon } from '../../components/ui';
+import { parseLocalDate } from '../../utils/date';
 
 type Phase = 'idle' | 'previewing' | 'reviewing' | 'importing' | 'done' | 'error';
 
@@ -582,10 +583,10 @@ export default function DigitalImportScreen() {
 
 function formatDate(value: string): string {
   const locale = getLanguage() === 'en' ? 'en-US' : 'zh-CN';
+  const d = parseLocalDate(value);
+  if (!d) return value;
   try {
-    const s = String(value);
-    const normalized = s.includes('T') ? s : s.replace(' ', 'T');
-    return new Date(normalized).toLocaleDateString(locale, {
+    return d.toLocaleDateString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

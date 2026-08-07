@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { Modal, useTheme } from 'react-native-paper';
 import { Icon } from '../ui';
 import { useT } from '../../i18n';
+import { parseLocalDate, isDateOnlyString } from '../../utils/date';
 
 export interface ExifSheetProps {
   visible: boolean;
@@ -11,12 +12,9 @@ export interface ExifSheetProps {
 }
 
 function formatDate(value: any): string | null {
-  if (value == null || value === '') return null;
-  const s = String(value);
-  const normalized = s.includes('T') ? s : s.replace(' ', 'T');
-  const d = new Date(normalized);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleString();
+  const d = parseLocalDate(value);
+  if (!d) return null;
+  return isDateOnlyString(value) ? d.toLocaleDateString() : d.toLocaleString();
 }
 
 function formatFileSize(bytes: any): string | null {

@@ -3,10 +3,12 @@ import '../styles/forms.css';
 import LocationInput from './LocationInput.jsx';
 import GeoSearchInput from './GeoSearchInput.jsx';
 import { getTags } from '../api';
+import { splitDateTime } from '../lib/dateGroups';
 
 export default function PhotoMetaEditModal({ roll, photo, onSave, onClose }) {
-  const [dateTaken, setDateTaken] = useState(photo.date_taken || '');
-  const [timeTaken, setTimeTaken] = useState(photo.time_taken || '');
+  const initialDt = splitDateTime(photo.date_taken);
+  const [dateTaken, setDateTaken] = useState(initialDt.date);
+  const [timeTaken, setTimeTaken] = useState(photo.time_taken || initialDt.time);
   const [detailLocation, setDetailLocation] = useState(photo.detail_location || '');
   const [location, setLocation] = useState({ 
     location_id: photo.location_id || null, 

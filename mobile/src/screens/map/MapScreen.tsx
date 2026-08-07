@@ -30,6 +30,7 @@ import { Icon, Badge } from '../../components/ui';
 import CachedImage from '../../components/CachedImage';
 import { ApiContext } from '../../context/ApiContext';
 import { getPhotoUrl } from '../../utils/urls';
+import { parseLocalDate, toISODateString } from '../../utils/date';
 import LeafletMap from '../../components/map/LeafletMap';
 import { wgs84ToGcj02 } from '@filmgallery/shared/coordTransform';
 import { useApiQuery } from '../../hooks/useApiQuery';
@@ -362,10 +363,9 @@ export default function MapScreen() {
                     ? (() => {
                         const raw = selectedPhoto.date_taken || selectedPhoto.taken_at;
                         try { 
-                          const norm = String(raw).includes('T') ? raw : String(raw).replace(' ', 'T');
-                          const d = new Date(norm);
-                          if (!isNaN(d.getTime())) {
-                            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                          const d = parseLocalDate(raw);
+                          if (d) {
+                            return toISODateString(d);
                           }
                         } catch(e) {}
                         return String(raw).slice(0, 10);

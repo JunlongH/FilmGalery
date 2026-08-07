@@ -3,6 +3,7 @@ import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { Icon } from '../ui';
 import type { AppMode } from '../../context/AppModeContext';
+import { parseLocalDate } from '../../utils/date';
 import { useT } from '../../i18n';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -26,9 +27,8 @@ interface StatItem {
 }
 
 function isThisMonth(dateStr: string | null | undefined): boolean {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return false;
+  const d = parseLocalDate(dateStr);
+  if (!d) return false;
   const now = new Date();
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
 }

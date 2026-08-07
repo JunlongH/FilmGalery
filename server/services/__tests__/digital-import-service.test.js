@@ -16,6 +16,10 @@ jest.mock('../../utils/prepared-statements', () => ({
   allAsync: jest.fn().mockResolvedValue([]),
 }));
 
+jest.mock('exiftool-vendored', () => ({
+  exiftool: { read: jest.fn().mockResolvedValue(null) },
+}));
+
 // db-helpers.runAsync is used by execute()/processOne()/rollbackPartial;
 // not touched by preview(), so safe to mock globally.
 jest.mock('../../utils/db-helpers', () => ({
@@ -41,6 +45,7 @@ jest.mock('sharp', () => {
 const PreparedStmt = require('../../utils/prepared-statements');
 const dbHelpers = require('../../utils/db-helpers');
 const digitalFileService = require('../digital-file-service');
+const { exiftool } = require('exiftool-vendored');
 const service = require('../digital-import-service');
 
 async function makeTmpFile(name, content) {
@@ -58,6 +63,8 @@ describe('digital-import-service.preview — multi-file', () => {
     tmpFiles = [];
     PreparedStmt.getAsync.mockReset();
     PreparedStmt.getAsync.mockResolvedValue(null);
+    exiftool.read.mockReset();
+    exiftool.read.mockResolvedValue(null);
   });
 
   test('processes multiple JPEG files, returns correct per-item shape', async () => {
@@ -162,6 +169,45 @@ describe('digital-import-service.preview — multi-file', () => {
     expect(result.items.every((i) => i.hash && i.file.originalname)).toBe(true);
     // Filenames preserved in order
     expect(result.items.map((i) => i.file.originalname)).toEqual(names);
+  });
+
+  test('normalizes ExposureTime to canonical shutter strings', async () => {
+    const cases = [
+      ['1/125', '1/125'],   // exiftool fractional string — kept
+      ['1/60', '1/60'],
+      ['0.008', '1/125'],   // decimal-seconds string — converted
+      [0.008, '1/125'],     // decimal-seconds number — converted
+      [2.5, '2.5'],         // long exposure ≥ 1s — plain seconds
+      ['30', '30'],
+    ];
+    const paths = await Promise.all(
+      cases.map((_, i) => makeTmpFile(`sh-${i}`, `shutter-${i}`)),
+    );
+    tmpFiles = paths;
+    cases.forEach(([raw], i) => {
+      exiftool.read.mockResolvedValueOnce({ ExposureTime: raw });
+    });
+
+    const result = await service.preview(
+      paths.map((p, i) => ({ path: p, originalname: `sh${i}.jpg`, size: 1 })),
+    );
+
+    expect(result.items.map((i) => i.exif && i.exif.exposureTime)).toEqual(
+      cases.map(([, expected]) => expected),
+    );
+  });
+
+  test('unparseable ExposureTime yields no exposureTime field (not NaN)', async () => {
+    const fp = await makeTmpFile('bad-shutter', 'bad-shutter-content');
+    tmpFiles = [fp];
+    exiftool.read.mockResolvedValueOnce({ ExposureTime: 'Bulb' });
+
+    const result = await service.preview([
+      { path: fp, originalname: 'bad.jpg', size: 1 },
+    ]);
+
+    expect(result.items[0].exif).not.toBeNull();
+    expect(result.items[0].exif.exposureTime).toBeUndefined();
   });
 });
 
@@ -381,5 +427,41 @@ describe('digital-import-service.execute — cancellation cleanup', () => {
 
     // (f) Total unlink count: 3 (self-cleanup of photoId=1) + 2 temp files.
     expect(fspSpies.unlink).toHaveBeenCalledTimes(5);
+  });
+
+  test('processOne splits EXIF datetime into date_taken/time_taken and stores canonical shutter speed', async () => {
+    const items = [
+      {
+        file: { path: '/tmp/di-dt.jpg', originalname: 'dt.jpg', size: 10 },
+        hash: 'h1',
+        duplicate: false,
+        exif: { dateTimeOriginal: '2026-08-07 14:30:05', exposureTime: '1/125' },
+      },
+      {
+        file: { path: '/tmp/di-nodt.jpg', originalname: 'nodt.jpg', size: 10 },
+        hash: 'h2',
+        duplicate: false,
+        exif: {},
+      },
+    ];
+
+    await service.execute({ items }, 'job-dt-1', jobRegistry);
+
+    const insertCalls = dbHelpers.runAsync.mock.calls.filter(
+      ([sql]) => /INSERT INTO photos/.test(sql),
+    );
+    expect(insertCalls).toHaveLength(2);
+
+    // Param order: sessionId, hash, filename, original_filename, date_taken,
+    // time_taken, focal_length, aperture, shutter_speed, iso, ...
+    const withDt = insertCalls[0][1];
+    expect(withDt[4]).toBe('2026-08-07');
+    expect(withDt[5]).toBe('14:30:05');
+    expect(withDt[8]).toBe('1/125');
+
+    const noDt = insertCalls[1][1];
+    expect(noDt[4]).toBe(null);
+    expect(noDt[5]).toBe(null);
+    expect(noDt[8]).toBe(null);
   });
 });

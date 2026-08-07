@@ -3,7 +3,7 @@ import {
   FILM_ITEM_STATUS_LABELS,
   FILM_ITEM_STATUS_FILTERS,
 } from '../src/constants/filmItemStatus';
-import { toISODateString, parseISODate } from '../src/utils/date';
+import { toISODateString, parseISODate, parseLocalDate } from '../src/utils/date';
 import { buildUploadUrl } from '../src/utils/urlHelper';
 import { getPhotoUrl, getRollCoverUrl } from '../src/utils/urls';
 import { SPACING } from '../src/styles/spacing';
@@ -44,6 +44,32 @@ describe('utils/date', () => {
   test('round-trip: format → parse → format', () => {
     const original = '2024-03-15';
     expect(toISODateString(parseISODate(original)!)).toBe(original);
+  });
+
+  test('parseLocalDate parses date-only strings as local midnight, not UTC', () => {
+    expect(parseLocalDate('2024-07-17')).toEqual(new Date(2024, 6, 17));
+    expect(parseLocalDate('2024-07-17')!.getHours()).toBe(0);
+    expect(toISODateString(parseLocalDate('2024-07-17')!)).toBe('2024-07-17');
+  });
+
+  test('parseLocalDate parses datetime strings in local time', () => {
+    expect(parseLocalDate('2024-07-17 10:30:00')).toEqual(new Date(2024, 6, 17, 10, 30, 0));
+    expect(parseLocalDate('2024-07-17T10:30:00')).toEqual(new Date(2024, 6, 17, 10, 30, 0));
+  });
+
+  test('parseLocalDate returns null for empty or invalid input', () => {
+    expect(parseLocalDate(null)).toBeNull();
+    expect(parseLocalDate(undefined)).toBeNull();
+    expect(parseLocalDate('')).toBeNull();
+    expect(parseLocalDate('   ')).toBeNull();
+    expect(parseLocalDate('garbage')).toBeNull();
+  });
+
+  test('parseLocalDate rejects rollover dates instead of overflowing', () => {
+    expect(parseLocalDate('2024-13-45')).toBeNull();
+    expect(parseLocalDate('2024-02-30')).toBeNull();
+    expect(parseLocalDate('2024-00-05')).toBeNull();
+    expect(parseLocalDate('2024-01-00')).toBeNull();
   });
 });
 

@@ -14,6 +14,7 @@ import ExifSheet from '../../components/digital/ExifSheet';
 import { api } from '../../api/client';
 import { colors, spacing, radius } from '../../theme';
 import { getPhotoUrl } from '../../utils/urls';
+import { parseLocalDate, isDateOnlyString } from '../../utils/date';
 import { useQueryData } from '../../hooks/useApiQuery';
 import { setQueryData, invalidateQueries } from '../../api/queryCache';
 import { useT } from '../../i18n';
@@ -354,12 +355,9 @@ export default function PhotoViewScreen({ route, navigation }: any) {
   }, [photo]);
 
   const dateTakenText = useMemo(() => {
-    if (!photo?.date_taken) return '';
-    const raw = String(photo.date_taken);
-    const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
-    const d = new Date(normalized);
-    if (isNaN(d.getTime())) return '';
-    return d.toLocaleString();
+    const d = parseLocalDate(photo?.date_taken);
+    if (!d) return '';
+    return isDateOnlyString(photo.date_taken) ? d.toLocaleDateString() : d.toLocaleString();
   }, [photo?.date_taken]);
 
   const gpsText = useMemo(() => {

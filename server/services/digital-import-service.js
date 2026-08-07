@@ -50,6 +50,30 @@ function getExiftool() {
   return _exiftool || null;
 }
 
+function shutterSecondsToString(sec) {
+  if (sec >= 1) {
+    return String(Math.round(sec * 10) / 10);
+  }
+  return `1/${Math.round(1 / sec)}`;
+}
+
+function normalizeShutterSpeed(value) {
+  if (value == null) return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? shutterSecondsToString(value) : null;
+  }
+  const s = String(value).trim();
+  if (!s) return null;
+  const frac = s.match(/^(\d+)\s*\/\s*(\d+(?:\.\d+)?)$/);
+  if (frac) {
+    const num = Number(frac[1]);
+    const den = Number(frac[2]);
+    return num > 0 && den > 0 ? `${num}/${den}` : null;
+  }
+  const sec = Number(s);
+  return Number.isFinite(sec) && sec > 0 ? shutterSecondsToString(sec) : null;
+}
+
 /**
  * Extract a normalized subset of EXIF fields from exiftool tags.
  * @param {Object} tags - raw exiftool-vendored tags
@@ -81,7 +105,10 @@ function extractExifFields(tags) {
   if (tags.Software) out.software = String(tags.Software).trim();
   if (tags.FocalLength != null) out.focalLength = Number(tags.FocalLength);
   if (tags.FNumber != null) out.fNumber = Number(tags.FNumber);
-  if (tags.ExposureTime != null) out.exposureTime = Number(tags.ExposureTime);
+  if (tags.ExposureTime != null) {
+    const shutter = normalizeShutterSpeed(tags.ExposureTime);
+    if (shutter) out.exposureTime = shutter;
+  }
   if (tags.ISO != null) out.iso = Number(tags.ISO);
   if (tags.GPSLatitude != null) out.gpsLatitude = Number(tags.GPSLatitude);
   if (tags.GPSLongitude != null) out.gpsLongitude = Number(tags.GPSLongitude);
@@ -250,21 +277,26 @@ async function processOne(item, sessionId) {
   let fileSize = null;
   try { fileSize = fs.statSync(item.file.path).size; } catch (_) { fileSize = null; }
 
+  const dtOriginal = exif.dateTimeOriginal || null;
+  const dateTaken = dtOriginal ? dtOriginal.slice(0, 10) : null;
+  const timeTaken = dtOriginal && dtOriginal.length >= 19 ? dtOriginal.slice(11, 19) : null;
+
   // INSERT photo first to obtain an id for file naming
   const ins = await runAsync(
     `INSERT INTO photos (
        source_type, session_id, content_hash, filename, original_filename,
-       date_taken, focal_length, aperture, shutter_speed, iso,
+       date_taken, time_taken, focal_length, aperture, shutter_speed, iso,
        white_balance, color_space, latitude, longitude, altitude,
        camera, lens, source_make, source_model, source_software, source_lens,
        width, height, file_size
-     ) VALUES ('digital', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES ('digital', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       sessionId,
       item.hash,
       item.file.originalname,
       item.file.originalname,
-      exif.dateTimeOriginal || null,
+      dateTaken,
+      timeTaken,
       exif.focalLength || null,
       exif.fNumber || null,
       exif.exposureTime || null,

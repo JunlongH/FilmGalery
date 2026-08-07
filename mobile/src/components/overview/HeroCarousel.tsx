@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { AppMode } from '../../context/AppModeContext';
 import { ApiContext } from '../../context/ApiContext';
 import { getPhotoUrl } from '../../utils/urls';
+import { parseLocalDate } from '../../utils/date';
 import { useT } from '../../i18n';
 import CachedImage from '../CachedImage';
 
@@ -161,8 +162,9 @@ export default function HeroCarousel({ photos, loading, active, mode, photosKey 
         (photo.original_filename && photo.original_filename.replace(/\.[^.]+$/, '')) ||
         '';
     const dateStr = photo.date_taken || photo.date || photo.taken_at || photo.created_at;
-    const dateLabel = dateStr
-      ? new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    const parsedDate = dateStr ? parseLocalDate(dateStr) : null;
+    const dateLabel = parsedDate
+      ? parsedDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
       : '';
     const metaParts = [
       dateLabel,

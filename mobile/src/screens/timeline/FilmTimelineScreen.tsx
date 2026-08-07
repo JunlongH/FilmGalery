@@ -20,6 +20,7 @@ import SkeletonBox from '../../components/SkeletonBox';
 import { ApiContext } from '../../context/ApiContext';
 import { api } from '../../api/client';
 import { format } from 'date-fns';
+import { parseLocalDate } from '../../utils/date';
 import { getRollCoverUrl } from '../../utils/urls';
 import { Icon } from '../../components/ui';
 import { useFocusEffect } from '@react-navigation/native';
@@ -81,8 +82,8 @@ export default function FilmTimelineScreen({ navigation }: any) {
       const dateStr = r.start_date || r.startDate || r.shot_date || r.created_at || r.createdAt || r.date || r.end_date || r.endDate;
       if (!dateStr) return;
       const s = String(dateStr);
-      const d = new Date(s.includes('T') ? s : s.replace(' ', 'T'));
-      if (!isNaN(d.getTime())) set.add(d.getFullYear());
+      const d = parseLocalDate(s);
+      if (d) set.add(d.getFullYear());
     });
     return Array.from(set).sort((a, b) => b - a); // desc
   }, [rolls]);
@@ -96,9 +97,8 @@ export default function FilmTimelineScreen({ navigation }: any) {
       const dates = [sStr, eStr].filter(Boolean);
       if (dates.length === 0) return false;
       return dates.some((ds: any) => {
-        const s = String(ds);
-        const d = new Date(s.includes('T') ? s : s.replace(' ', 'T'));
-        return !isNaN(d.getTime()) && d.getFullYear() === selectedYear;
+        const d = parseLocalDate(ds);
+        return d != null && d.getFullYear() === selectedYear;
       });
     });
   }, [rolls, selectedYear]);
@@ -106,8 +106,8 @@ export default function FilmTimelineScreen({ navigation }: any) {
   const renderItem = ({ item, index }: any) => {
     const coverUrl = getRollCoverUrl(baseUrl, item);
     const filmLabel = item.film_name_joined || item.film_type || t('home.unknownFilm');
-    const dateStr = item.start_date ? format(new Date(item.start_date), 'yyyy-MM-dd') : '';
-    const dateRange = item.end_date ? `${dateStr} - ${format(new Date(item.end_date), 'yyyy-MM-dd')}` : dateStr;
+    const dateStr = item.start_date ? format(parseLocalDate(item.start_date)!, 'yyyy-MM-dd') : '';
+    const dateRange = item.end_date ? `${dateStr} - ${format(parseLocalDate(item.end_date)!, 'yyyy-MM-dd')}` : dateStr;
     const photoCount = item.photo_count || item.photos?.length || 0;
 
     return (

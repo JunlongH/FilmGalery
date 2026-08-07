@@ -60,7 +60,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [entries, setEntries] = useState<any[]>([]);
-  const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newDate, setNewDate] = useState(toISODateString(new Date()));
   const [newTime, setNewTime] = useState(() => {
     const now = new Date();
     return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -370,7 +370,7 @@ export default function ShotLogScreen({ route, navigation }: any) {
       if (data.location.latitude != null) setNewLatitude(data.location.latitude);
       if (data.location.longitude != null) setNewLongitude(data.location.longitude);
     }
-    setNewDate(new Date().toISOString().split('T')[0]);
+    setNewDate(toISODateString(new Date()));
     const now = new Date();
     setNewTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
   };

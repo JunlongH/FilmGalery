@@ -9,6 +9,7 @@ import { ApiContext } from '../../context/ApiContext';
 import { Icon } from '../../components/ui';
 import { api } from '../../api/client';
 import { format } from 'date-fns';
+import { parseLocalDate } from '../../utils/date';
 import { useApiQuery } from '../../hooks/useApiQuery';
 import { useT } from '../../i18n';
 
@@ -67,7 +68,7 @@ export default function FilmRollsScreen({ route, navigation }: any) {
             <CoverOverlay 
               title={item.title || t('home.rollFallback', { id: item.id })}
               leftText={(item.film_name_joined || item.film_type || t('home.unknownFilm'))}
-              rightText={`${item.start_date ? format(new Date(item.start_date), 'yyyy-MM-dd') : ''}${item.end_date ? ` - ${format(new Date(item.end_date), 'yyyy-MM-dd')}` : ''}`}
+              rightText={`${item.start_date ? format(parseLocalDate(item.start_date)!, 'yyyy-MM-dd') : ''}${item.end_date ? ` - ${format(parseLocalDate(item.end_date)!, 'yyyy-MM-dd')}` : ''}`}
             />
           </View>
         ) : (

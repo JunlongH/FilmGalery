@@ -13,6 +13,7 @@ import { ApiContext } from '../../context/ApiContext';
 import { Icon } from '../../components/ui';
 import { getRollsByEquipment } from '../../api/equipment';
 import { format } from 'date-fns';
+import { parseLocalDate } from '../../utils/date';
 import { useApiQuery } from '../../hooks/useApiQuery';
 import { useT } from '../../i18n';
 
@@ -68,7 +69,7 @@ export default function EquipmentRollsScreen({ route, navigation }: any) {
     }
 
     const dateRange = item.start_date 
-      ? `${format(new Date(item.start_date), 'yyyy-MM-dd')}${item.end_date ? ` - ${format(new Date(item.end_date), 'yyyy-MM-dd')}` : ''}`
+      ? `${format(parseLocalDate(item.start_date)!, 'yyyy-MM-dd')}${item.end_date ? ` - ${format(parseLocalDate(item.end_date)!, 'yyyy-MM-dd')}` : ''}`
       : '';
 
     return (
