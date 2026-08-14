@@ -31,7 +31,7 @@ const FIELD_GROUPS = {
 const ALL_FIELDS = Object.values(FIELD_GROUPS).flat();
 
 export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSaved }) {
-  const isBatch = Array.isArray(photos) && photos.length > 1;
+  const isBatch = Array.isArray(photos) && photos.length > 0;
   const base = photo || (isBatch ? photos[0] : null);
   const navigate = useNavigate();
   const isDigital = base?.source_type === 'digital';
@@ -437,7 +437,7 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
             <label className="fg-label">Camera</label>
             <EquipmentSelector
               type="camera"
-              mode={photo?.source_type === 'digital' ? 'digital' : 'film'}
+              mode={isDigital ? 'digital' : 'film'}
               value={cameraEquipId}
               onChange={(id, item) => {
                 setCameraEquipId(id);
@@ -469,7 +469,7 @@ export default function PhotoDetailsSidebar({ photo, photos, roll, onClose, onSa
             ) : (
               <EquipmentSelector
                 type="lens"
-                mode={photo?.source_type === 'digital' ? 'digital' : 'film'}
+                mode={isDigital ? 'digital' : 'film'}
                 value={lensEquipId}
                 cameraId={cameraEquipId}
                 onChange={(id, item) => {
