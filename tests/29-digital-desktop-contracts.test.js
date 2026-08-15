@@ -362,8 +362,15 @@ describe('PhotoDetailsSidebar — digital-specific sections', () => {
     expect(src).toMatch(/value=\{base\?\.source_software\s*\|\|\s*['"]['"]\}\s+readOnly/);
     expect(src).toMatch(/value=\{base\?\.source_lens\s*\|\|\s*['"]['"]\}\s+readOnly/);
     // WHY: EquipmentSelector mode must follow source_type so the digital
-    // equipment pool (no film bodies) is offered.
-    expect(src).toMatch(/mode=\{photo\?\.source_type\s*===\s*['"]digital['"]\s*\?\s*['"]digital['"]\s*:\s*['"]film['"]\}/);
+    // equipment pool (no film bodies) is offered. The mode must be derived
+    // from base (= photo || photos[0]): batch edits pass only `photos`, so
+    // reading the bare `photo` prop defaulted digital batches to film gear.
+    expect(src).toMatch(/const\s+isDigital\s*=\s*base\?\.source_type\s*===\s*['"]digital['"]/);
+    const equipModeMatches = src.match(/mode=\{isDigital\s*\?\s*['"]digital['"]\s*:\s*['"]film['"]\}/g) || [];
+    expect(equipModeMatches.length).toBe(2);
+    // WHY: a single-photo batch must still resolve base to photos[0];
+    // photos.length > 1 left base null and the save targets [undefined].
+    expect(src).toMatch(/const\s+isBatch\s*=\s*Array\.isArray\(photos\)\s*&&\s*photos\.length\s*>\s*0/);
   });
 
   test('photoAlbums query is enabled only for digital non-batch photos', () => {
